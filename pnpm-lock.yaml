@@ -273,6 +273,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: 'catalog:'
         version: 5.2.8
+      '@showtime/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@tanstack/react-router':
         specifier: 'catalog:'
         version: 1.170.16(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
