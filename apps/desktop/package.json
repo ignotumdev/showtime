@@ -1,0 +1,52 @@
+{
+  "name": "@showtime/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Showtime supports live sound engineers during shows and soundchecks.",
+  "license": "MIT",
+  "author": "Johannes Schießl",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build && electron-builder",
+    "preview": "vp preview"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "effect": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "shadcn": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tw-animate-css": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "^18.2.64",
+    "@types/react-dom": "^18.2.21",
+    "@vitejs/plugin-react": "^6.0.3",
+    "electron": "^30.0.1",
+    "electron-builder": "^24.13.3",
+    "tailwindcss": "catalog:",
+    "typescript": "^5.2.2",
+    "vite": "catalog:",
+    "vite-plugin-electron": "^1.1.0",
+    "vite-plugin-electron-renderer": "^1.0.0",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.9.0",
+      "onFail": "download"
+    }
+  }
+}
