@@ -1,4 +1,4 @@
-## Contributing
+# Contributing
 
 This project is still in its very early stages. Expect issues.
 We are not yet accepting external contributions.
