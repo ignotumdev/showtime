@@ -46,12 +46,5 @@
     "vite-plugin-electron-renderer": "^1.0.0",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.9.0",
-      "onFail": "download"
-    }
   }
 }
