@@ -1,12 +1,21 @@
 import iconUrl from "../../../../assets/icon.svg";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAtomSet } from "@/frontend/react/AtomProvider";
+import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
+import { useRouterState } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 
 type TitleBarProps = {
   isMacOS?: boolean;
 };
 
-export function TitleBar({ isMacOS = false }: TitleBarProps) {
+export function TitleBar({ isMacOS = navigator.userAgent.includes("Macintosh") }: TitleBarProps) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const setDialog = useAtomSet(showDialogAtom);
+  const isShowsRoute = pathname === "/";
+
   return (
     <header
       className={cn(
@@ -21,7 +30,14 @@ export function TitleBar({ isMacOS = false }: TitleBarProps) {
           Alpha
         </Badge>
       </div>
-      <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar" />
+      <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
+        {isShowsRoute && (
+          <Button size="sm" onClick={() => setDialog({ type: "create" })}>
+            <PlusIcon />
+            New show
+          </Button>
+        )}
+      </div>
     </header>
   );
 }

@@ -123,3 +123,12 @@ export class ShowDiscoveryStatError extends Schema.TaggedErrorClass<ShowDiscover
 ) {}
 
 export type ShowDiscoveryError = ShowDiscoveryDirectoryError | ShowDiscoveryStatError;
+
+export const ShowSummary = Schema.Struct({
+  id: ShowId,
+  name: ShowName,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+});
+
+export type ShowSummary = typeof ShowSummary.Type;
