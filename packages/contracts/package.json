@@ -12,7 +12,15 @@
       "import": "./src/index.ts"
     }
   },
+  "scripts": {
+    "build": "tsc",
+    "test": "vp test run"
+  },
   "dependencies": {
     "effect": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

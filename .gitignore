@@ -36,3 +36,6 @@ release
 
 # Tanstack
 .tanstack
+
+# TS Build
+apps/desktop/tsconfig.node.tsbuildinfo

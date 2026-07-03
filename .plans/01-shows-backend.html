@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>01 - Shows Backend</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-white text-zinc-950 antialiased">
+        <main class="mx-auto max-w-4xl px-6 py-10">
+            <header class="border-b border-zinc-200 pb-6">
+                <p class="text-sm font-medium text-sky-700">Plan 01</p>
+                <h1 class="mt-2 text-3xl font-semibold tracking-tight">
+                    Shows Backend
+                </h1>
+                <p class="mt-3 max-w-2xl text-zinc-600">
+                    Add the first backend foundation for show files in Showtime:
+                    shared Effect schemas and branded types, an IDs module, show
+                    file persistence, and Electron main-process startup
+                    discovery.
+                </p>
+            </header>
+
+            <section class="mt-8 grid gap-4 md:grid-cols-3">
+                <div class="rounded-lg border border-zinc-200 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-900">Scope</h2>
+                    <p class="mt-2 text-sm text-zinc-600">
+                        Backend only. No renderer UI or user workflow yet.
+                    </p>
+                </div>
+                <div class="rounded-lg border border-zinc-200 p-4">
+                    <h2 class="text-sm font-semibold text-zinc-900">
+                        First Milestone
+                    </h2>
+                    <p class="mt-2 text-sm text-zinc-600">
+                        Log discovered
+                        <code class="rounded bg-zinc-100 px-1 py-0.5"
+                            >.showtime</code
+                        >
+                        files from
+                        <code class="rounded bg-zinc-100 px-1 py-0.5"
+                            >HOME/.showtime/shows</code
+                        >.
+                    </p>
+                </div>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">Data Model</h2>
+                <div
+                    class="mt-4 overflow-hidden rounded-lg border border-zinc-200"
+                >
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-zinc-50 text-zinc-700">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">Field</th>
+                                <th class="px-4 py-3 font-medium">Type</th>
+                                <th class="px-4 py-3 font-medium">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-200">
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    config.version
+                                </td>
+                                <td class="px-4 py-3">
+                                    literal
+                                    <code
+                                        class="rounded bg-zinc-100 px-1 py-0.5"
+                                        >"dev"</code
+                                    >
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600">
+                                    No migrations during development. Old files
+                                    can be discarded.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    config.id
+                                </td>
+                                <td class="px-4 py-3">branded ShowId</td>
+                                <td class="px-4 py-3 text-zinc-600">
+                                    Generated as
+                                    <code
+                                        class="rounded bg-zinc-100 px-1 py-0.5"
+                                        >show_</code
+                                    >
+                                    plus 16 chars from
+                                    <code
+                                        class="rounded bg-zinc-100 px-1 py-0.5"
+                                        >0123456789abcdefghijklmnopqrstuvwxyz</code
+                                    >.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    config.name
+                                </td>
+                                <td class="px-4 py-3">string</td>
+                                <td class="px-4 py-3 text-zinc-600">
+                                    User-facing show name. Validation should
+                                    reject empty or whitespace-only values.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    config.createdAt
+                                </td>
+                                <td class="px-4 py-3">
+                                    Effect DateTime schema
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600">
+                                    Use Effect-native DateTime encoding in
+                                    contracts so date handling stays explicit
+                                    and consistent.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    config.updatedAt
+                                </td>
+                                <td class="px-4 py-3">
+                                    Effect DateTime schema
+                                </td>
+                                <td class="px-4 py-3 text-zinc-600">
+                                    Must change on every show file update,
+                                    including config-only updates.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">
+                    Proposed File Structure
+                </h2>
+                <pre
+                    class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"
+                ><code>packages/contracts/src/
+  ids.ts
+  show.ts
+  index.ts
+
+apps/desktop/electron/
+  main.ts
+  backend/
+    index.ts
+    ids/
+      Ids.ts
+    shows/
+      ShowDiscovery.ts
+      ShowFile.ts
+      ShowPaths.ts</code></pre>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">
+                    Implementation Sequence
+                </h2>
+                <ol class="mt-4 space-y-4">
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">1.</span> Define
+                            contracts in <code>packages/contracts</code>
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Add Effect Schema definitions and exported
+                            TypeScript types for show IDs, the dev config
+                            version, show config, and the full show file
+                            document. Keep the contracts package runtime-safe so
+                            every backend read validates unknown JSON before it
+                            is trusted. Use Effect-native DateTime schemas for
+                            <code>createdAt</code> and <code>updatedAt</code>.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Use branded schemas for entity IDs, with a
+                                specific <code>ShowId</code> brand.
+                            </li>
+                            <li>
+                                Validate the <code>show_</code> prefix and the
+                                16-character custom alphabet suffix.
+                            </li>
+                            <li>
+                                Export constructors or parser helpers only if
+                                they reduce duplication for backend services.
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">2.</span> Add an
+                            Effect-native IDs module
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Create
+                            <code
+                                >apps/desktop/electron/backend/ids/Ids.ts</code
+                            >
+                            to own ID generation. It should use nanoid with the
+                            alphabet
+                            <code>0123456789abcdefghijklmnopqrstuvwxyz</code>
+                            and a length of 16, then prepend the entity prefix
+                            such as <code>show_</code>.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Expose a method like
+                                <code>makeShowId</code> returning the branded
+                                <code>ShowId</code>.
+                            </li>
+                            <li>
+                                Keep raw string generation private to the
+                                service.
+                            </li>
+                            <li>
+                                Use Effect service/layer patterns, but do not
+                                suffix module files with <code>Service</code>.
+                            </li>
+                            <li>
+                                Add <code>nanoid</code> to the desktop package
+                                if it is not already present.
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">3.</span> Create show
+                            storage path helpers
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Centralize filesystem paths for show storage in
+                            <code>shows/ShowPaths.ts</code>. Resolve the base
+                            directory as <code>HOME/.showtime/shows</code> in
+                            the main process, using Effect Platform and
+                            <code>@effect/platform-node</code> wherever possible
+                            instead of direct Node filesystem calls.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Use <code>os.homedir()</code> instead of
+                                renderer-provided paths.
+                            </li>
+                            <li>
+                                Keep the <code>.showtime</code> extension in one
+                                shared constant.
+                            </li>
+                            <li>
+                                Create <code>HOME/.showtime/shows</code> on
+                                first-run discovery so startup behavior is
+                                predictable.
+                            </li>
+                            <li>
+                                Use the filename format
+                                <code>show-name-id.showtime</code> for new show
+                                files, with sanitization for filesystem safety.
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">4.</span> Build show file
+                            persistence
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Add <code>shows/ShowFile.ts</code> as the Effect
+                            module responsible for reading, validating,
+                            updating, and writing a show JSON file. Even if the
+                            first runnable behavior only logs discovered files,
+                            design this module now so later UI actions do not
+                            duplicate persistence logic.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Use Effect Platform filesystem APIs and
+                                <code>@effect/platform-node</code> runtime
+                                layers where they fit the task.
+                            </li>
+                            <li>
+                                Read JSON with schema validation before
+                                modification.
+                            </li>
+                            <li>
+                                Write JSON deterministically with stable
+                                formatting.
+                            </li>
+                            <li>
+                                Always set <code>updatedAt</code> during
+                                updates.
+                            </li>
+                            <li>
+                                Prefer atomic write behavior: write to a
+                                temporary file in the same directory, then
+                                rename.
+                            </li>
+                            <li>
+                                Represent filesystem and parse failures as typed
+                                errors instead of thrown exceptions leaking
+                                across service boundaries.
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">5.</span> Add show
+                            discovery
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Implement discovery in
+                            <code>shows/ShowDiscovery.ts</code> for all files
+                            ending in <code>.showtime</code> inside
+                            <code>HOME/.showtime/shows</code>. For the first
+                            backend milestone, discovery should log every
+                            candidate file it finds from Electron main.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Create the show directory if it does not exist,
+                                then log an empty result if no files are
+                                present.
+                            </li>
+                            <li>
+                                Filter out directories and non-<code
+                                    >.showtime</code
+                                >
+                                files.
+                            </li>
+                            <li>Log absolute paths for diagnostics.</li>
+                            <li>
+                                Optionally validate each discovered JSON file
+                                after the initial logging milestone is working.
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        <h3 class="font-semibold">
+                            <span class="text-sky-700">6.</span> Wire backend
+                            startup into Electron main
+                        </h3>
+                        <p class="mt-2 text-sm text-zinc-600">
+                            Import a small backend entrypoint from
+                            <code>apps/desktop/electron/backend</code> and run
+                            it from <code>app.whenReady()</code> before or
+                            alongside window creation. Keep the main file
+                            focused on Electron lifecycle code.
+                        </p>
+                        <ul
+                            class="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600"
+                        >
+                            <li>
+                                Build a composed Effect layer for IDs, show
+                                paths, show files, discovery, and the Node
+                                platform layer.
+                            </li>
+                            <li>
+                                Run startup discovery with
+                                <code>Effect.runPromise</code> or the
+                                repo-preferred Effect runtime pattern.
+                            </li>
+                            <li>
+                                Catch and log startup backend failures without
+                                preventing the window from opening during this
+                                early milestone.
+                            </li>
+                        </ul>
+                    </li>
+                </ol>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">
+                    Acceptance Criteria
+                </h2>
+                <ul class="mt-4 space-y-3 text-sm text-zinc-700">
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        Contracts exports include branded show ID types and
+                        Effect schemas for the dev show file format.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        Contracts use Effect-native DateTime schemas for
+                        <code>createdAt</code> and <code>updatedAt</code>.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        The backend folder exists under
+                        <code>apps/desktop/electron/backend</code> with per-type
+                        folders such as <code>ids/Ids.ts</code> and
+                        <code>shows/ShowFile.ts</code>, and is imported by
+                        Electron main.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        Starting the desktop app logs discovered absolute paths
+                        for every <code>.showtime</code> file in
+                        <code>HOME/.showtime/shows</code>.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        A missing <code>HOME/.showtime/shows</code> directory is
+                        created during startup discovery and does not crash
+                        startup.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        New show files use the filename format
+                        <code>show-name-id.showtime</code>.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        Show updates go through one Effect service and always
+                        refresh <code>updatedAt</code>.
+                    </li>
+                    <li class="rounded-lg border border-zinc-200 p-4">
+                        TypeScript build passes for contracts and desktop.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">
+                    Testing Plan
+                </h2>
+                <div class="mt-4 space-y-3 text-sm text-zinc-700">
+                    <p class="rounded-lg border border-zinc-200 p-4">
+                        Add unit tests for ID format validation and schema
+                        decoding, especially invalid prefixes, invalid alphabet
+                        characters, and wrong suffix length.
+                    </p>
+                    <p class="rounded-lg border border-zinc-200 p-4">
+                        Add backend service tests with a temporary HOME or
+                        injected base path so discovery can verify missing
+                        directory, empty directory, mixed files, and valid
+                        <code>.showtime</code> files.
+                    </p>
+                    <p class="rounded-lg border border-zinc-200 p-4">
+                        Add update-service tests confirming stable JSON output
+                        and changed <code>updatedAt</code>.
+                    </p>
+                    <p class="rounded-lg border border-zinc-200 p-4">
+                        Use Vite Plus for tests. <code>vp test</code> is built
+                        on Vitest, does not run in watch mode by default, and
+                        test configuration should live in the
+                        <code>test</code> block of
+                        <code>vite.config.ts</code> rather than a separate
+                        Vitest config.
+                    </p>
+                    <p class="rounded-lg border border-zinc-200 p-4">
+                        Run <code>pnpm ready</code> or the workspace equivalent
+                        after implementation.
+                    </p>
+                </div>
+            </section>
+
+            <section class="mt-10">
+                <h2 class="text-xl font-semibold tracking-tight">
+                    Resolved Decisions
+                </h2>
+                <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-700">
+                    <li>
+                        First-run discovery creates
+                        <code>HOME/.showtime/shows</code>.
+                    </li>
+                    <li>
+                        New show filenames use
+                        <code>show-name-id.showtime</code>.
+                    </li>
+                    <li>
+                        Dates use Effect-native DateTime schemas in
+                        <code>packages/contracts</code>.
+                    </li>
+                    <li>
+                        The Electron backend uses per-type folders and avoids
+                        <code>Service</code> suffixes in file names.
+                    </li>
+                    <li>
+                        Filesystem work should prefer Effect Platform and
+                        <code>@effect/platform-node</code>.
+                    </li>
+                </ul>
+            </section>
+        </main>
+    </body>
+</html>

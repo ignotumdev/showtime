@@ -6,6 +6,27 @@ import { lazyPlugins } from "vite-plus";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 
+function electronEnv() {
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return env;
+}
+
+function startElectron({
+  startup,
+}: {
+  startup: (
+    argv?: string[],
+    options?: import("node:child_process").SpawnOptions,
+  ) => Promise<boolean>;
+}) {
+  return startup(undefined, { env: electronEnv() });
+}
+
+function hasElectronApp(process: NodeJS.Process) {
+  return "electronApp" in process;
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   publicDir: path.resolve(__dirname, "../../assets"),
@@ -25,11 +46,22 @@ export default defineConfig({
       main: {
         // Shortcut of `build.lib.entry`.
         entry: "electron/main.ts",
+        onstart({ startup }) {
+          void startElectron({ startup });
+        },
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.
         // Preload scripts may contain Web assets, so use the `build.rollupOptions.input` instead `build.lib.entry`.
         input: path.join(__dirname, "electron/preload.ts"),
+        onstart({ reload, startup }) {
+          if (hasElectronApp(process)) {
+            reload();
+            return;
+          }
+
+          void startElectron({ startup });
+        },
       },
       // Ployfill the Electron and Node.js API for Renderer process.
       // If you want use Node.js in Renderer process, the `nodeIntegration` needs to be enabled in the Main process.
