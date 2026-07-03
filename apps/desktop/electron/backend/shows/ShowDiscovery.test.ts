@@ -1,5 +1,6 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, PlatformError } from "effect";
+import { FileSystem } from "effect/FileSystem";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +23,36 @@ const makeLayer = (home: string) =>
     Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
     Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
   );
+
+const makeLayerWithStatFailure = (home: string, failedPath: string) => {
+  const fileSystemLayer = Layer.effect(
+    FileSystem,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+
+      return FileSystem.of({
+        ...fs,
+        stat: (filePath) =>
+          filePath === failedPath
+            ? Effect.fail(
+                PlatformError.systemError({
+                  _tag: "NotFound",
+                  module: "FileSystem",
+                  method: "stat",
+                  pathOrDescriptor: filePath,
+                  description: "test stat failure",
+                }),
+              )
+            : fs.stat(filePath),
+      });
+    }),
+  ).pipe(Layer.provide(NodeFileSystem.layer));
+
+  return ShowDiscoveryLayer.layer.pipe(
+    Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
+    Layer.provide(Layer.mergeAll(fileSystemLayer, NodePath.layer)),
+  );
+};
 
 afterEach(async () => {
   await Promise.all(Array.from(tempHomes, (home) => rm(home, { recursive: true, force: true })));
@@ -83,5 +114,37 @@ describe("ShowDiscovery", () => {
     );
 
     expect(discovered).toEqual([{ path: path.join(showsDirectory, "valid.showtime") }]);
+  });
+
+  it("skips files that cannot be statted and continues discovery", async () => {
+    const home = await makeTempHome();
+    const showsDirectory = path.join(home, ".showtime", "shows");
+    const skippedPath = path.join(showsDirectory, "skip.showtime");
+    const firstPath = path.join(showsDirectory, "first.showtime");
+    const secondPath = path.join(showsDirectory, "second.showtime");
+    await mkdir(showsDirectory, { recursive: true });
+    const validDocument = {
+      type: "showtime-show",
+      version: "dev",
+      config: {
+        id: "show_0123456789abcdef",
+        name: "Valid",
+        createdAt: "2026-07-02T10:00:00.000Z",
+        updatedAt: "2026-07-02T10:00:00.000Z",
+      },
+    };
+    await writeFile(firstPath, JSON.stringify(validDocument));
+    await writeFile(skippedPath, JSON.stringify(validDocument));
+    await writeFile(secondPath, JSON.stringify(validDocument));
+
+    const discovered = await Effect.runPromise(
+      Effect.gen(function* () {
+        const discovery = yield* ShowDiscovery;
+        return yield* discovery.discover;
+      }).pipe(Effect.provide(makeLayerWithStatFailure(home, skippedPath))),
+    );
+
+    expect(discovered).toHaveLength(2);
+    expect(discovered).toEqual(expect.arrayContaining([{ path: firstPath }, { path: secondPath }]));
   });
 });

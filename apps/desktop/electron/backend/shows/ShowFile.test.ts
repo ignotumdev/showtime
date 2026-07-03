@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { ShowId, ShowName } from "@showtime/contracts";
+import { ShowFileUpdateError, ShowId, ShowName } from "@showtime/contracts";
 import { ShowFile } from "./ShowFile";
 import * as ShowFileLayer from "./ShowFile";
 import * as ShowPaths from "./ShowPaths";
@@ -101,5 +101,30 @@ describe("ShowFile", () => {
     );
     expect(persisted.config.updatedAt).not.toBe(persisted.config.createdAt);
     expect(await readFile(filePath, "utf8")).toMatch(/\n$/);
+  });
+
+  it("returns a typed error when an update callback throws", async () => {
+    const home = await makeTempHome();
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const showFile = yield* ShowFile;
+        const filePath = yield* showFile.create({ id: showId, name: "Soundcheck" });
+
+        return yield* Effect.result(
+          showFile.update(filePath, () => {
+            throw new Error("boom");
+          }),
+        );
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result._tag).toBe("Failure");
+    if (result._tag !== "Failure") {
+      throw new Error("Expected update to fail");
+    }
+
+    expect(result.failure).toBeInstanceOf(ShowFileUpdateError);
+    expect(result.failure._tag).toBe("ShowFileUpdateError");
   });
 });

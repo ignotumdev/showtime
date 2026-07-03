@@ -1,11 +1,6 @@
 import { Context, Effect, Layer, Path } from "effect";
 import { FileSystem } from "effect/FileSystem";
-import {
-  ShowDiscoveryDirectoryError,
-  ShowDiscoveryStatError,
-  type ShowDiscoveryError,
-  type ShowFileError,
-} from "@showtime/contracts";
+import { ShowDiscoveryDirectoryError, ShowDiscoveryStatError } from "@showtime/contracts";
 import { ShowFile } from "./ShowFile";
 import { ShowPaths } from "./ShowPaths";
 
@@ -18,7 +13,7 @@ export class ShowDiscovery extends Context.Service<
   {
     readonly discover: Effect.Effect<
       ReadonlyArray<DiscoveredShowFile>,
-      ShowDiscoveryError | ShowFileError
+      ShowDiscoveryDirectoryError
     >;
   }
 >()("showtime/ShowDiscovery") {}
@@ -57,15 +52,23 @@ const makeShowDiscovery = Effect.fnUntraced(function* () {
       }
 
       const filePath = path.join(directory, entry);
-      const info = yield* fs.stat(filePath).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ShowDiscoveryStatError({
-              path: filePath,
-              cause,
-            }),
+      const stat = yield* Effect.result(
+        fs.stat(filePath).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ShowDiscoveryStatError({
+                path: filePath,
+                cause,
+              }),
+          ),
         ),
       );
+      if (stat._tag === "Failure") {
+        yield* Effect.logWarning("Skipping unstatable show file", filePath, stat.failure);
+        continue;
+      }
+
+      const info = stat.success;
       if (info.type !== "File") {
         continue;
       }

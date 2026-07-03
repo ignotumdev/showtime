@@ -7,6 +7,7 @@ import {
   ShowFileJsonError,
   ShowFileReadError,
   ShowFileSchemaError,
+  ShowFileUpdateError,
   ShowFileWriteError,
   type ShowFileError,
   type ShowFileDocument,
@@ -102,7 +103,10 @@ const makeShowFile = Effect.fnUntraced(function* () {
 
   const update: ShowFileShape["update"] = Effect.fnUntraced(function* (filePath, updateDocument) {
     const document = yield* read(filePath);
-    const next = updateDocument(document);
+    const next = yield* Effect.try({
+      try: () => updateDocument(document),
+      catch: (cause) => new ShowFileUpdateError({ path: filePath, cause }),
+    });
     const now = yield* DateTime.now;
     const refreshed = {
       ...next,

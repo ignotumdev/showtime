@@ -91,11 +91,20 @@ export class ShowFileSchemaError extends Schema.TaggedErrorClass<ShowFileSchemaE
   },
 ) {}
 
+export class ShowFileUpdateError extends Schema.TaggedErrorClass<ShowFileUpdateError>()(
+  "ShowFileUpdateError",
+  {
+    path: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 export type ShowFileError =
   | ShowFileReadError
   | ShowFileWriteError
   | ShowFileJsonError
-  | ShowFileSchemaError;
+  | ShowFileSchemaError
+  | ShowFileUpdateError;
 
 export class ShowDiscoveryDirectoryError extends Schema.TaggedErrorClass<ShowDiscoveryDirectoryError>()(
   "ShowDiscoveryDirectoryError",

@@ -23,6 +23,26 @@ function startElectron({
   return startup(undefined, { env: electronEnv() });
 }
 
+let electronStartupRequested = false;
+
+function startElectronOnce({ startup }: Parameters<typeof startElectron>[0]) {
+  if (electronStartupRequested && !hasElectronApp(process)) {
+    return;
+  }
+
+  electronStartupRequested = true;
+  void startElectron({ startup }).then(
+    (started) => {
+      if (!started) {
+        electronStartupRequested = false;
+      }
+    },
+    () => {
+      electronStartupRequested = false;
+    },
+  );
+}
+
 function hasElectronApp(process: NodeJS.Process) {
   return "electronApp" in process;
 }
@@ -47,7 +67,7 @@ export default defineConfig({
         // Shortcut of `build.lib.entry`.
         entry: "electron/main.ts",
         onstart({ startup }) {
-          void startElectron({ startup });
+          startElectronOnce({ startup });
         },
       },
       preload: {
@@ -60,7 +80,7 @@ export default defineConfig({
             return;
           }
 
-          void startElectron({ startup });
+          startElectronOnce({ startup });
         },
       },
       // Ployfill the Electron and Node.js API for Renderer process.
