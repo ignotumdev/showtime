@@ -42,21 +42,24 @@ describe("ShowService", () => {
       Effect.gen(function* () {
         const shows = yield* ShowService;
 
-        const created = yield* shows.create("Soundcheck");
+        const created = yield* shows.create({ name: "Soundcheck", color: "sky" });
         const afterCreate = yield* shows.list;
-        const renamed = yield* shows.rename({ id: created.id, name: "Main Set" });
+        const edited = yield* shows.edit({ id: created.id, name: "Main Set", color: "rose" });
         const afterRename = yield* shows.list;
         yield* shows.delete(created.id);
         const afterDelete = yield* shows.list;
 
-        return { afterCreate, afterDelete, afterRename, created, renamed };
+        return { afterCreate, afterDelete, afterRename, created, edited };
       }).pipe(Effect.provide(makeLayer(home))),
     );
 
     expect(result.created.name).toBe("Soundcheck");
+    expect(result.created.color).toBe("sky");
     expect(result.afterCreate.map((show) => show.name)).toEqual(["Soundcheck"]);
-    expect(result.renamed.name).toBe("Main Set");
+    expect(result.edited.name).toBe("Main Set");
+    expect(result.edited.color).toBe("rose");
     expect(result.afterRename.map((show) => show.name)).toEqual(["Main Set"]);
+    expect(result.afterRename.map((show) => show.color)).toEqual(["rose"]);
     expect(result.afterDelete).toEqual([]);
   });
 });

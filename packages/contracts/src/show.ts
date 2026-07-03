@@ -36,9 +36,34 @@ const NonBlankString = Schema.String.pipe(
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
 
+export const showColors = [
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "pink",
+  "rose",
+  "neutral",
+] as const;
+
+export const ShowColor = Schema.Literals(showColors);
+export type ShowColor = typeof ShowColor.Type;
+
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
+  color: ShowColor,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -127,6 +152,7 @@ export type ShowDiscoveryError = ShowDiscoveryDirectoryError | ShowDiscoveryStat
 export const ShowSummary = Schema.Struct({
   id: ShowId,
   name: ShowName,
+  color: ShowColor,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });

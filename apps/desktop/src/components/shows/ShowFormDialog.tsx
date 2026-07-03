@@ -1,5 +1,6 @@
 import * as React from "react";
-import { PlusIcon } from "lucide-react";
+import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
+import { showColors, type ShowColor } from "@showtime/contracts";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,25 +11,41 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAtom, useAtomSet } from "@/frontend/react/AtomProvider";
 import {
   createShowAtom,
-  renameShowAtom,
+  editShowAtom,
   showDialogAtom,
   showMutationOptions,
 } from "@/frontend/shows/ShowAtoms";
+import { cn } from "@/lib/utils";
+import { showColorClassNames } from "./show-color";
+import { Input } from "../ui/input";
+
+const randomShowColor = (): ShowColor =>
+  showColors[Math.floor(Math.random() * showColors.length)] ?? "sky";
 
 export function ShowFormDialog() {
   const [dialog, setDialog] = useAtom(showDialogAtom);
   const createShow = useAtomSet(createShowAtom);
-  const renameShow = useAtomSet(renameShowAtom);
-  const isOpen = dialog.type === "create" || dialog.type === "rename";
-  const isRename = dialog.type === "rename";
+  const editShow = useAtomSet(editShowAtom);
+  const isOpen = dialog.type === "create" || dialog.type === "edit";
+  const isEdit = dialog.type === "edit";
   const [name, setName] = React.useState("");
+  const [color, setColor] = React.useState<ShowColor>("sky");
 
   React.useEffect(() => {
-    setName(dialog.type === "rename" ? dialog.show.name : "");
+    if (dialog.type === "edit") {
+      setName(dialog.show.name);
+      setColor(dialog.show.color);
+      return;
+    }
+
+    if (dialog.type === "create") {
+      setName("");
+      setColor(randomShowColor());
+    }
   }, [dialog]);
 
   const close = React.useCallback(() => setDialog({ type: "closed" }), [setDialog]);
@@ -41,11 +58,12 @@ export function ShowFormDialog() {
         return;
       }
 
-      if (dialog.type === "rename") {
-        renameShow({
+      if (dialog.type === "edit") {
+        editShow({
           payload: {
             id: dialog.show.id,
             name: trimmed,
+            color,
           },
           ...showMutationOptions,
         });
@@ -53,6 +71,7 @@ export function ShowFormDialog() {
         createShow({
           payload: {
             name: trimmed,
+            color,
           },
           ...showMutationOptions,
         });
@@ -60,7 +79,7 @@ export function ShowFormDialog() {
 
       close();
     },
-    [close, createShow, dialog, name, renameShow],
+    [close, color, createShow, dialog, editShow, name],
   );
 
   return (
@@ -68,9 +87,9 @@ export function ShowFormDialog() {
       <DialogContent>
         <form className="grid gap-4" onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>{isRename ? "Rename show" : "New show"}</DialogTitle>
+            <DialogTitle>{isEdit ? "Edit show" : "New show"}</DialogTitle>
             <DialogDescription>
-              {isRename ? "Update the show name." : "Create a show."}
+              {isEdit ? "Update the show details." : "Create a show."}
             </DialogDescription>
           </DialogHeader>
           <label className="grid gap-2">
@@ -81,11 +100,40 @@ export function ShowFormDialog() {
               onChange={(event) => setName(event.currentTarget.value)}
             />
           </label>
+          <div className="grid gap-2">
+            <span className="text-sm font-medium">Color</span>
+            <Popover>
+              <PopoverTrigger render={<Button type="button" variant="outline" />}>
+                <div className={cn(showColorClassNames[color], "size-4 rounded")} />
+                <span className="capitalize">{color}</span>
+                <ChevronsUpDownIcon className="ml-auto" />
+              </PopoverTrigger>
+              <PopoverContent align="start">
+                <div className="grid grid-cols-6 gap-2">
+                  {showColors.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className="relative flex size-8 items-center justify-center rounded-md outline-none ring-ring/50 hover:bg-accent focus-visible:ring-3"
+                      aria-label={option}
+                      aria-pressed={option === color}
+                      onClick={() => setColor(option)}
+                    >
+                      <span className={cn(showColorClassNames[option], "size-5 rounded-md")} />
+                      {option === color && (
+                        <CheckIcon className="absolute size-3 text-white drop-shadow" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
             <Button type="submit" disabled={name.trim().length === 0}>
-              {!isRename && <PlusIcon />}
-              {isRename ? "Rename" : "Create"}
+              {!isEdit && <PlusIcon />}
+              {isEdit ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>

@@ -4,6 +4,7 @@ import {
   decodeShowName,
   ShowRpcError,
   type ShowFileDocument,
+  type ShowColor,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
@@ -16,10 +17,14 @@ export class ShowService extends Context.Service<
   ShowService,
   {
     readonly list: Effect.Effect<ReadonlyArray<ShowSummary>, ShowRpcError>;
-    readonly create: (name: string) => Effect.Effect<ShowSummary, ShowRpcError>;
-    readonly rename: (params: {
+    readonly create: (params: {
+      readonly name: string;
+      readonly color: ShowColor;
+    }) => Effect.Effect<ShowSummary, ShowRpcError>;
+    readonly edit: (params: {
       readonly id: ShowId;
       readonly name: string;
+      readonly color: ShowColor;
     }) => Effect.Effect<ShowSummary, ShowRpcError>;
     readonly delete: (id: ShowId) => Effect.Effect<void, ShowRpcError>;
   }
@@ -34,6 +39,7 @@ const toRpcError = (message: string) => (cause: unknown) =>
 const toSummary = (document: ShowFileDocument): ShowSummary => ({
   id: document.config.id,
   name: document.config.name,
+  color: document.config.color,
   createdAt: DateTime.formatIso(document.config.createdAt),
   updatedAt: DateTime.formatIso(document.config.updatedAt),
 });
@@ -85,10 +91,16 @@ const makeShowService = Effect.fnUntraced(function* () {
     Effect.mapError(toRpcError("Could not list shows.")),
   );
 
-  const create = Effect.fnUntraced(function* (name: string) {
+  const create = Effect.fnUntraced(function* ({
+    name,
+    color,
+  }: {
+    readonly name: string;
+    readonly color: ShowColor;
+  }) {
     const id = yield* ids.makeShowId;
     const filePath = yield* showFile
-      .create({ id, name })
+      .create({ id, name, color })
       .pipe(Effect.mapError(toRpcError("Could not create show.")));
     const document = yield* showFile
       .read(filePath)
@@ -97,12 +109,14 @@ const makeShowService = Effect.fnUntraced(function* () {
     return toSummary(document);
   });
 
-  const rename = Effect.fnUntraced(function* ({
+  const edit = Effect.fnUntraced(function* ({
     id,
     name,
+    color,
   }: {
     readonly id: ShowId;
     readonly name: string;
+    readonly color: ShowColor;
   }) {
     const showName = yield* decodeShowName(name).pipe(
       Effect.mapError(toRpcError("Show name cannot be empty.")),
@@ -115,9 +129,10 @@ const makeShowService = Effect.fnUntraced(function* () {
         config: {
           ...current.config,
           name: showName,
+          color,
         },
       }))
-      .pipe(Effect.mapError(toRpcError("Could not rename show.")));
+      .pipe(Effect.mapError(toRpcError("Could not edit show.")));
 
     if (nextPath !== found.path) {
       yield* fs
@@ -136,7 +151,7 @@ const makeShowService = Effect.fnUntraced(function* () {
   return ShowService.of({
     list,
     create,
-    rename,
+    edit,
     delete: deleteShow,
   });
 });

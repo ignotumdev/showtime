@@ -18,6 +18,7 @@ import { useAtomSet } from "@/frontend/react/AtomProvider";
 import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
 import { formatRelativeDate } from "@/lib/dates";
 import type { ShowSummary } from "@showtime/contracts";
+import { showColorClassNames } from "./show-color";
 
 type ShowItemProps = {
   readonly show: ShowSummary;
@@ -29,7 +30,7 @@ export function ShowItem({ show }: ShowItemProps) {
   return (
     <Item variant="outline">
       <ItemMedia>
-        <div className="bg-sky-500 size-6 rounded-md" />
+        <div className={`${showColorClassNames[show.color]} size-6 rounded-md`} />
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{show.name}</ItemTitle>
@@ -44,9 +45,9 @@ export function ShowItem({ show }: ShowItemProps) {
             <span className="sr-only">Show actions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={6}>
-            <DropdownMenuItem onClick={() => setDialog({ type: "rename", show })}>
+            <DropdownMenuItem onClick={() => setDialog({ type: "edit", show })}>
               <PencilIcon />
-              Rename
+              Edit
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"

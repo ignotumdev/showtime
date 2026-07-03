@@ -4,6 +4,7 @@ import {
   idSuffixLength,
   showIdPrefix,
   showRpcReactivityKey,
+  type ShowColor,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
@@ -12,7 +13,7 @@ import { ShowRpcClient } from "@/frontend/rpc/ShowRpcClient";
 export type ShowDialogState =
   | { readonly type: "closed" }
   | { readonly type: "create" }
-  | { readonly type: "rename"; readonly show: ShowSummary }
+  | { readonly type: "edit"; readonly show: ShowSummary }
   | { readonly type: "delete"; readonly show: ShowSummary };
 
 export const showDialogAtom = Atom.make<ShowDialogState>({ type: "closed" }).pipe(Atom.keepAlive);
@@ -35,6 +36,8 @@ const sortShows = (shows: ReadonlyArray<ShowSummary>) =>
 
 const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSummary["name"];
 
+const optimisticShowColor = (color: ShowColor): ShowSummary["color"] => color;
+
 const showsQueryAtom = ShowRpcClient.query("ListShows", undefined, {
   reactivityKeys: showRpcReactivityKey,
   serializationKey: "all",
@@ -52,7 +55,7 @@ const showsQueryAtom = ShowRpcClient.query("ListShows", undefined, {
 export const showsAtom = showsQueryAtom.pipe(Atom.optimistic, Atom.keepAlive);
 
 const createShowMutation = ShowRpcClient.mutation("CreateShow");
-const renameShowMutation = ShowRpcClient.mutation("RenameShow");
+const editShowMutation = ShowRpcClient.mutation("EditShow");
 const deleteShowMutation = ShowRpcClient.mutation("DeleteShow");
 
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
@@ -71,6 +74,7 @@ export const createShowAtom = showsAtom.pipe(
           {
             id: makeTemporaryShowId(),
             name: optimisticShowName(input.payload.name.trim()),
+            color: optimisticShowColor(input.payload.color),
             createdAt: now,
             updatedAt: now,
           },
@@ -82,9 +86,9 @@ export const createShowAtom = showsAtom.pipe(
   Atom.keepAlive,
 );
 
-export const renameShowAtom = showsAtom.pipe(
+export const editShowAtom = showsAtom.pipe(
   Atom.optimisticFn({
-    reducer: (current, input: MutationInput<typeof renameShowMutation>) => {
+    reducer: (current, input: MutationInput<typeof editShowMutation>) => {
       if (!AsyncResult.isSuccess(current)) {
         return current;
       }
@@ -96,6 +100,7 @@ export const renameShowAtom = showsAtom.pipe(
               ? {
                   ...show,
                   name: optimisticShowName(input.payload.name.trim()),
+                  color: optimisticShowColor(input.payload.color),
                   updatedAt: new Date().toISOString(),
                 }
               : show,
@@ -103,7 +108,7 @@ export const renameShowAtom = showsAtom.pipe(
         ),
       );
     },
-    fn: renameShowMutation,
+    fn: editShowMutation,
   }),
   Atom.keepAlive,
 );

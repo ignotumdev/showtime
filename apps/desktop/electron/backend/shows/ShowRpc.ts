@@ -9,8 +9,8 @@ const handlers = ShowRpcGroup.toLayer(
 
     return ShowRpcGroup.of({
       ListShows: () => shows.list,
-      CreateShow: ({ name }) => shows.create(name),
-      RenameShow: ({ id, name }) => shows.rename({ id, name }),
+      CreateShow: ({ name, color }) => shows.create({ name, color }),
+      EditShow: ({ id, name, color }) => shows.edit({ id, name, color }),
       DeleteShow: ({ id }) => shows.delete(id),
     });
   }),
