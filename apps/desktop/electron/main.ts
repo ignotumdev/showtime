@@ -1,6 +1,8 @@
 import { app, BrowserWindow, Menu } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { Effect } from "effect";
+import { startBackend } from "./backend";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,5 +86,8 @@ app.on("activate", () => {
 
 void app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  Effect.runPromise(startBackend).catch((error: unknown) => {
+    console.error("Showtime backend startup failed", error);
+  });
   createWindow();
 });

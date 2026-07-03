@@ -7,6 +7,7 @@ catalogMode: prefer
 
 catalog:
   "@base-ui/react": ^1.6.0
+  "@effect/platform-node": 4.0.0-beta.93
   "@fontsource-variable/inter": ^5.2.8
   "@tailwindcss/vite": ^4.3.2
   "@tanstack/react-router": ^1.170.16
@@ -17,6 +18,7 @@ catalog:
   clsx: ^2.1.1
   effect: 4.0.0-beta.93
   lucide-react: ^1.23.0
+  nanoid: ^5.1.6
   shadcn: ^4.12.0
   tailwind-merge: ^3.6.0
   tailwindcss: ^4.3.2
@@ -25,6 +27,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@0.2.2
   vite-plugin-electron-renderer: ^0.14.7
   vite-plus: 0.2.2
+  vitest: ^4.1.9
 overrides:
   vite: "catalog:"
 peerDependencyRules:
@@ -34,6 +37,8 @@ peerDependencyRules:
     vite: "*"
 minimumReleaseAgeExclude:
   - effect@4.0.0-beta.93
+  - "@effect/platform-node@4.0.0-beta.93"
+  - "@effect/platform-node-shared@4.0.0-beta.93"
   - "@voidzero-dev/vite-plus-core@0.2.2"
   - "@voidzero-dev/vite-plus-darwin-arm64@0.2.2"
   - "@voidzero-dev/vite-plus-darwin-x64@0.2.2"
