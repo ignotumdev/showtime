@@ -9,7 +9,7 @@ export const Route = createFileRoute("/")({
 
 function RouteComponent() {
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-xl items-center">
+    <main className="mx-auto flex h-[calc(100vh-5rem)] min-h-0 w-full max-w-xl items-center">
       <ShowList />
       <ShowFormDialog />
       <ShowDeleteDialog />

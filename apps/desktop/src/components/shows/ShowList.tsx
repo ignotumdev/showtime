@@ -9,6 +9,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { ItemGroup } from "@/components/ui/item";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAtomValue } from "@/frontend/react/AtomProvider";
 import { showsAtom } from "@/frontend/shows/ShowAtoms";
 import { ShowItem } from "./ShowItem";
@@ -72,10 +73,12 @@ function ShowItems({
   readonly shows: ReadonlyArray<Parameters<typeof ShowItem>[0]["show"]>;
 }) {
   return (
-    <ItemGroup>
-      {shows.map((show) => (
-        <ShowItem key={show.id} show={show} />
-      ))}
-    </ItemGroup>
+    <ScrollArea className="h-full w-full px-4">
+      <ItemGroup>
+        {shows.map((show) => (
+          <ShowItem key={show.id} show={show} />
+        ))}
+      </ItemGroup>
+    </ScrollArea>
   );
 }
