@@ -1,7 +1,8 @@
 import * as React from "react";
-import { AlertCircleIcon, CheckIcon, Loader2Icon, XIcon } from "lucide-react";
+import { AlertCircleIcon, CheckIcon, XIcon } from "lucide-react";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
 import { showMutationAtoms } from "@/frontend/shows/ShowAtoms";
 import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
@@ -60,7 +61,7 @@ export function ShowMutationStatus() {
       {failure ? (
         <AlertCircleIcon className="size-4 text-destructive" />
       ) : waiting ? (
-        <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+        <Spinner className="text-muted-foreground" />
       ) : (
         <CheckIcon className="size-4 text-muted-foreground" />
       )}

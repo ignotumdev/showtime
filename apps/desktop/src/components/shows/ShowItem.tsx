@@ -34,7 +34,7 @@ export function ShowItem({ show }: ShowItemProps) {
       <ItemContent>
         <ItemTitle>{show.name}</ItemTitle>
         <ItemDescription title={show.updatedAt}>
-          {show.pending ? "Saving..." : formatRelativeDate(show.updatedAt)}
+          {formatRelativeDate(show.updatedAt)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
