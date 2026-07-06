@@ -86,6 +86,7 @@ describe("ShowDiscovery", () => {
         config: {
           id: "show_0123456789abcdef",
           name: "Valid",
+          color: "green",
           createdAt: "2026-07-02T10:00:00.000Z",
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
@@ -99,6 +100,7 @@ describe("ShowDiscovery", () => {
         config: {
           id: "show_0123456789abcdef",
           name: "Invalid",
+          color: "green",
           createdAt: "not-a-date",
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
@@ -129,6 +131,7 @@ describe("ShowDiscovery", () => {
       config: {
         id: "show_0123456789abcdef",
         name: "Valid",
+        color: "green",
         createdAt: "2026-07-02T10:00:00.000Z",
         updatedAt: "2026-07-02T10:00:00.000Z",
       },

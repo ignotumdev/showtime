@@ -39,6 +39,7 @@ describe("ShowFile", () => {
         return yield* showFile.create({
           id: showId,
           name: "Main Hall / Night 1",
+          color: "violet",
         });
       }).pipe(Effect.provide(makeLayer(home))),
     );
@@ -54,6 +55,7 @@ describe("ShowFile", () => {
       config: {
         id: "show_0123456789abcdef",
         name: "Main Hall / Night 1",
+        color: "violet",
       },
     });
   });
@@ -70,13 +72,14 @@ describe("ShowFile", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const showFile = yield* ShowFile;
-        yield* showFile.create({ id: showId, name: "Soundcheck" });
+        yield* showFile.create({ id: showId, name: "Soundcheck", color: "sky" });
         yield* Effect.sleep("10 millis");
         return yield* showFile.update(filePath, (document) => ({
           ...document,
           config: {
             ...document.config,
             name: decodeShowName("Soundcheck Updated"),
+            color: "rose",
           },
         }));
       }).pipe(Effect.provide(makeLayer(home))),
@@ -87,15 +90,18 @@ describe("ShowFile", () => {
       readonly version: "dev";
       readonly config: {
         readonly name: string;
+        readonly color: string;
         readonly createdAt: string;
         readonly updatedAt: string;
       };
     };
 
     expect(result.config.name).toBe("Soundcheck Updated");
+    expect(result.config.color).toBe("rose");
     expect(persisted.type).toBe("showtime-show");
     expect(persisted.version).toBe("dev");
     expect(persisted.config.name).toBe("Soundcheck Updated");
+    expect(persisted.config.color).toBe("rose");
     expect(DateTime.toEpochMillis(result.config.updatedAt)).toBeGreaterThanOrEqual(
       DateTime.toEpochMillis(result.config.createdAt),
     );
@@ -109,7 +115,11 @@ describe("ShowFile", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const showFile = yield* ShowFile;
-        const filePath = yield* showFile.create({ id: showId, name: "Soundcheck" });
+        const filePath = yield* showFile.create({
+          id: showId,
+          name: "Soundcheck",
+          color: "sky",
+        });
 
         return yield* Effect.result(
           showFile.update(filePath, () => {
