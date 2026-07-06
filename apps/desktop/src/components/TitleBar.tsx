@@ -12,7 +12,9 @@ type TitleBarProps = {
 };
 
 export function TitleBar({ isMacOS = navigator.userAgent.includes("Macintosh") }: TitleBarProps) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
 
@@ -24,8 +26,8 @@ export function TitleBar({ isMacOS = navigator.userAgent.includes("Macintosh") }
       )}
     >
       <div className="flex min-w-0 items-center gap-2.25">
-        <img className="size-4.5 shrink-0" src={iconUrl} alt="" />
-        <span className="truncate text-[13px] leading-none font-bold text-[#fafafa]">Showtime</span>
+        <img className="size-6 shrink-0" src={iconUrl} alt="" />
+        <span className="truncate text-lg leading-none font-bold text-[#fafafa]">Showtime</span>
         <Badge className="dark" variant="outline">
           Alpha
         </Badge>
