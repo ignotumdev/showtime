@@ -11,6 +11,7 @@ import {
   ShowFileWriteError,
   type ShowFileError,
   type ShowFileDocument,
+  type ShowColor,
   type ShowId,
 } from "@showtime/contracts";
 import { ShowPaths } from "./ShowPaths";
@@ -24,6 +25,7 @@ interface ShowFileShape {
   readonly create: (params: {
     readonly id: ShowId;
     readonly name: string;
+    readonly color: ShowColor;
   }) => Effect.Effect<string, ShowFileError>;
   readonly update: (
     filePath: string,
@@ -78,7 +80,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
     );
   });
 
-  const create: ShowFileShape["create"] = Effect.fnUntraced(function* ({ id, name }) {
+  const create: ShowFileShape["create"] = Effect.fnUntraced(function* ({ id, name, color }) {
     const now = yield* DateTime.now;
     const filePath = yield* paths.makeShowFilePath({ name, id });
     const showName = yield* decodeShowName(name).pipe(
@@ -94,6 +96,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
       config: {
         id,
         name: showName,
+        color,
         createdAt: now,
         updatedAt: now,
       },

@@ -1,7 +1,9 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
+import { makeShowRpcWebSocketUrl } from "@showtime/contracts";
 import { startBackend } from "./backend";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +29,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+const showRpcToken = randomBytes(32).toString("base64url");
+const showRpcWebSocketUrl = makeShowRpcWebSocketUrl(showRpcToken);
 
 function getAppIconPath() {
   if (app.isPackaged) {
@@ -37,6 +41,11 @@ function getAppIconPath() {
 }
 
 function createWindow() {
+  if (win && !win.isDestroyed()) {
+    win.focus();
+    return;
+  }
+
   win = new BrowserWindow({
     autoHideMenuBar: true,
     icon: getAppIconPath(),
@@ -66,6 +75,21 @@ function createWindow() {
   }
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", () => {
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) {
+      win.restore();
+    }
+    win.focus();
+  }
+});
+
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
@@ -84,10 +108,19 @@ app.on("activate", () => {
   }
 });
 
-void app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
-  Effect.runPromise(startBackend).catch((error: unknown) => {
-    console.error("Showtime backend startup failed", error);
+if (gotSingleInstanceLock) {
+  void app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
+    createWindow();
+
+    Effect.runPromise(startBackend(showRpcToken)).catch((error: unknown) => {
+      console.error("Showtime backend startup failed", error);
+      dialog.showErrorBox(
+        "Showtime could not start",
+        "The local Showtime backend could not start. Please close other Showtime windows and try again.",
+      );
+      app.quit();
+    });
   });
-  createWindow();
-});
+}

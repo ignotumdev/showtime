@@ -22,3 +22,7 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
   // You can expose other APTs you need here.
   // ...
 });
+
+contextBridge.exposeInMainWorld("showtime", {
+  rpcWebSocketUrl: () => ipcRenderer.invoke("showtime:rpc-web-socket-url") as Promise<string>,
+});

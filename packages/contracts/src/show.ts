@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema, SchemaGetter } from "effect";
 
 export const showIdPrefix = "show_";
 export const idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -36,9 +36,41 @@ const NonBlankString = Schema.String.pipe(
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
 
+export const showColors = [
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "pink",
+  "rose",
+  "neutral",
+] as const;
+
+export const ShowColor = Schema.Literals(showColors);
+export type ShowColor = typeof ShowColor.Type;
+
+const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
+  Schema.decodeTo(Schema.toType(ShowColor), {
+    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as ShowColor)),
+    encode: SchemaGetter.required(),
+  }),
+);
+
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
+  color: ShowColorWithLegacyDefault,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -123,3 +155,21 @@ export class ShowDiscoveryStatError extends Schema.TaggedErrorClass<ShowDiscover
 ) {}
 
 export type ShowDiscoveryError = ShowDiscoveryDirectoryError | ShowDiscoveryStatError;
+
+export const ShowSummary = Schema.Struct({
+  id: ShowId,
+  name: ShowName,
+  color: ShowColor,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+});
+
+export type ShowSummary = typeof ShowSummary.Type;
+
+export const compareShowSummaries = (left: ShowSummary, right: ShowSummary) =>
+  `${left.name.toLocaleLowerCase()}:${left.id}`.localeCompare(
+    `${right.name.toLocaleLowerCase()}:${right.id}`,
+  );
+
+export const sortShowSummaries = (shows: ReadonlyArray<ShowSummary>) =>
+  [...shows].sort(compareShowSummaries);
