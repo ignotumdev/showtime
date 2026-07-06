@@ -1,8 +1,8 @@
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
+const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-US", {
   numeric: "auto",
 });
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const absoluteDateFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
 });
 

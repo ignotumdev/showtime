@@ -14,9 +14,10 @@ export function useRelativeDateNow(values: ReadonlyArray<string | number | Date>
     const scheduleNextUpdate = () => {
       const current = new Date();
       setNow(current);
+      const timestamps = valueKey === "" ? [] : valueKey.split(",").map(Number);
 
-      const nextDelay = values.reduce<number | undefined>((minimumDelay, value) => {
-        const delay = millisecondsUntilRelativeDateUpdate(value, current);
+      const nextDelay = timestamps.reduce<number | undefined>((minimumDelay, timestamp) => {
+        const delay = millisecondsUntilRelativeDateUpdate(timestamp, current);
 
         if (delay === undefined) {
           return minimumDelay;
@@ -37,7 +38,7 @@ export function useRelativeDateNow(values: ReadonlyArray<string | number | Date>
         window.clearTimeout(timeout);
       }
     };
-  }, [valueKey, values]);
+  }, [valueKey]);
 
   return now;
 }

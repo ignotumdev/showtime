@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { Cause, Effect, Exit } from "effect";
+import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
 
 const scheduleTask = (task: () => void) => {
   const timeout = window.setTimeout(task, 0);
@@ -106,16 +107,53 @@ export const useAtomValue = <A,>(atom: Atom.Atom<A>): A => {
   return React.useSyncExternalStore(store.subscribe, store.snapshot, store.snapshot);
 };
 
-export const useAtomSet = <R, W>(atom: Atom.Writable<R, W>) => {
+type AtomSetMode = "value" | "promise" | "promiseExit";
+
+type AtomSetOptions<R, Mode extends AtomSetMode> = {
+  readonly mode?: ([R] extends [AsyncResult.AsyncResult<any, any>] ? Mode : "value") | undefined;
+};
+
+type AtomSet<R, W, Mode extends AtomSetMode> = "promise" extends Mode
+  ? (value: W) => Promise<AsyncResult.AsyncResult.Success<R>>
+  : "promiseExit" extends Mode
+    ? (
+        value: W,
+      ) => Promise<
+        Exit.Exit<AsyncResult.AsyncResult.Success<R>, AsyncResult.AsyncResult.Failure<R>>
+      >
+    : (value: W) => void;
+
+const flattenExit = <A, E>(exit: Exit.Exit<A, E>): A => {
+  if (Exit.isSuccess(exit)) {
+    return exit.value;
+  }
+
+  throw Cause.squash(exit.cause);
+};
+
+export const useAtomSet = <R, W, Mode extends AtomSetMode = never>(
+  atom: Atom.Writable<R, W>,
+  options?: AtomSetOptions<R, Mode>,
+): AtomSet<R, W, Mode> => {
   const registry = useRegistry();
   useMountAtom(atom);
 
   return React.useCallback(
     (value: W) => {
       registry.set(atom, value);
+
+      if (options?.mode === "promise" || options?.mode === "promiseExit") {
+        const promise = Effect.runPromiseExit(
+          AtomRegistry.getResult(registry, atom as Atom.Atom<AsyncResult.AsyncResult<any, any>>, {
+            suspendOnWaiting: true,
+          }),
+        );
+
+        return options.mode === "promise" ? promise.then(flattenExit) : promise;
+      }
     },
-    [atom, registry],
-  );
+    [atom, options?.mode, registry],
+  ) as AtomSet<R, W, Mode>;
 };
 
 export const useAtom = <R, W>(atom: Atom.Writable<R, W>) =>
