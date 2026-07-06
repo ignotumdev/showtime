@@ -38,8 +38,6 @@ const makeShowRpcLive = (token: string) => {
 };
 
 const startBackendEffect = Effect.fnUntraced(function* (rpcToken: string, onStarted?: () => void) {
-  const discovery = yield* ShowDiscovery.ShowDiscovery;
-  yield* discovery.discover;
   yield* Effect.logInfo(`Starting Showtime RPC server on ${showRpcHost}:${showRpcPort}`);
   yield* Effect.scoped(
     Effect.gen(function* () {

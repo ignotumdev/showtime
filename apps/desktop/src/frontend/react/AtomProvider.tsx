@@ -113,9 +113,9 @@ type AtomSetOptions<R, Mode extends AtomSetMode> = {
   readonly mode?: ([R] extends [AsyncResult.AsyncResult<any, any>] ? Mode : "value") | undefined;
 };
 
-type AtomSet<R, W, Mode extends AtomSetMode> = "promise" extends Mode
+type AtomSet<R, W, Mode extends AtomSetMode> = Mode extends "promise"
   ? (value: W) => Promise<AsyncResult.AsyncResult.Success<R>>
-  : "promiseExit" extends Mode
+  : Mode extends "promiseExit"
     ? (
         value: W,
       ) => Promise<
@@ -131,7 +131,7 @@ const flattenExit = <A, E>(exit: Exit.Exit<A, E>): A => {
   throw Cause.squash(exit.cause);
 };
 
-export const useAtomSet = <R, W, Mode extends AtomSetMode = never>(
+export const useAtomSet = <R, W, Mode extends AtomSetMode = "value">(
   atom: Atom.Writable<R, W>,
   options?: AtomSetOptions<R, Mode>,
 ): AtomSet<R, W, Mode> => {
