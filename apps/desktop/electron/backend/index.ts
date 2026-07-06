@@ -37,12 +37,18 @@ const makeShowRpcLive = (token: string) => {
   );
 };
 
-const startBackendEffect = Effect.fnUntraced(function* (rpcToken: string) {
+const startBackendEffect = Effect.fnUntraced(function* (rpcToken: string, onStarted?: () => void) {
   const discovery = yield* ShowDiscovery.ShowDiscovery;
   yield* discovery.discover;
   yield* Effect.logInfo(`Starting Showtime RPC server on ${showRpcHost}:${showRpcPort}`);
-  yield* Effect.scoped(Layer.launch(makeShowRpcLive(rpcToken)));
+  yield* Effect.scoped(
+    Effect.gen(function* () {
+      yield* Layer.build(makeShowRpcLive(rpcToken));
+      yield* Effect.sync(() => onStarted?.());
+      yield* Effect.never;
+    }),
+  );
 });
 
-export const startBackend = (rpcToken: string) =>
-  startBackendEffect(rpcToken).pipe(Effect.provide(BackendLive));
+export const startBackend = (rpcToken: string, onStarted?: () => void) =>
+  startBackendEffect(rpcToken, onStarted).pipe(Effect.provide(BackendLive));

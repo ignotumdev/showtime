@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
@@ -29,6 +29,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let backendStarted = false;
 const showRpcToken = randomBytes(32).toString("base64url");
 const showRpcWebSocketUrl = makeShowRpcWebSocketUrl(showRpcToken);
 
@@ -41,6 +42,11 @@ function getAppIconPath() {
 }
 
 function createWindow() {
+  if (win && !win.isDestroyed()) {
+    win.focus();
+    return;
+  }
+
   win = new BrowserWindow({
     autoHideMenuBar: true,
     icon: getAppIconPath(),
@@ -70,6 +76,21 @@ function createWindow() {
   }
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", () => {
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) {
+      win.restore();
+    }
+    win.focus();
+  }
+});
+
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
@@ -83,16 +104,29 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (backendStarted && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
-void app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
-  ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
-  Effect.runPromise(startBackend(showRpcToken)).catch((error: unknown) => {
-    console.error("Showtime backend startup failed", error);
+if (gotSingleInstanceLock) {
+  void app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
+    Effect.runPromise(
+      startBackend(showRpcToken, () => {
+        backendStarted = true;
+        createWindow();
+      }),
+    ).catch((error: unknown) => {
+      console.error("Showtime backend startup failed", error);
+      if (!backendStarted) {
+        dialog.showErrorBox(
+          "Showtime could not start",
+          "The local Showtime backend could not start. Please close other Showtime windows and try again.",
+        );
+        app.quit();
+      }
+    });
   });
-  createWindow();
-});
+}

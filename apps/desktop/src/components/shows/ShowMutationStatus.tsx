@@ -23,11 +23,12 @@ export function ShowMutationStatus() {
         ? deleteResult
         : undefined;
   const waiting =
-    (AsyncResult.isSuccess(createResult) && createResult.waiting) ||
-    (AsyncResult.isSuccess(editResult) && editResult.waiting) ||
-    (AsyncResult.isSuccess(deleteResult) && deleteResult.waiting);
+    AsyncResult.isWaiting(createResult) ||
+    AsyncResult.isWaiting(editResult) ||
+    AsyncResult.isWaiting(deleteResult);
+  const visibleFailure = waiting ? undefined : failure;
   const success =
-    !failure &&
+    !visibleFailure &&
     !waiting &&
     (AsyncResult.isSuccess(createResult) ||
       AsyncResult.isSuccess(editResult) ||
@@ -48,17 +49,17 @@ export function ShowMutationStatus() {
     return () => window.clearTimeout(timeout);
   }, [reset, success]);
 
-  if (!failure && !waiting && !success) {
+  if (!visibleFailure && !waiting && !success) {
     return null;
   }
 
   return (
     <div
-      role={failure ? "alert" : "status"}
-      aria-live={failure ? "assertive" : "polite"}
+      role={visibleFailure ? "alert" : "status"}
+      aria-live={visibleFailure ? "assertive" : "polite"}
       className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-lg"
     >
-      {failure ? (
+      {visibleFailure ? (
         <AlertCircleIcon className="size-4 text-destructive" />
       ) : waiting ? (
         <Spinner className="text-muted-foreground" />
@@ -66,8 +67,8 @@ export function ShowMutationStatus() {
         <CheckIcon className="size-4 text-muted-foreground" />
       )}
       <span className="min-w-0 flex-1">
-        {failure
-          ? showRpcErrorMessageFromCause(failure.cause)
+        {visibleFailure
+          ? showRpcErrorMessageFromCause(visibleFailure.cause)
           : waiting
             ? "Saving changes..."
             : "Changes saved"}

@@ -36,7 +36,7 @@ export function ShowList() {
 
   if (AsyncResult.isFailure(result)) {
     const previous = Option.getOrUndefined(result.previousSuccess);
-    if (previous) {
+    if (previous && previous.value.length > 0) {
       return <ShowItems shows={previous.value} />;
     }
 
