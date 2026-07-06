@@ -1,11 +1,16 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
-import { ShowColor, ShowId, ShowSummary } from "./show.js";
+import { ShowColor, ShowId, ShowName, ShowSummary } from "./show.js";
 
 export const showRpcHost = "127.0.0.1";
 export const showRpcPort = 34987;
-export const showRpcPath = "/rpc";
-export const showRpcWebSocketUrl = `ws://${showRpcHost}:${showRpcPort}${showRpcPath}`;
+export const showRpcPathPrefix = "/rpc";
+
+export const makeShowRpcPath = (token: string) =>
+  `${showRpcPathPrefix}/${encodeURIComponent(token)}`;
+
+export const makeShowRpcWebSocketUrl = (token: string) =>
+  `ws://${showRpcHost}:${showRpcPort}${makeShowRpcPath(token)}`;
 
 export class ShowRpcError extends Schema.TaggedErrorClass<ShowRpcError>()("ShowRpcError", {
   message: Schema.String,
@@ -19,7 +24,7 @@ export const ShowRpcGroup = RpcGroup.make(
   }),
   Rpc.make("CreateShow", {
     payload: {
-      name: Schema.String,
+      name: ShowName,
       color: ShowColor,
     },
     success: ShowSummary,
@@ -28,7 +33,7 @@ export const ShowRpcGroup = RpcGroup.make(
   Rpc.make("EditShow", {
     payload: {
       id: ShowId,
-      name: Schema.String,
+      name: ShowName,
       color: ShowColor,
     },
     success: ShowSummary,

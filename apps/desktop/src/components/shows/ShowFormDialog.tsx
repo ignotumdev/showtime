@@ -1,6 +1,6 @@
 import * as React from "react";
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
-import { showColors, type ShowColor } from "@showtime/contracts";
+import { showColors, type ShowColor, type ShowName } from "@showtime/contracts";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,7 +62,7 @@ export function ShowFormDialog() {
         editShow({
           payload: {
             id: dialog.show.id,
-            name: trimmed,
+            name: trimmed as ShowName,
             color,
           },
           ...showMutationOptions,
@@ -70,7 +70,7 @@ export function ShowFormDialog() {
       } else if (dialog.type === "create") {
         createShow({
           payload: {
-            name: trimmed,
+            name: trimmed as ShowName,
             color,
           },
           ...showMutationOptions,

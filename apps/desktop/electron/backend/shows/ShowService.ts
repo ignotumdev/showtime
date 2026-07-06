@@ -2,6 +2,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import {
   decodeShowName,
+  sortShowSummaries,
   ShowRpcError,
   type ShowFileDocument,
   type ShowColor,
@@ -58,10 +59,14 @@ const makeShowService = Effect.fnUntraced(function* () {
     const documents = [];
 
     for (const file of discovered) {
-      const document = yield* showFile
-        .read(file.path)
-        .pipe(Effect.mapError(toRpcError("Could not read show file.")));
-      documents.push({ document, path: file.path });
+      const parsed = yield* Effect.result(showFile.read(file.path));
+
+      if (parsed._tag === "Failure") {
+        yield* Effect.logWarning("Skipping unreadable show file", file.path, parsed.failure);
+        continue;
+      }
+
+      documents.push({ document: parsed.success, path: file.path });
     }
 
     return documents;
@@ -80,13 +85,7 @@ const makeShowService = Effect.fnUntraced(function* () {
 
   const list = listDocuments().pipe(
     Effect.map((documents) =>
-      documents
-        .map(({ document }) => toSummary(document))
-        .sort((left, right) =>
-          `${left.name.toLocaleLowerCase()}:${left.id}`.localeCompare(
-            `${right.name.toLocaleLowerCase()}:${right.id}`,
-          ),
-        ),
+      sortShowSummaries(documents.map(({ document }) => toSummary(document))),
     ),
     Effect.mapError(toRpcError("Could not list shows.")),
   );
@@ -123,8 +122,16 @@ const makeShowService = Effect.fnUntraced(function* () {
     );
     const found = yield* findById(id);
     const nextPath = yield* paths.makeShowFilePath({ id, name });
+    const targetPath = nextPath === found.path ? found.path : nextPath;
+
+    if (targetPath !== found.path) {
+      yield* fs
+        .rename(found.path, targetPath)
+        .pipe(Effect.mapError(toRpcError("Could not rename show file.")));
+    }
+
     const document = yield* showFile
-      .update(found.path, (current) => ({
+      .update(targetPath, (current) => ({
         ...current,
         config: {
           ...current.config,
@@ -133,12 +140,6 @@ const makeShowService = Effect.fnUntraced(function* () {
         },
       }))
       .pipe(Effect.mapError(toRpcError("Could not edit show.")));
-
-    if (nextPath !== found.path) {
-      yield* fs
-        .rename(found.path, nextPath)
-        .pipe(Effect.mapError(toRpcError("Could not rename show file.")));
-    }
 
     return toSummary(document);
   });

@@ -1,5 +1,5 @@
 import { AlertCircleIcon, FolderIcon } from "lucide-react";
-import { Cause, Option } from "effect";
+import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   Empty,
@@ -11,7 +11,8 @@ import {
 import { ItemGroup } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { showsAtom } from "@/frontend/shows/ShowAtoms";
+import { showsAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
+import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { ShowItem } from "./ShowItem";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -44,7 +45,7 @@ export function ShowList() {
             <AlertCircleIcon />
           </EmptyMedia>
           <EmptyTitle>Shows could not be loaded</EmptyTitle>
-          <EmptyDescription>{Cause.pretty(result.cause)}</EmptyDescription>
+          <EmptyDescription>{showRpcErrorMessageFromCause(result.cause)}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -67,16 +68,14 @@ export function ShowList() {
   return <ShowItems shows={result.value} />;
 }
 
-function ShowItems({
-  shows,
-}: {
-  readonly shows: ReadonlyArray<Parameters<typeof ShowItem>[0]["show"]>;
-}) {
+function ShowItems({ shows }: { readonly shows: ReadonlyArray<ShowListItem> }) {
   return (
     <ScrollArea className="h-full w-full px-4">
       <ItemGroup>
         {shows.map((show) => (
-          <ShowItem key={show.id} show={show} />
+          <div key={show.id} role="listitem">
+            <ShowItem show={show} />
+          </div>
         ))}
       </ItemGroup>
     </ScrollArea>

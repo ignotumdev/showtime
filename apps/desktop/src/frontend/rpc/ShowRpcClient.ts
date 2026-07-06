@@ -1,8 +1,10 @@
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { AtomRpc } from "effect/unstable/reactivity";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
-import { ShowRpcGroup, showRpcWebSocketUrl } from "@showtime/contracts";
+import { ShowRpcGroup } from "@showtime/contracts";
+
+const showRpcWebSocketUrl = Effect.promise(() => window.showtime.rpcWebSocketUrl());
 
 const ShowRpcProtocol = RpcClient.layerProtocolSocket().pipe(
   Layer.provide(Socket.layerWebSocket(showRpcWebSocketUrl)),

@@ -23,15 +23,15 @@ export function formatRelativeDate(value: string | number | Date, now: Date = ne
   const absoluteDiff = Math.abs(diff);
 
   if (absoluteDiff < MINUTE) {
-    return "Just now";
+    return relativeTimeFormatter.format(0, "second");
   }
 
   if (absoluteDiff < HOUR) {
-    return relativeTimeFormatter.format(Math.round(diff / MINUTE), "minute");
+    return relativeTimeFormatter.format(Math.trunc(diff / MINUTE), "minute");
   }
 
   if (absoluteDiff < DAY) {
-    return relativeTimeFormatter.format(Math.round(diff / HOUR), "hour");
+    return relativeTimeFormatter.format(Math.trunc(diff / HOUR), "hour");
   }
 
   if (absoluteDiff < 2 * DAY) {

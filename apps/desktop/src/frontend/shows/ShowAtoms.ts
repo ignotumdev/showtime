@@ -1,7 +1,9 @@
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
+  compareShowSummaries,
   idAlphabet,
   idSuffixLength,
+  sortShowSummaries,
   showIdPrefix,
   showRpcReactivityKey,
   type ShowColor,
@@ -18,6 +20,13 @@ export type ShowDialogState =
 
 export const showDialogAtom = Atom.make<ShowDialogState>({ type: "closed" }).pipe(Atom.keepAlive);
 
+export type ShowListItem = ShowSummary & {
+  readonly pending?: boolean;
+};
+
+const sortShowListItems = (shows: ReadonlyArray<ShowListItem>) =>
+  [...shows].sort(compareShowSummaries);
+
 const makeTemporaryShowId = (): ShowId => {
   const suffix = Array.from(
     { length: idSuffixLength },
@@ -26,13 +35,6 @@ const makeTemporaryShowId = (): ShowId => {
 
   return `${showIdPrefix}${suffix}` as ShowId;
 };
-
-const sortShows = (shows: ReadonlyArray<ShowSummary>) =>
-  [...shows].sort((left, right) =>
-    `${left.name.toLocaleLowerCase()}:${left.id}`.localeCompare(
-      `${right.name.toLocaleLowerCase()}:${right.id}`,
-    ),
-  );
 
 const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSummary["name"];
 
@@ -69,7 +71,7 @@ export const createShowAtom = showsAtom.pipe(
 
       const now = new Date().toISOString();
       return AsyncResult.success(
-        sortShows([
+        sortShowListItems([
           ...current.value,
           {
             id: makeTemporaryShowId(),
@@ -77,6 +79,7 @@ export const createShowAtom = showsAtom.pipe(
             color: optimisticShowColor(input.payload.color),
             createdAt: now,
             updatedAt: now,
+            pending: true,
           },
         ]),
       );
@@ -94,7 +97,7 @@ export const editShowAtom = showsAtom.pipe(
       }
 
       return AsyncResult.success(
-        sortShows(
+        sortShowSummaries(
           current.value.map((show) =>
             show.id === input.payload.id
               ? {
@@ -130,3 +133,5 @@ export const deleteShowAtom = showsAtom.pipe(
 export const showMutationOptions = {
   reactivityKeys: showRpcReactivityKey,
 } as const;
+
+export const showMutationAtoms = [createShowAtom, editShowAtom, deleteShowAtom] as const;

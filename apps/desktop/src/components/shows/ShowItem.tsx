@@ -15,13 +15,12 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAtomSet } from "@/frontend/react/AtomProvider";
-import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
+import { showDialogAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
 import { formatRelativeDate } from "@/lib/dates";
-import type { ShowSummary } from "@showtime/contracts";
 import { showColorClassNames } from "./show-color";
 
 type ShowItemProps = {
-  readonly show: ShowSummary;
+  readonly show: ShowListItem;
 };
 
 export function ShowItem({ show }: ShowItemProps) {
@@ -35,12 +34,14 @@ export function ShowItem({ show }: ShowItemProps) {
       <ItemContent>
         <ItemTitle>{show.name}</ItemTitle>
         <ItemDescription title={show.updatedAt}>
-          {formatRelativeDate(show.updatedAt)}
+          {show.pending ? "Saving..." : formatRelativeDate(show.updatedAt)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon-sm" disabled={show.pending} />}
+          >
             <EllipsisIcon />
             <span className="sr-only">Show actions</span>
           </DropdownMenuTrigger>

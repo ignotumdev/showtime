@@ -1,7 +1,9 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
+import { makeShowRpcWebSocketUrl } from "@showtime/contracts";
 import { startBackend } from "./backend";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +29,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+const showRpcToken = randomBytes(32).toString("base64url");
+const showRpcWebSocketUrl = makeShowRpcWebSocketUrl(showRpcToken);
 
 function getAppIconPath() {
   if (app.isPackaged) {
@@ -86,7 +90,8 @@ app.on("activate", () => {
 
 void app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  Effect.runPromise(startBackend).catch((error: unknown) => {
+  ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
+  Effect.runPromise(startBackend(showRpcToken)).catch((error: unknown) => {
     console.error("Showtime backend startup failed", error);
   });
   createWindow();

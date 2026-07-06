@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema, SchemaGetter } from "effect";
 
 export const showIdPrefix = "show_";
 export const idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -60,10 +60,17 @@ export const showColors = [
 export const ShowColor = Schema.Literals(showColors);
 export type ShowColor = typeof ShowColor.Type;
 
+const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
+  Schema.decodeTo(Schema.toType(ShowColor), {
+    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as ShowColor)),
+    encode: SchemaGetter.required(),
+  }),
+);
+
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ShowColor,
+  color: ShowColorWithLegacyDefault,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -158,3 +165,11 @@ export const ShowSummary = Schema.Struct({
 });
 
 export type ShowSummary = typeof ShowSummary.Type;
+
+export const compareShowSummaries = (left: ShowSummary, right: ShowSummary) =>
+  `${left.name.toLocaleLowerCase()}:${left.id}`.localeCompare(
+    `${right.name.toLocaleLowerCase()}:${right.id}`,
+  );
+
+export const sortShowSummaries = (shows: ReadonlyArray<ShowSummary>) =>
+  [...shows].sort(compareShowSummaries);
