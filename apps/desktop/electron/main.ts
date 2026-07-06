@@ -29,6 +29,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let backendStarted = false;
 const showRpcToken = randomBytes(32).toString("base64url");
 const showRpcWebSocketUrl = makeShowRpcWebSocketUrl(showRpcToken);
 
@@ -103,7 +104,7 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (backendStarted && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
@@ -112,9 +113,13 @@ if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
-    createWindow();
 
-    Effect.runPromise(startBackend(showRpcToken)).catch((error: unknown) => {
+    Effect.runPromise(
+      startBackend(showRpcToken, () => {
+        backendStarted = true;
+        createWindow();
+      }),
+    ).catch((error: unknown) => {
       console.error("Showtime backend startup failed", error);
       dialog.showErrorBox(
         "Showtime could not start",
