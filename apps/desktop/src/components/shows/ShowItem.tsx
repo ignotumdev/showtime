@@ -21,9 +21,10 @@ import { showColorClassNames } from "./show-color";
 
 type ShowItemProps = {
   readonly show: ShowListItem;
+  readonly now: Date;
 };
 
-export function ShowItem({ show }: ShowItemProps) {
+export function ShowItem({ show, now }: ShowItemProps) {
   const setDialog = useAtomSet(showDialogAtom);
 
   return (
@@ -34,7 +35,7 @@ export function ShowItem({ show }: ShowItemProps) {
       <ItemContent>
         <ItemTitle>{show.name}</ItemTitle>
         <ItemDescription title={show.updatedAt}>
-          {formatRelativeDate(show.updatedAt)}
+          {formatRelativeDate(show.updatedAt, now)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>

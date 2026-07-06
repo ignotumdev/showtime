@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { AlertCircleIcon, FolderIcon } from "lucide-react";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -11,6 +12,7 @@ import {
 import { ItemGroup } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAtomValue } from "@/frontend/react/AtomProvider";
+import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
 import { showsAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
 import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { ShowItem } from "./ShowItem";
@@ -69,12 +71,15 @@ export function ShowList() {
 }
 
 function ShowItems({ shows }: { readonly shows: ReadonlyArray<ShowListItem> }) {
+  const updatedAtValues = useMemo(() => shows.map((show) => show.updatedAt), [shows]);
+  const now = useRelativeDateNow(updatedAtValues);
+
   return (
     <ScrollArea className="h-full w-full px-4">
       <ItemGroup>
         {shows.map((show) => (
           <div key={show.id} role="listitem">
-            <ShowItem show={show} />
+            <ShowItem show={show} now={now} />
           </div>
         ))}
       </ItemGroup>
