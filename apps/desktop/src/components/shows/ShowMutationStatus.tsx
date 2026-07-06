@@ -1,11 +1,12 @@
 import * as React from "react";
 import { AlertCircleIcon, CheckIcon, XIcon } from "lucide-react";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
 import { showMutationAtoms } from "@/frontend/shows/ShowAtoms";
 import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { getShowMutationStatusState } from "./ShowMutationStatusState";
 
 export function ShowMutationStatus() {
   const createResult = useAtomValue(showMutationAtoms[0]);
@@ -15,24 +16,11 @@ export function ShowMutationStatus() {
   const resetEdit = useAtomSet(showMutationAtoms[1]);
   const resetDelete = useAtomSet(showMutationAtoms[2]);
 
-  const failure = AsyncResult.isFailure(createResult)
-    ? createResult
-    : AsyncResult.isFailure(editResult)
-      ? editResult
-      : AsyncResult.isFailure(deleteResult)
-        ? deleteResult
-        : undefined;
-  const waiting =
-    AsyncResult.isWaiting(createResult) ||
-    AsyncResult.isWaiting(editResult) ||
-    AsyncResult.isWaiting(deleteResult);
-  const visibleFailure = waiting ? undefined : failure;
-  const success =
-    !visibleFailure &&
-    !waiting &&
-    (AsyncResult.isSuccess(createResult) ||
-      AsyncResult.isSuccess(editResult) ||
-      AsyncResult.isSuccess(deleteResult));
+  const { visibleFailure, waiting, success } = getShowMutationStatusState([
+    createResult,
+    editResult,
+    deleteResult,
+  ]);
 
   const reset = React.useCallback(() => {
     resetCreate(Atom.Reset);
