@@ -16,7 +16,7 @@ import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/frontend/
 import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 
 type ShowDeleteDialogProps = {
-  readonly onDeleted?: () => void;
+  readonly onDeleted?: () => void | Promise<void>;
 };
 
 export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
@@ -26,8 +26,25 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
   const showName = dialog.type === "delete" ? dialog.show.name : "this show";
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | undefined>();
+  const dialogRef = React.useRef(dialog);
+
+  dialogRef.current = dialog;
 
   const close = () => setDialog({ type: "closed" });
+
+  const notifyDeleted = () => {
+    if (!onDeleted) {
+      return;
+    }
+
+    try {
+      void Promise.resolve(onDeleted()).catch((error: unknown) => {
+        console.error("Show deletion follow-up failed", error);
+      });
+    } catch (error) {
+      console.error("Show deletion follow-up failed", error);
+    }
+  };
 
   React.useEffect(() => {
     if (dialog.type === "delete") {
@@ -41,19 +58,25 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
       return;
     }
 
+    const deletingShowId = dialog.show.id;
     setIsDeleting(true);
     setDeleteError(undefined);
 
     const result = await deleteShow({
       payload: {
-        id: dialog.show.id,
+        id: deletingShowId,
       },
       ...showMutationOptions,
     });
 
+    const currentDialog = dialogRef.current;
+    if (currentDialog.type !== "delete" || currentDialog.show.id !== deletingShowId) {
+      return;
+    }
+
     if (Exit.isSuccess(result)) {
       close();
-      onDeleted?.();
+      notifyDeleted();
     } else {
       setDeleteError(showRpcErrorMessageFromCause(result.cause));
       setIsDeleting(false);

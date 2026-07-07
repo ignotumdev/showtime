@@ -34,6 +34,7 @@ export function ShowItem({ show, now }: ShowItemProps) {
         to="/shows/$showId"
         params={{ showId: show.id }}
         aria-label={`Open ${show.name}`}
+        title={show.updatedAt}
         className="absolute inset-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       />
       <ItemMedia className="pointer-events-none">

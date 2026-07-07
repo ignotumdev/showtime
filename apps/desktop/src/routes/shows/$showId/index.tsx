@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { PencilIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, FolderXIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -18,6 +19,8 @@ import { formatRelativeDate } from "@/lib/dates";
 import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { ShowFormDialog } from "@/components/shows/ShowFormDialog";
 import { showColorClassNames } from "@/components/shows/show-color";
+import { Spinner } from "@/components/ui/spinner";
+import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 
 export const Route = createFileRoute("/shows/$showId/")({
   component: RouteComponent,
@@ -26,11 +29,52 @@ export const Route = createFileRoute("/shows/$showId/")({
 function RouteComponent() {
   const navigate = useNavigate();
   const setDialog = useAtomSet(showDialogAtom);
-  const { show } = useShowFromParams();
+  const { show, result } = useShowFromParams();
   const updatedAtValues = React.useMemo(() => (show ? [show.updatedAt] : []), [show]);
   const now = useRelativeDateNow(updatedAtValues);
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
+
+  if (AsyncResult.isInitial(result)) {
+    return (
+      <Empty className="h-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Spinner />
+          </EmptyMedia>
+          <EmptyTitle>Loading show</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  if (AsyncResult.isFailure(result) && !show) {
+    return (
+      <Empty className="h-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AlertCircleIcon />
+          </EmptyMedia>
+          <EmptyTitle>Show could not be loaded</EmptyTitle>
+          <EmptyDescription>{showRpcErrorMessageFromCause(result.cause)}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  if (!show) {
+    return (
+      <Empty className="h-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <FolderXIcon />
+          </EmptyMedia>
+          <EmptyTitle>Show not found</EmptyTitle>
+          <EmptyDescription>This show may have been deleted.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
 
   return (
     <React.Fragment>
@@ -62,7 +106,7 @@ function RouteComponent() {
         )}
       </Empty>
       <ShowFormDialog />
-      <ShowDeleteDialog onDeleted={() => navigate({ to: "/" })} />
+      <ShowDeleteDialog onDeleted={() => navigate({ to: "/", replace: true })} />
     </React.Fragment>
   );
 }

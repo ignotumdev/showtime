@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAtomSet } from "@/frontend/react/AtomProvider";
 import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { showColorClassNames } from "./shows/show-color";
 
@@ -29,9 +29,11 @@ export function TitleBar({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const params = useParams({ strict: false });
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
   const isLiveRoute = pathname.includes("/live");
+  const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
 
   return (
@@ -46,13 +48,7 @@ export function TitleBar({
         {isLiveRoute && (
           <Button
             variant="ghost"
-            render={
-              liveShow ? (
-                <Link to="/shows/$showId" params={{ showId: liveShow.id }} />
-              ) : (
-                <Link to="/" />
-              )
-            }
+            render={showId ? <Link to="/shows/$showId" params={{ showId }} /> : <Link to="/" />}
           >
             <ArrowLeftIcon /> Back
           </Button>

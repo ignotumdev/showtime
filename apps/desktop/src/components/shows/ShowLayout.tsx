@@ -62,7 +62,7 @@ export function ShowLayout() {
 
             <SidebarGroup>
               <SidebarGroupLabel>Setlist</SidebarGroupLabel>
-              <SidebarGroupAction type="button" aria-label="Add song">
+              <SidebarGroupAction type="button" aria-label="Add song" disabled>
                 <PlusIcon />
               </SidebarGroupAction>
               <SidebarGroupContent>
@@ -109,15 +109,16 @@ export function ShowLayout() {
   );
 }
 
-type ShowSidebarLinkProps = {
-  readonly to:
-    | "/shows/$showId"
-    | "/shows/$showId/microphones"
-    | "/shows/$showId/setlist"
-    | "/shows/$showId/setlist/$songId";
-  readonly params:
-    | { readonly showId: string }
-    | { readonly showId: string; readonly songId: string };
+type ShowSidebarLinkProps = (
+  | {
+      readonly to: "/shows/$showId" | "/shows/$showId/microphones" | "/shows/$showId/setlist";
+      readonly params: { readonly showId: string };
+    }
+  | {
+      readonly to: "/shows/$showId/setlist/$songId";
+      readonly params: { readonly showId: string; readonly songId: string };
+    }
+) & {
   readonly label: string;
   readonly badge?: string;
   readonly number?: number;

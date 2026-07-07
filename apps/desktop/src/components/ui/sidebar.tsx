@@ -31,9 +31,9 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
   open: boolean;
-  setOpen: (open: boolean) => void;
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   openMobile: boolean;
-  setOpenMobile: (open: boolean) => void;
+  setOpenMobile: React.Dispatch<React.SetStateAction<boolean>>;
   isMobile: boolean;
   toggleSidebar: () => void;
 };
@@ -71,18 +71,19 @@ function SidebarProvider({
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value;
       if (setOpenProp) {
+        const openState = typeof value === "function" ? value(open) : value;
         setOpenProp(openState);
       } else {
-        _setOpen(openState);
+        _setOpen(value);
       }
-
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
     },
     [setOpenProp, open],
   );
+
+  React.useEffect(() => {
+    document.cookie = `${SIDEBAR_COOKIE_NAME}=${open}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+  }, [open]);
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
@@ -271,6 +272,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 
   return (
     <button
+      type="button"
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
@@ -406,8 +408,9 @@ function SidebarGroupAction({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
+        type: "button",
         className: cn(
-          "absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+          "absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
           className,
         ),
       },
@@ -494,6 +497,7 @@ function SidebarMenuButton({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
+        type: "button",
         className: cn(sidebarMenuButtonVariants({ variant, size }), className),
       },
       props,
@@ -543,8 +547,9 @@ function SidebarMenuAction({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
+        type: "button",
         className: cn(
-          "absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+          "absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
           showOnHover &&
             "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
           className,
