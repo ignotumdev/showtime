@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,17 +29,24 @@ export function ShowItem({ show, now }: ShowItemProps) {
   const setDialog = useAtomSet(showDialogAtom);
 
   return (
-    <Item variant="outline">
-      <ItemMedia>
+    <Item variant="outline" className="relative">
+      <Link
+        to="/shows/$showId"
+        params={{ showId: show.id }}
+        aria-label={`Open ${show.name}`}
+        title={show.updatedAt}
+        className="absolute inset-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      />
+      <ItemMedia className="pointer-events-none">
         <div className={`${showColorClassNames[show.color]} size-6 rounded-md`} />
       </ItemMedia>
-      <ItemContent>
+      <ItemContent className="pointer-events-none">
         <ItemTitle>{show.name}</ItemTitle>
         <ItemDescription title={show.updatedAt}>
           {formatRelativeDate(show.updatedAt, now)}
         </ItemDescription>
       </ItemContent>
-      <ItemActions>
+      <ItemActions className="relative z-10">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="ghost" size="icon-sm" disabled={show.pending} />}
