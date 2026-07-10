@@ -1,9 +1,12 @@
 import { Effect, Schema, SchemaGetter } from "effect";
+import { ShowColor } from "./color.js";
+import { idAlphabet, idSuffixLength } from "./ids.js";
+import { Microphone } from "./microphone.js";
+
+export { ShowColor, showColors } from "./color.js";
+export { idAlphabet, idSuffixLength } from "./ids.js";
 
 export const showIdPrefix = "show_";
-export const idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
-export const idSuffixLength = 16;
-
 const showIdPattern = new RegExp(`^${showIdPrefix}[${idAlphabet}]{${idSuffixLength}}$`);
 
 export const ShowId = Schema.String.pipe(
@@ -35,60 +38,6 @@ const NonBlankString = Schema.String.pipe(
 
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
-
-export const showColors = [
-  "red",
-  "orange",
-  "amber",
-  "yellow",
-  "lime",
-  "green",
-  "emerald",
-  "teal",
-  "cyan",
-  "sky",
-  "blue",
-  "indigo",
-  "violet",
-  "purple",
-  "fuchsia",
-  "pink",
-  "rose",
-  "neutral",
-] as const;
-
-export const ShowColor = Schema.Literals(showColors);
-export type ShowColor = typeof ShowColor.Type;
-
-export const microphoneIdPrefix = "mic_";
-const microphoneIdPattern = new RegExp(`^${microphoneIdPrefix}[${idAlphabet}]{${idSuffixLength}}$`);
-
-export const MicrophoneId = Schema.String.pipe(
-  Schema.check(
-    Schema.isPattern(microphoneIdPattern, {
-      expected: `${microphoneIdPrefix} followed by ${idSuffixLength} lowercase base36 characters`,
-    }),
-  ),
-  Schema.brand("MicrophoneId"),
-);
-export type MicrophoneId = typeof MicrophoneId.Type;
-
-export const MicrophoneNumber = Schema.Number.pipe(
-  Schema.check(
-    Schema.makeFilter((value) => Number.isSafeInteger(value) && value >= 1, {
-      expected: "a positive whole number",
-    }),
-  ),
-);
-export type MicrophoneNumber = typeof MicrophoneNumber.Type;
-
-export const Microphone = Schema.Struct({
-  id: MicrophoneId,
-  number: MicrophoneNumber,
-  color: ShowColor,
-  name: Schema.optional(Schema.String),
-});
-export type Microphone = typeof Microphone.Type;
 
 const MicrophonesWithLegacyDefault = Schema.optional(Schema.Array(Microphone)).pipe(
   Schema.decodeTo(Schema.toType(Schema.Array(Microphone)), {

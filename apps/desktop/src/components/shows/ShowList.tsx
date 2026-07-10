@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAtomValue } from "@/frontend/react/AtomProvider";
 import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
 import { showsAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { ShowItem } from "./ShowItem";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -47,7 +47,7 @@ export function ShowList() {
             <AlertCircleIcon />
           </EmptyMedia>
           <EmptyTitle>Shows could not be loaded</EmptyTitle>
-          <EmptyDescription>{showRpcErrorMessageFromCause(result.cause)}</EmptyDescription>
+          <EmptyDescription>{rpcErrorMessageFromCause(result.cause)}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

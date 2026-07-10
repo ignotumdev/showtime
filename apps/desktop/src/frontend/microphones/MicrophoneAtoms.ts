@@ -8,11 +8,11 @@ import {
   type MicrophoneId,
   type ShowId,
 } from "@showtime/contracts";
-import { ShowRpcClient } from "@/frontend/rpc/ShowRpcClient";
+import { RpcClient } from "@/frontend/rpc/RpcClient";
 
-const createMicrophoneMutation = ShowRpcClient.mutation("CreateMicrophone");
-const deleteMicrophoneMutation = ShowRpcClient.mutation("DeleteMicrophone");
-export const editMicrophoneAtom = ShowRpcClient.mutation("EditMicrophone").pipe(Atom.keepAlive);
+const createMicrophoneMutation = RpcClient.mutation("CreateMicrophone");
+const deleteMicrophoneMutation = RpcClient.mutation("DeleteMicrophone");
+export const editMicrophoneAtom = RpcClient.mutation("EditMicrophone").pipe(Atom.keepAlive);
 
 export type MicrophoneListItem = Microphone & { readonly pending?: boolean };
 
@@ -27,7 +27,7 @@ const makeTemporaryMicrophoneId = (): MicrophoneId => {
 };
 
 export const microphoneAtoms = Atom.family((showId: ShowId) => {
-  const query = ShowRpcClient.query(
+  const query = RpcClient.query(
     "ListMicrophones",
     { showId },
     {

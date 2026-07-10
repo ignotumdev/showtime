@@ -10,6 +10,7 @@ import * as ShowServiceLayer from "./ShowService";
 import * as ShowDiscovery from "./ShowDiscovery";
 import * as ShowFile from "./ShowFile";
 import * as ShowPaths from "./ShowPaths";
+import * as ShowRepository from "./ShowRepository";
 
 const tempHomes = new Set<string>();
 
@@ -23,8 +24,12 @@ const makeLayer = (home: string) =>
   ShowServiceLayer.layer.pipe(
     Layer.provideMerge(Ids.layer),
     Layer.provideMerge(
-      ShowDiscovery.layer.pipe(
-        Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
+      ShowRepository.layer.pipe(
+        Layer.provideMerge(
+          ShowDiscovery.layer.pipe(
+            Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
+          ),
+        ),
       ),
     ),
     Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
@@ -61,32 +66,5 @@ describe("ShowService", () => {
     expect(result.afterRename.map((show) => show.name)).toEqual(["Main Set"]);
     expect(result.afterRename.map((show) => show.color)).toEqual(["rose"]);
     expect(result.afterDelete).toEqual([]);
-  });
-
-  it("persists microphone creation and edits while allowing duplicate numbers", async () => {
-    const home = await makeTempHome();
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const shows = yield* ShowService;
-        const show = yield* shows.create({ name: "Soundcheck", color: "sky" });
-        const first = yield* shows.createMicrophone({ showId: show.id, color: "rose" });
-        const second = yield* shows.createMicrophone({ showId: show.id, color: "blue" });
-        yield* shows.editMicrophone({
-          showId: show.id,
-          id: second.id,
-          number: first.number,
-          color: "emerald",
-          name: "Lead vocal",
-        });
-        const afterEdit = yield* shows.listMicrophones(show.id);
-        yield* shows.deleteMicrophone({ showId: show.id, id: first.id });
-        const afterDelete = yield* shows.listMicrophones(show.id);
-        return { afterDelete, afterEdit };
-      }).pipe(Effect.provide(makeLayer(home))),
-    );
-
-    expect(result.afterEdit.map(({ number }) => number)).toEqual([1, 1]);
-    expect(result.afterEdit[1]).toMatchObject({ color: "emerald", name: "Lead vocal" });
-    expect(result.afterDelete).toEqual([result.afterEdit[1]]);
   });
 });

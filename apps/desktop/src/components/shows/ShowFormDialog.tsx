@@ -20,7 +20,7 @@ import {
   showDialogAtom,
   showMutationOptions,
 } from "@/frontend/shows/ShowAtoms";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { cn } from "@/lib/utils";
 import { randomShowColor, showColorClassNames } from "./show-color";
 import { Input } from "../ui/input";
@@ -94,7 +94,7 @@ export function ShowFormDialog() {
       if (Exit.isSuccess(result)) {
         close();
       } else {
-        setSubmitError(showRpcErrorMessageFromCause(result.cause));
+        setSubmitError(rpcErrorMessageFromCause(result.cause));
         setIsSubmitting(false);
       }
     },

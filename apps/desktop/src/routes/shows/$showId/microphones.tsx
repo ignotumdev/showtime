@@ -25,14 +25,14 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empt
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { microphoneColorClassNames } from "@/components/shows/show-color";
+import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
 import {
   editMicrophoneAtom,
   microphoneAtoms,
   type MicrophoneListItem,
-} from "@/frontend/shows/MicrophoneAtoms";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+} from "@/frontend/microphones/MicrophoneAtoms";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/microphones")({ component: RouteComponent });
@@ -277,7 +277,7 @@ function MicrophoneDeleteDialog({
     if (Exit.isSuccess(result)) {
       onClose();
     } else {
-      setDeleteError(showRpcErrorMessageFromCause(result.cause));
+      setDeleteError(rpcErrorMessageFromCause(result.cause));
       setIsDeleting(false);
     }
   };

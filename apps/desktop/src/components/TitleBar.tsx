@@ -13,7 +13,7 @@ import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
-import { microphoneAtoms } from "@/frontend/shows/MicrophoneAtoms";
+import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
 
 type TitleBarProps = {
   hideName?: boolean;
