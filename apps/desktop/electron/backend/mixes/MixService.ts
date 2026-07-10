@@ -51,23 +51,25 @@ const make = Effect.fnUntraced(function* () {
   const create: MixServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const found = yield* repository.findById(showId);
     const id = yield* ids.makeMixId;
-    const number = MixNumber.make(
-      String(
-        Math.max(
-          0,
-          ...found.document.mixes
-            .filter((mix) => mix.deletedAt === undefined)
-            .map((mix) => Number(mix.number))
-            .filter(Number.isSafeInteger),
-        ) + 1,
-      ),
-    );
     const now = yield* DateTime.now;
-    const mix: Mix = { id, number, color, createdAt: now, updatedAt: now };
-    yield* showFile
-      .update(found.path, (document) => ({ ...document, mixes: [...document.mixes, mix] }))
+    const updated = yield* showFile
+      .update(found.path, (document) => {
+        const number = MixNumber.make(
+          String(
+            Math.max(
+              0,
+              ...document.mixes
+                .filter((mix) => mix.deletedAt === undefined)
+                .map((mix) => Number(mix.number))
+                .filter(Number.isSafeInteger),
+            ) + 1,
+          ),
+        );
+        const mix: Mix = { id, number, color, createdAt: now, updatedAt: now };
+        return { ...document, mixes: [...document.mixes, mix] };
+      })
       .pipe(Effect.mapError(toRpcError("Could not add mix.")));
-    return mix;
+    return updated.mixes.find((mix) => mix.id === id)!;
   });
 
   const edit: MixServiceShape["edit"] = Effect.fnUntraced(function* (params) {

@@ -41,7 +41,8 @@ export const mixAtoms = Atom.family((showId: ShowId) => {
   const create = mixes.pipe(
     Atom.optimisticFn({
       reducer: (current, input: MutationInput<typeof createMixMutation>) => {
-        const currentMixes = AsyncResult.isSuccess(current) ? current.value : [];
+        if (!AsyncResult.isSuccess(current)) return current;
+        const currentMixes = current.value;
         const nextNumber = MixNumber.make(
           String(
             Math.max(

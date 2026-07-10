@@ -174,6 +174,7 @@ function MixCard({
       <CardContent className="flex flex-col items-center gap-3 text-center">
         <Popover>
           <PopoverTrigger
+            disabled={mix.pending}
             render={
               <div
                 className={cn(
@@ -186,6 +187,7 @@ function MixCard({
           >
             <input
               aria-label="Mix label"
+              disabled={mix.pending}
               value={number}
               onFocus={(event) => event.currentTarget.select()}
               onClick={(event) => {
@@ -209,6 +211,7 @@ function MixCard({
                   type="button"
                   aria-label={option}
                   aria-pressed={option === color}
+                  disabled={mix.pending}
                   className="relative flex size-8 items-center justify-center rounded-md outline-none ring-ring/50 hover:bg-accent focus-visible:ring-3"
                   onClick={async () => {
                     setColor(option);
@@ -238,6 +241,7 @@ function MixCard({
         <div className="w-full min-w-0">
           <Input
             aria-label={`Name for mix ${number}`}
+            disabled={mix.pending}
             placeholder="Optional name"
             value={name}
             className="text-center"

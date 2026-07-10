@@ -33,6 +33,29 @@ const makeLayer = (home: string) => {
 };
 
 describe("MixService", () => {
+  it("serializes concurrent creation and assigns unique labels", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const mixes = yield* MixService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const created = yield* Effect.all(
+          Array.from({ length: 10 }, () => mixes.create({ showId: show.id, color: "rose" })),
+          { concurrency: "unbounded" },
+        );
+        return { created, listed: yield* mixes.list(show.id) };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.created.map((mix) => mix.number).sort()).toEqual(
+      Array.from({ length: 10 }, (_, index) => String(index + 1)).sort(),
+    );
+    expect(result.listed).toHaveLength(11);
+    expect(new Set(result.listed.map((mix) => mix.id)).size).toBe(11);
+  });
+
   it("creates Main by default, allows renaming it, and refuses to delete it", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
     tempHomes.add(home);
