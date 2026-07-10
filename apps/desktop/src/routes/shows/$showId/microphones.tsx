@@ -21,7 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -49,7 +55,7 @@ function RouteComponent() {
   const [microphoneToDelete, setMicrophoneToDelete] = React.useState<MicrophoneListItem>();
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col">
+    <div className="mx-auto flex w-full max-w-6xl flex-col h-full">
       {AsyncResult.isInitial(result) ? (
         <Empty>
           <EmptyHeader>
@@ -75,6 +81,7 @@ function RouteComponent() {
               <Mic2Icon />
             </EmptyMedia>
             <EmptyTitle>No microphones yet</EmptyTitle>
+            <EmptyDescription>Add one to get started</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
