@@ -100,6 +100,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
         createdAt: now,
         updatedAt: now,
       },
+      microphones: [],
     });
     return filePath;
   });

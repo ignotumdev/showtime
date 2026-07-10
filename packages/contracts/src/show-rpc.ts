@@ -1,6 +1,14 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
-import { ShowColor, ShowId, ShowName, ShowSummary } from "./show.js";
+import {
+  Microphone,
+  MicrophoneId,
+  MicrophoneNumber,
+  ShowColor,
+  ShowId,
+  ShowName,
+  ShowSummary,
+} from "./show.js";
 
 export const showRpcHost = "127.0.0.1";
 export const showRpcPort = 34987;
@@ -46,6 +54,33 @@ export const ShowRpcGroup = RpcGroup.make(
     success: Schema.Void,
     error: ShowRpcError,
   }),
+  Rpc.make("ListMicrophones", {
+    payload: { showId: ShowId },
+    success: Schema.Array(Microphone),
+    error: ShowRpcError,
+  }),
+  Rpc.make("CreateMicrophone", {
+    payload: { showId: ShowId, color: ShowColor },
+    success: Microphone,
+    error: ShowRpcError,
+  }),
+  Rpc.make("EditMicrophone", {
+    payload: {
+      showId: ShowId,
+      id: MicrophoneId,
+      number: MicrophoneNumber,
+      color: ShowColor,
+      name: Schema.optional(Schema.String),
+    },
+    success: Microphone,
+    error: ShowRpcError,
+  }),
+  Rpc.make("DeleteMicrophone", {
+    payload: { showId: ShowId, id: MicrophoneId },
+    success: Schema.Void,
+    error: ShowRpcError,
+  }),
 );
 
 export const showRpcReactivityKey = ["shows"] as const;
+export const microphonesRpcReactivityKey = (showId: ShowId) => ["microphones", showId] as const;

@@ -8,6 +8,9 @@ import {
   type ShowColor,
   type ShowId,
   type ShowSummary,
+  type Microphone,
+  type MicrophoneId,
+  type MicrophoneNumber,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids";
 import { ShowDiscovery } from "./ShowDiscovery";
@@ -28,6 +31,24 @@ export class ShowService extends Context.Service<
       readonly color: ShowColor;
     }) => Effect.Effect<ShowSummary, ShowRpcError>;
     readonly delete: (id: ShowId) => Effect.Effect<void, ShowRpcError>;
+    readonly listMicrophones: (
+      showId: ShowId,
+    ) => Effect.Effect<ReadonlyArray<Microphone>, ShowRpcError>;
+    readonly createMicrophone: (params: {
+      readonly showId: ShowId;
+      readonly color: ShowColor;
+    }) => Effect.Effect<Microphone, ShowRpcError>;
+    readonly editMicrophone: (params: {
+      readonly showId: ShowId;
+      readonly id: MicrophoneId;
+      readonly number: MicrophoneNumber;
+      readonly color: ShowColor;
+      readonly name?: string;
+    }) => Effect.Effect<Microphone, ShowRpcError>;
+    readonly deleteMicrophone: (params: {
+      readonly showId: ShowId;
+      readonly id: MicrophoneId;
+    }) => Effect.Effect<void, ShowRpcError>;
   }
 >()("showtime/ShowService") {}
 
@@ -149,11 +170,84 @@ const makeShowService = Effect.fnUntraced(function* () {
     yield* fs.remove(found.path).pipe(Effect.mapError(toRpcError("Could not delete show.")));
   });
 
+  const listMicrophones = Effect.fnUntraced(function* (showId: ShowId) {
+    const found = yield* findById(showId);
+    return found.document.microphones;
+  });
+
+  const createMicrophone = Effect.fnUntraced(function* ({
+    showId,
+    color,
+  }: {
+    readonly showId: ShowId;
+    readonly color: ShowColor;
+  }) {
+    const found = yield* findById(showId);
+    const id = yield* ids.makeMicrophoneId;
+    const number = Math.max(0, ...found.document.microphones.map((mic) => mic.number)) + 1;
+    const microphone: Microphone = { id, number, color };
+    yield* showFile
+      .update(found.path, (document) => ({
+        ...document,
+        microphones: [...document.microphones, microphone],
+      }))
+      .pipe(Effect.mapError(toRpcError("Could not add microphone.")));
+    return microphone;
+  });
+
+  const editMicrophone = Effect.fnUntraced(function* (params: {
+    readonly showId: ShowId;
+    readonly id: MicrophoneId;
+    readonly number: MicrophoneNumber;
+    readonly color: ShowColor;
+    readonly name?: string;
+  }) {
+    const found = yield* findById(params.showId);
+    const current = found.document.microphones.find((mic) => mic.id === params.id);
+    if (!current) {
+      return yield* Effect.fail(new ShowRpcError({ message: "Microphone not found." }));
+    }
+    const trimmedName = params.name?.trim();
+    const microphone: Microphone = {
+      id: params.id,
+      number: params.number,
+      color: params.color,
+      ...(trimmedName ? { name: trimmedName } : {}),
+    };
+    yield* showFile
+      .update(found.path, (document) => ({
+        ...document,
+        microphones: document.microphones.map((mic) => (mic.id === params.id ? microphone : mic)),
+      }))
+      .pipe(Effect.mapError(toRpcError("Could not edit microphone.")));
+    return microphone;
+  });
+
+  const deleteMicrophone = Effect.fnUntraced(function* (params: {
+    readonly showId: ShowId;
+    readonly id: MicrophoneId;
+  }) {
+    const found = yield* findById(params.showId);
+    if (!found.document.microphones.some((mic) => mic.id === params.id)) {
+      return yield* Effect.fail(new ShowRpcError({ message: "Microphone not found." }));
+    }
+    yield* showFile
+      .update(found.path, (document) => ({
+        ...document,
+        microphones: document.microphones.filter((mic) => mic.id !== params.id),
+      }))
+      .pipe(Effect.mapError(toRpcError("Could not delete microphone.")));
+  });
+
   return ShowService.of({
     list,
     create,
     edit,
     delete: deleteShow,
+    listMicrophones,
+    createMicrophone,
+    editMicrophone,
+    deleteMicrophone,
   });
 });
 

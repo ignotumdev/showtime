@@ -62,4 +62,31 @@ describe("ShowService", () => {
     expect(result.afterRename.map((show) => show.color)).toEqual(["rose"]);
     expect(result.afterDelete).toEqual([]);
   });
+
+  it("persists microphone creation and edits while allowing duplicate numbers", async () => {
+    const home = await makeTempHome();
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const show = yield* shows.create({ name: "Soundcheck", color: "sky" });
+        const first = yield* shows.createMicrophone({ showId: show.id, color: "rose" });
+        const second = yield* shows.createMicrophone({ showId: show.id, color: "blue" });
+        yield* shows.editMicrophone({
+          showId: show.id,
+          id: second.id,
+          number: first.number,
+          color: "emerald",
+          name: "Lead vocal",
+        });
+        const afterEdit = yield* shows.listMicrophones(show.id);
+        yield* shows.deleteMicrophone({ showId: show.id, id: first.id });
+        const afterDelete = yield* shows.listMicrophones(show.id);
+        return { afterDelete, afterEdit };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.afterEdit.map(({ number }) => number)).toEqual([1, 1]);
+    expect(result.afterEdit[1]).toMatchObject({ color: "emerald", name: "Lead vocal" });
+    expect(result.afterDelete).toEqual([result.afterEdit[1]]);
+  });
 });

@@ -22,11 +22,8 @@ import {
 } from "@/frontend/shows/ShowAtoms";
 import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { cn } from "@/lib/utils";
-import { showColorClassNames } from "./show-color";
+import { randomShowColor, showColorClassNames } from "./show-color";
 import { Input } from "../ui/input";
-
-const randomShowColor = (): ShowColor =>
-  showColors[Math.floor(Math.random() * showColors.length)] ?? "sky";
 
 export function ShowFormDialog() {
   const [dialog, setDialog] = useAtom(showDialogAtom);

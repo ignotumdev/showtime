@@ -29,7 +29,24 @@ describe("ShowFileDocument", () => {
         createdAt: "2026-07-02T10:00:00.000Z",
         updatedAt: "2026-07-02T10:01:00.000Z",
       },
+      microphones: [],
     });
+  });
+
+  it("decodes microphones and supplies an empty list for legacy show files", () => {
+    const legacy = decode({
+      type: "showtime-show",
+      version: "dev",
+      config: {
+        id: "show_0123456789abcdef",
+        name: "Soundcheck",
+        color: "sky",
+        createdAt: "2026-07-02T10:00:00.000Z",
+        updatedAt: "2026-07-02T10:01:00.000Z",
+      },
+    });
+
+    expect(legacy.microphones).toEqual([]);
   });
 
   it("rejects blank show names", () => {
