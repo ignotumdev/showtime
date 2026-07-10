@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import {
   RpcError,
   type Microphone,
@@ -42,14 +42,23 @@ const make = Effect.fnUntraced(function* () {
   const showFile = yield* ShowFile;
 
   const list: MicrophoneServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).document.microphones;
+    return (yield* repository.findById(showId)).document.microphones.filter(
+      (microphone) => microphone.deletedAt === undefined,
+    );
   });
 
   const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const found = yield* repository.findById(showId);
     const id = yield* ids.makeMicrophoneId;
-    const number = Math.max(0, ...found.document.microphones.map((mic) => mic.number)) + 1;
-    const microphone: Microphone = { id, number, color };
+    const number =
+      Math.max(
+        0,
+        ...found.document.microphones
+          .filter((microphone) => microphone.deletedAt === undefined)
+          .map((microphone) => microphone.number),
+      ) + 1;
+    const now = yield* DateTime.now;
+    const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
     yield* showFile
       .update(found.path, (document) => ({
         ...document,
@@ -61,14 +70,21 @@ const make = Effect.fnUntraced(function* () {
 
   const edit: MicrophoneServiceShape["edit"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    if (!found.document.microphones.some((mic) => mic.id === params.id)) {
+    const existing = found.document.microphones.find(
+      (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
+    );
+    if (existing === undefined) {
       return yield* Effect.fail(new RpcError({ message: "Microphone not found." }));
     }
     const trimmedName = params.name?.trim();
+    const now = yield* DateTime.now;
+    const { name: _existingName, ...existingWithoutName } = existing;
     const microphone: Microphone = {
+      ...existingWithoutName,
       id: params.id,
       number: params.number,
       color: params.color,
+      updatedAt: now,
       ...(trimmedName ? { name: trimmedName } : {}),
     };
     yield* showFile
@@ -82,13 +98,22 @@ const make = Effect.fnUntraced(function* () {
 
   const deleteMicrophone: MicrophoneServiceShape["delete"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    if (!found.document.microphones.some((mic) => mic.id === params.id)) {
+    if (
+      !found.document.microphones.some(
+        (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
+      )
+    ) {
       return yield* Effect.fail(new RpcError({ message: "Microphone not found." }));
     }
+    const now = yield* DateTime.now;
     yield* showFile
       .update(found.path, (document) => ({
         ...document,
-        microphones: document.microphones.filter((mic) => mic.id !== params.id),
+        microphones: document.microphones.map((microphone) =>
+          microphone.id === params.id
+            ? { ...microphone, updatedAt: now, deletedAt: now }
+            : microphone,
+        ),
       }))
       .pipe(Effect.mapError(toRpcError("Could not delete microphone.")));
   });

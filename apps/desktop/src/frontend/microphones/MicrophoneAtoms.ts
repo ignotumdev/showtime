@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   idAlphabet,
@@ -50,10 +51,13 @@ export const microphoneAtoms = Atom.family((showId: ShowId) => {
       reducer: (current, input: MutationInput<typeof createMicrophoneMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
         const nextNumber = Math.max(0, ...current.value.map((mic) => mic.number)) + 1;
+        const now = DateTime.nowUnsafe();
         const microphone: MicrophoneListItem = {
           id: makeTemporaryMicrophoneId(),
           number: nextNumber,
           color: input.payload.color,
+          createdAt: now,
+          updatedAt: now,
           pending: true,
         };
         return AsyncResult.success([...current.value, microphone]);

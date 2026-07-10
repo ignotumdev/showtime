@@ -29,5 +29,8 @@ export const Microphone = Schema.Struct({
   number: MicrophoneNumber,
   color: Color,
   name: Schema.optional(Schema.String),
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+  deletedAt: Schema.optional(Schema.DateTimeUtcFromString),
 });
 export type Microphone = typeof Microphone.Type;

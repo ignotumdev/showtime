@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { DateTime, Effect, Layer } from "effect";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -52,12 +52,21 @@ describe("MicrophoneService", () => {
         const afterEdit = yield* microphones.list(show.id);
         yield* microphones.delete({ showId: show.id, id: first.id });
         const afterDelete = yield* microphones.list(show.id);
-        return { afterDelete, afterEdit };
+        const repository = yield* ShowRepository.ShowRepository;
+        const persisted = yield* repository.findById(show.id);
+        return { afterDelete, afterEdit, first, persisted: persisted.document.microphones };
       }).pipe(Effect.provide(makeLayer(home))),
     );
 
     expect(result.afterEdit.map(({ number }) => number)).toEqual([1, 1]);
     expect(result.afterEdit[1]).toMatchObject({ color: "emerald", name: "Lead vocal" });
     expect(result.afterDelete).toEqual([result.afterEdit[1]]);
+    expect(result.first.createdAt).toEqual(result.first.updatedAt);
+    expect(DateTime.toEpochMillis(result.afterEdit[1]!.updatedAt)).toBeGreaterThanOrEqual(
+      DateTime.toEpochMillis(result.afterEdit[1]!.createdAt),
+    );
+    expect(result.persisted).toHaveLength(2);
+    expect(result.persisted[0]!.deletedAt).toBeDefined();
+    expect(result.persisted[0]!.updatedAt).toEqual(result.persisted[0]!.deletedAt);
   });
 });

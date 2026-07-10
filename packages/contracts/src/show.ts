@@ -39,13 +39,6 @@ const NonBlankString = Schema.String.pipe(
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
 
-const MicrophonesWithLegacyDefault = Schema.optional(Schema.Array(Microphone)).pipe(
-  Schema.decodeTo(Schema.toType(Schema.Array(Microphone)), {
-    decode: SchemaGetter.withDefault(Effect.succeed([] as ReadonlyArray<Microphone>)),
-    encode: SchemaGetter.required(),
-  }),
-);
-
 const ColorWithLegacyDefault = Schema.optional(Color).pipe(
   Schema.decodeTo(Schema.toType(Color), {
     decode: SchemaGetter.withDefault(Effect.succeed("neutral" as Color)),
@@ -68,7 +61,7 @@ export const ShowFileDocument = Schema.Struct({
   type: ShowFileType,
   version: ShowConfigVersion,
   config: ShowConfig,
-  microphones: MicrophonesWithLegacyDefault,
+  microphones: Schema.Array(Microphone),
 });
 
 export type ShowFileDocument = typeof ShowFileDocument.Type;
