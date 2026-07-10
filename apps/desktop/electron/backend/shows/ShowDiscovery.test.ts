@@ -90,6 +90,7 @@ describe("ShowDiscovery", () => {
           createdAt: "2026-07-02T10:00:00.000Z",
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
+        microphones: [],
       }),
     );
     await writeFile(
@@ -104,6 +105,7 @@ describe("ShowDiscovery", () => {
           createdAt: "not-a-date",
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
+        microphones: [],
       }),
     );
     await writeFile(path.join(showsDirectory, "notes.txt"), "ignore");
@@ -115,7 +117,14 @@ describe("ShowDiscovery", () => {
       }).pipe(Effect.provide(makeLayer(home))),
     );
 
-    expect(discovered).toEqual([{ path: path.join(showsDirectory, "valid.showtime") }]);
+    expect(discovered).toEqual([
+      expect.objectContaining({
+        path: path.join(showsDirectory, "valid.showtime"),
+        document: expect.objectContaining({
+          config: expect.objectContaining({ id: "show_0123456789abcdef", name: "Valid" }),
+        }),
+      }),
+    ]);
   });
 
   it("skips files that cannot be statted and continues discovery", async () => {
@@ -135,6 +144,7 @@ describe("ShowDiscovery", () => {
         createdAt: "2026-07-02T10:00:00.000Z",
         updatedAt: "2026-07-02T10:00:00.000Z",
       },
+      microphones: [],
     };
     await writeFile(firstPath, JSON.stringify(validDocument));
     await writeFile(skippedPath, JSON.stringify(validDocument));
@@ -148,6 +158,8 @@ describe("ShowDiscovery", () => {
     );
 
     expect(discovered).toHaveLength(2);
-    expect(discovered).toEqual(expect.arrayContaining([{ path: firstPath }, { path: secondPath }]));
+    expect(discovered.map(({ path: filePath }) => filePath)).toEqual(
+      expect.arrayContaining([firstPath, secondPath]),
+    );
   });
 });

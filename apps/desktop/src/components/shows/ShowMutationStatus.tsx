@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
 import { showMutationAtoms } from "@/frontend/shows/ShowAtoms";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 import { getShowMutationStatusState } from "./ShowMutationStatusState";
 
 export function ShowMutationStatus() {
@@ -56,7 +56,7 @@ export function ShowMutationStatus() {
       )}
       <span className="min-w-0 flex-1">
         {visibleFailure
-          ? showRpcErrorMessageFromCause(visibleFailure.cause)
+          ? rpcErrorMessageFromCause(visibleFailure.cause)
           : waiting
             ? "Saving changes..."
             : "Changes saved"}

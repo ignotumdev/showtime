@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
-import { makeShowRpcWebSocketUrl } from "@showtime/contracts";
+import { makeRpcWebSocketUrl } from "@showtime/contracts";
 import { startBackend } from "./backend";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,8 +30,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 let backendStarted = false;
-const showRpcToken = randomBytes(32).toString("base64url");
-const showRpcWebSocketUrl = makeShowRpcWebSocketUrl(showRpcToken);
+const rpcToken = randomBytes(32).toString("base64url");
+const rpcWebSocketUrl = makeRpcWebSocketUrl(rpcToken);
 
 function getAppIconPath() {
   if (app.isPackaged) {
@@ -112,10 +112,10 @@ app.on("activate", () => {
 if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
-    ipcMain.handle("showtime:rpc-web-socket-url", () => showRpcWebSocketUrl);
+    ipcMain.handle("showtime:rpc-web-socket-url", () => rpcWebSocketUrl);
 
     Effect.runPromise(
-      startBackend(showRpcToken, () => {
+      startBackend(rpcToken, () => {
         backendStarted = true;
         createWindow();
       }),

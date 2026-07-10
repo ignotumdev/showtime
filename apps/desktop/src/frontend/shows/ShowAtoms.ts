@@ -1,16 +1,15 @@
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   compareShowSummaries,
-  idAlphabet,
-  idSuffixLength,
+  makeTemporaryId,
   sortShowSummaries,
   showIdPrefix,
-  showRpcReactivityKey,
-  type ShowColor,
+  showsRpcReactivityKey,
+  type Color,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
-import { ShowRpcClient } from "@/frontend/rpc/ShowRpcClient";
+import { RpcClient } from "@/frontend/rpc/RpcClient";
 
 export type ShowDialogState =
   | { readonly type: "closed" }
@@ -27,21 +26,14 @@ export type ShowListItem = ShowSummary & {
 const sortShowListItems = (shows: ReadonlyArray<ShowListItem>) =>
   [...shows].sort(compareShowSummaries);
 
-const makeTemporaryShowId = (): ShowId => {
-  const suffix = Array.from(
-    { length: idSuffixLength },
-    () => idAlphabet[Math.floor(Math.random() * idAlphabet.length)],
-  ).join("");
-
-  return `${showIdPrefix}${suffix}` as ShowId;
-};
+const makeTemporaryShowId = (): ShowId => makeTemporaryId(showIdPrefix) as ShowId;
 
 const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSummary["name"];
 
-const optimisticShowColor = (color: ShowColor): ShowSummary["color"] => color;
+const optimisticShowColor = (color: Color): ShowSummary["color"] => color;
 
-const showsQueryAtom = ShowRpcClient.query("ListShows", undefined, {
-  reactivityKeys: showRpcReactivityKey,
+const showsQueryAtom = RpcClient.query("ListShows", undefined, {
+  reactivityKeys: showsRpcReactivityKey,
   serializationKey: "all",
   timeToLive: "5 minutes",
 }).pipe(
@@ -56,9 +48,9 @@ const showsQueryAtom = ShowRpcClient.query("ListShows", undefined, {
 
 export const showsAtom = showsQueryAtom.pipe(Atom.optimistic, Atom.keepAlive);
 
-const createShowMutation = ShowRpcClient.mutation("CreateShow");
-const editShowMutation = ShowRpcClient.mutation("EditShow");
-const deleteShowMutation = ShowRpcClient.mutation("DeleteShow");
+const createShowMutation = RpcClient.mutation("CreateShow");
+const editShowMutation = RpcClient.mutation("EditShow");
+const deleteShowMutation = RpcClient.mutation("DeleteShow");
 
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 
@@ -131,7 +123,7 @@ export const deleteShowAtom = showsAtom.pipe(
 );
 
 export const showMutationOptions = {
-  reactivityKeys: showRpcReactivityKey,
+  reactivityKeys: showsRpcReactivityKey,
 } as const;
 
 export const showMutationAtoms = [createShowAtom, editShowAtom, deleteShowAtom] as const;

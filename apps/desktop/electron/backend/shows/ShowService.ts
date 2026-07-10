@@ -3,36 +3,36 @@ import { FileSystem } from "effect/FileSystem";
 import {
   decodeShowName,
   sortShowSummaries,
-  ShowRpcError,
+  RpcError,
   type ShowFileDocument,
-  type ShowColor,
+  type Color,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids";
-import { ShowDiscovery } from "./ShowDiscovery";
 import { ShowFile } from "./ShowFile";
 import { ShowPaths } from "./ShowPaths";
+import { ShowRepository } from "./ShowRepository";
 
 export class ShowService extends Context.Service<
   ShowService,
   {
-    readonly list: Effect.Effect<ReadonlyArray<ShowSummary>, ShowRpcError>;
+    readonly list: Effect.Effect<ReadonlyArray<ShowSummary>, RpcError>;
     readonly create: (params: {
       readonly name: string;
-      readonly color: ShowColor;
-    }) => Effect.Effect<ShowSummary, ShowRpcError>;
+      readonly color: Color;
+    }) => Effect.Effect<ShowSummary, RpcError>;
     readonly edit: (params: {
       readonly id: ShowId;
       readonly name: string;
-      readonly color: ShowColor;
-    }) => Effect.Effect<ShowSummary, ShowRpcError>;
-    readonly delete: (id: ShowId) => Effect.Effect<void, ShowRpcError>;
+      readonly color: Color;
+    }) => Effect.Effect<ShowSummary, RpcError>;
+    readonly delete: (id: ShowId) => Effect.Effect<void, RpcError>;
   }
 >()("showtime/ShowService") {}
 
 const toRpcError = (message: string) => (cause: unknown) =>
-  new ShowRpcError({
+  new RpcError({
     message,
     cause,
   });
@@ -48,42 +48,11 @@ const toSummary = (document: ShowFileDocument): ShowSummary => ({
 const makeShowService = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem;
   const ids = yield* Ids;
-  const discovery = yield* ShowDiscovery;
+  const repository = yield* ShowRepository;
   const showFile = yield* ShowFile;
   const paths = yield* ShowPaths;
 
-  const listDocuments = Effect.fnUntraced(function* () {
-    const discovered = yield* discovery.discover.pipe(
-      Effect.mapError(toRpcError("Could not discover shows.")),
-    );
-    const documents = [];
-
-    for (const file of discovered) {
-      const parsed = yield* Effect.result(showFile.read(file.path));
-
-      if (parsed._tag === "Failure") {
-        yield* Effect.logWarning("Skipping unreadable show file", file.path, parsed.failure);
-        continue;
-      }
-
-      documents.push({ document: parsed.success, path: file.path });
-    }
-
-    return documents;
-  });
-
-  const findById = Effect.fnUntraced(function* (id: ShowId) {
-    const documents = yield* listDocuments();
-    const found = documents.find((entry) => entry.document.config.id === id);
-
-    if (!found) {
-      return yield* Effect.fail(new ShowRpcError({ message: "Show not found." }));
-    }
-
-    return found;
-  });
-
-  const list = listDocuments().pipe(
+  const list = repository.list.pipe(
     Effect.map((documents) =>
       sortShowSummaries(documents.map(({ document }) => toSummary(document))),
     ),
@@ -95,7 +64,7 @@ const makeShowService = Effect.fnUntraced(function* () {
     color,
   }: {
     readonly name: string;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) {
     const id = yield* ids.makeShowId;
     const filePath = yield* showFile
@@ -115,12 +84,12 @@ const makeShowService = Effect.fnUntraced(function* () {
   }: {
     readonly id: ShowId;
     readonly name: string;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) {
     const showName = yield* decodeShowName(name).pipe(
       Effect.mapError(toRpcError("Show name cannot be empty.")),
     );
-    const found = yield* findById(id);
+    const found = yield* repository.findById(id);
     const nextPath = yield* paths.makeShowFilePath({ id, name });
     const targetPath = nextPath === found.path ? found.path : nextPath;
 
@@ -145,7 +114,7 @@ const makeShowService = Effect.fnUntraced(function* () {
   });
 
   const deleteShow = Effect.fnUntraced(function* (id: ShowId) {
-    const found = yield* findById(id);
+    const found = yield* repository.findById(id);
     yield* fs.remove(found.path).pipe(Effect.mapError(toRpcError("Could not delete show.")));
   });
 

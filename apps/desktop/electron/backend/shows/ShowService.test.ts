@@ -10,6 +10,7 @@ import * as ShowServiceLayer from "./ShowService";
 import * as ShowDiscovery from "./ShowDiscovery";
 import * as ShowFile from "./ShowFile";
 import * as ShowPaths from "./ShowPaths";
+import * as ShowRepository from "./ShowRepository";
 
 const tempHomes = new Set<string>();
 
@@ -23,8 +24,12 @@ const makeLayer = (home: string) =>
   ShowServiceLayer.layer.pipe(
     Layer.provideMerge(Ids.layer),
     Layer.provideMerge(
-      ShowDiscovery.layer.pipe(
-        Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
+      ShowRepository.layer.pipe(
+        Layer.provideMerge(
+          ShowDiscovery.layer.pipe(
+            Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
+          ),
+        ),
       ),
     ),
     Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
