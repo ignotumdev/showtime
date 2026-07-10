@@ -1,7 +1,8 @@
-import { Effect, Schema, SchemaGetter } from "effect";
+import { Schema } from "effect";
 import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
 import { Microphone } from "./microphone.js";
+import { Mix } from "./mix.js";
 
 export { Color, colors } from "./color.js";
 export const showIdPrefix = "show_";
@@ -37,17 +38,10 @@ const NonBlankString = Schema.String.pipe(
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
 
-const ColorWithLegacyDefault = Schema.optional(Color).pipe(
-  Schema.decodeTo(Schema.toType(Color), {
-    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as Color)),
-    encode: SchemaGetter.required(),
-  }),
-);
-
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ColorWithLegacyDefault,
+  color: Color,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -60,6 +54,7 @@ export const ShowFileDocument = Schema.Struct({
   version: ShowConfigVersion,
   config: ShowConfig,
   microphones: Schema.Array(Microphone),
+  mixes: Schema.Array(Mix),
 });
 
 export type ShowFileDocument = typeof ShowFileDocument.Type;

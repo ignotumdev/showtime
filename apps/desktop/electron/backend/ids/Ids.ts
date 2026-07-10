@@ -7,6 +7,8 @@ import {
   microphoneIdPrefix,
   ShowId,
   showIdPrefix,
+  MixId,
+  mixIdPrefix,
 } from "@showtime/contracts";
 
 export class Ids extends Context.Service<
@@ -14,6 +16,7 @@ export class Ids extends Context.Service<
   {
     readonly makeShowId: Effect.Effect<ShowId>;
     readonly makeMicrophoneId: Effect.Effect<MicrophoneId>;
+    readonly makeMixId: Effect.Effect<MixId>;
   }
 >()("showtime/Ids") {}
 
@@ -28,6 +31,10 @@ export const layer = Layer.succeed(
     ),
     makeMicrophoneId: Effect.sync(() => `${microphoneIdPrefix}${makeId()}`).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(MicrophoneId)),
+      Effect.orDie,
+    ),
+    makeMixId: Effect.sync(() => `${mixIdPrefix}${makeId()}`).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(MixId)),
       Effect.orDie,
     ),
   }),

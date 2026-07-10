@@ -13,6 +13,9 @@ import {
   type ShowFileDocument,
   type Color,
   type ShowId,
+  mainMixId,
+  MixId,
+  MixNumber,
 } from "@showtime/contracts";
 import { ShowPaths } from "./ShowPaths";
 
@@ -101,6 +104,16 @@ const makeShowFile = Effect.fnUntraced(function* () {
         updatedAt: now,
       },
       microphones: [],
+      mixes: [
+        {
+          id: MixId.make(mainMixId),
+          number: MixNumber.make("LR"),
+          color: "sky",
+          name: "Main",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
     });
     return filePath;
   });

@@ -91,6 +91,7 @@ describe("ShowDiscovery", () => {
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
         microphones: [],
+        mixes: [],
       }),
     );
     await writeFile(
@@ -106,6 +107,7 @@ describe("ShowDiscovery", () => {
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
         microphones: [],
+        mixes: [],
       }),
     );
     await writeFile(path.join(showsDirectory, "notes.txt"), "ignore");
@@ -145,6 +147,7 @@ describe("ShowDiscovery", () => {
         updatedAt: "2026-07-02T10:00:00.000Z",
       },
       microphones: [],
+      mixes: [],
     };
     await writeFile(firstPath, JSON.stringify(validDocument));
     await writeFile(skippedPath, JSON.stringify(validDocument));
