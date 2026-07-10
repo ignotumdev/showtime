@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAtom, useAtomSet } from "@/frontend/react/AtomProvider";
 import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/frontend/shows/ShowAtoms";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 
 type ShowDeleteDialogProps = {
   readonly onDeleted?: () => void | Promise<void>;
@@ -78,7 +78,7 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
       close();
       notifyDeleted();
     } else {
-      setDeleteError(showRpcErrorMessageFromCause(result.cause));
+      setDeleteError(rpcErrorMessageFromCause(result.cause));
       setIsDeleting(false);
     }
   };

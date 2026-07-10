@@ -1,6 +1,8 @@
-import type { ShowColor } from "@showtime/contracts";
+import { colors, type Color } from "@showtime/contracts";
 
-export const showColorClassNames: Record<ShowColor, string> = {
+export const randomShowColor = (): Color => colors[Math.floor(Math.random() * colors.length)];
+
+export const showColorClassNames: Record<Color, string> = {
   red: "bg-red-500",
   orange: "bg-orange-500",
   amber: "bg-amber-500",

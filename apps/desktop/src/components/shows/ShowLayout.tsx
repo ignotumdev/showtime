@@ -34,9 +34,9 @@ export function ShowLayout() {
 
   return (
     <React.Fragment>
-      <TitleBar hideName={true} stack="below-content" />
-      <SidebarProvider className="relative z-20 h-screen overflow-hidden bg-background">
-        <Sidebar collapsible="none">
+      <TitleBar hideName={true} stack="above-content" />
+      <SidebarProvider className="relative h-screen overflow-hidden bg-background">
+        <Sidebar collapsible="none" className="relative z-40">
           <SidebarHeader>
             <Link
               to="/shows/$showId"
@@ -101,7 +101,7 @@ export function ShowLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="min-w-0 overflow-auto p-4">
+        <SidebarInset className="z-20 min-w-0 overflow-auto px-4 pt-14 pb-4">
           <Outlet />
         </SidebarInset>
       </SidebarProvider>

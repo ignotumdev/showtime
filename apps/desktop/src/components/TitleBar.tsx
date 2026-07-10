@@ -1,5 +1,10 @@
 import iconUrl from "../../../../assets/icon.svg";
-import type { ShowColor, ShowId, ShowName } from "@showtime/contracts";
+import {
+  microphonesRpcReactivityKey,
+  type Color,
+  type ShowId,
+  type ShowName,
+} from "@showtime/contracts";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +12,8 @@ import { useAtomSet } from "@/frontend/react/AtomProvider";
 import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
-import { showColorClassNames } from "./shows/show-color";
+import { randomShowColor, showColorClassNames } from "./shows/show-color";
+import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
 
 type TitleBarProps = {
   hideName?: boolean;
@@ -15,9 +21,9 @@ type TitleBarProps = {
   liveShow?: {
     readonly id: ShowId;
     readonly name: ShowName;
-    readonly color: ShowColor;
+    readonly color: Color;
   };
-  stack?: "default" | "below-content";
+  stack?: "default" | "above-content" | "below-content";
 };
 
 export function TitleBar({
@@ -32,6 +38,7 @@ export function TitleBar({
   const params = useParams({ strict: false });
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
+  const isMicrophonesRoute = pathname.endsWith("/microphones");
   const isLiveRoute = pathname.includes("/live");
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
@@ -42,6 +49,7 @@ export function TitleBar({
         "drag-region fixed inset-x-0 top-0 z-10 flex h-10 select-none items-center bg-[#0a0a0a] py-0 pr-35 pl-3",
         isMacOS && "pr-3 pl-20.5",
         stack === "below-content" && "z-0",
+        stack === "above-content" && "z-30",
       )}
     >
       <div className="no-drag-region flex items-center gap-1" aria-label="Window toolbar">
@@ -76,7 +84,25 @@ export function TitleBar({
             New show
           </Button>
         )}
+        {isMicrophonesRoute && showId && <AddMicrophoneButton showId={showId as ShowId} />}
       </div>
     </header>
+  );
+}
+
+function AddMicrophoneButton({ showId }: { readonly showId: ShowId }) {
+  const createMicrophone = useAtomSet(microphoneAtoms(showId).create);
+  return (
+    <Button
+      size="sm"
+      onClick={() =>
+        createMicrophone({
+          payload: { showId, color: randomShowColor() },
+          reactivityKeys: microphonesRpcReactivityKey(showId),
+        })
+      }
+    >
+      <PlusIcon /> Add microphone
+    </Button>
   );
 }

@@ -20,7 +20,7 @@ import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { ShowFormDialog } from "@/components/shows/ShowFormDialog";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { Spinner } from "@/components/ui/spinner";
-import { showRpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
 
 export const Route = createFileRoute("/shows/$showId/")({
   component: RouteComponent,
@@ -56,7 +56,7 @@ function RouteComponent() {
             <AlertCircleIcon />
           </EmptyMedia>
           <EmptyTitle>Show could not be loaded</EmptyTitle>
-          <EmptyDescription>{showRpcErrorMessageFromCause(result.cause)}</EmptyDescription>
+          <EmptyDescription>{rpcErrorMessageFromCause(result.cause)}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

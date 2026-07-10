@@ -1,9 +1,10 @@
 import { Effect, Schema, SchemaGetter } from "effect";
+import { Color } from "./color.js";
+import { idAlphabet, idSuffixLength } from "./ids.js";
+import { Microphone } from "./microphone.js";
 
+export { Color, colors } from "./color.js";
 export const showIdPrefix = "show_";
-export const idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
-export const idSuffixLength = 16;
-
 const showIdPattern = new RegExp(`^${showIdPrefix}[${idAlphabet}]{${idSuffixLength}}$`);
 
 export const ShowId = Schema.String.pipe(
@@ -36,33 +37,9 @@ const NonBlankString = Schema.String.pipe(
 export const ShowName = NonBlankString.pipe(Schema.brand("ShowName"));
 export type ShowName = typeof ShowName.Type;
 
-export const showColors = [
-  "red",
-  "orange",
-  "amber",
-  "yellow",
-  "lime",
-  "green",
-  "emerald",
-  "teal",
-  "cyan",
-  "sky",
-  "blue",
-  "indigo",
-  "violet",
-  "purple",
-  "fuchsia",
-  "pink",
-  "rose",
-  "neutral",
-] as const;
-
-export const ShowColor = Schema.Literals(showColors);
-export type ShowColor = typeof ShowColor.Type;
-
-const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
-  Schema.decodeTo(Schema.toType(ShowColor), {
-    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as ShowColor)),
+const ColorWithLegacyDefault = Schema.optional(Color).pipe(
+  Schema.decodeTo(Schema.toType(Color), {
+    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as Color)),
     encode: SchemaGetter.required(),
   }),
 );
@@ -70,7 +47,7 @@ const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ShowColorWithLegacyDefault,
+  color: ColorWithLegacyDefault,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -82,6 +59,7 @@ export const ShowFileDocument = Schema.Struct({
   type: ShowFileType,
   version: ShowConfigVersion,
   config: ShowConfig,
+  microphones: Schema.Array(Microphone),
 });
 
 export type ShowFileDocument = typeof ShowFileDocument.Type;
@@ -159,7 +137,7 @@ export type ShowDiscoveryError = ShowDiscoveryDirectoryError | ShowDiscoveryStat
 export const ShowSummary = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ShowColor,
+  color: Color,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });

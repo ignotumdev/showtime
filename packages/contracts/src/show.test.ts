@@ -17,6 +17,7 @@ describe("ShowFileDocument", () => {
         createdAt: "2026-07-02T10:00:00.000Z",
         updatedAt: "2026-07-02T10:01:00.000Z",
       },
+      microphones: [],
     });
 
     expect(encode(decoded)).toEqual({
@@ -29,7 +30,43 @@ describe("ShowFileDocument", () => {
         createdAt: "2026-07-02T10:00:00.000Z",
         updatedAt: "2026-07-02T10:01:00.000Z",
       },
+      microphones: [],
     });
+  });
+
+  it("decodes and encodes microphone lifecycle timestamps", () => {
+    const decoded = decode({
+      type: "showtime-show",
+      version: "dev",
+      config: {
+        id: "show_0123456789abcdef",
+        name: "Soundcheck",
+        color: "sky",
+        createdAt: "2026-07-02T10:00:00.000Z",
+        updatedAt: "2026-07-02T10:01:00.000Z",
+      },
+      microphones: [
+        {
+          id: "mic_0123456789abcdef",
+          number: 1,
+          color: "rose",
+          createdAt: "2026-07-02T10:02:00.000Z",
+          updatedAt: "2026-07-02T10:03:00.000Z",
+          deletedAt: "2026-07-02T10:04:00.000Z",
+        },
+      ],
+    });
+
+    expect(encode(decoded).microphones).toEqual([
+      {
+        id: "mic_0123456789abcdef",
+        number: 1,
+        color: "rose",
+        createdAt: "2026-07-02T10:02:00.000Z",
+        updatedAt: "2026-07-02T10:03:00.000Z",
+        deletedAt: "2026-07-02T10:04:00.000Z",
+      },
+    ]);
   });
 
   it("rejects blank show names", () => {
@@ -44,6 +81,7 @@ describe("ShowFileDocument", () => {
           createdAt: "2026-07-02T10:00:00.000Z",
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
+        microphones: [],
       }),
     ).toThrow();
   });
@@ -61,6 +99,7 @@ describe("ShowFileDocument", () => {
             createdAt: "not-a-date",
             updatedAt: "2026-07-02T10:00:00.000Z",
           },
+          microphones: [],
         }),
       ),
     ).rejects.toThrow();
