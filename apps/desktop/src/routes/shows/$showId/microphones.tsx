@@ -5,9 +5,9 @@ import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   microphonesRpcReactivityKey,
-  showColors,
+  colors as colorOptions,
   type MicrophoneNumber,
-  type ShowColor,
+  type Color,
   type ShowId,
 } from "@showtime/contracts";
 import { Card, CardContent } from "@/components/ui/card";
@@ -120,7 +120,7 @@ function MicrophoneCard({
     setColor(microphone.color);
   }, [microphone.color, microphone.name, microphone.number]);
 
-  const save = (next: { number?: number; name?: string; color?: ShowColor }) =>
+  const save = (next: { number?: number; name?: string; color?: Color }) =>
     edit({
       payload: {
         showId,
@@ -190,7 +190,7 @@ function MicrophoneCard({
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto">
             <div className="grid grid-cols-6 gap-2">
-              {showColors.map((option) => (
+              {colorOptions.map((option) => (
                 <button
                   key={option}
                   type="button"

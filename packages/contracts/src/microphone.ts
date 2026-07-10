@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { ShowColor } from "./color.js";
+import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
 
 export const microphoneIdPrefix = "mic_";
@@ -27,7 +27,7 @@ export type MicrophoneNumber = typeof MicrophoneNumber.Type;
 export const Microphone = Schema.Struct({
   id: MicrophoneId,
   number: MicrophoneNumber,
-  color: ShowColor,
+  color: Color,
   name: Schema.optional(Schema.String),
 });
 export type Microphone = typeof Microphone.Type;

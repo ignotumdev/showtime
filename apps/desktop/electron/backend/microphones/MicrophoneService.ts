@@ -4,7 +4,7 @@ import {
   type Microphone,
   type MicrophoneId,
   type MicrophoneNumber,
-  type ShowColor,
+  type Color,
   type ShowId,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids";
@@ -15,13 +15,13 @@ interface MicrophoneServiceShape {
   readonly list: (showId: ShowId) => Effect.Effect<ReadonlyArray<Microphone>, RpcError>;
   readonly create: (params: {
     readonly showId: ShowId;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) => Effect.Effect<Microphone, RpcError>;
   readonly edit: (params: {
     readonly showId: ShowId;
     readonly id: MicrophoneId;
     readonly number: MicrophoneNumber;
-    readonly color: ShowColor;
+    readonly color: Color;
     readonly name?: string;
   }) => Effect.Effect<Microphone, RpcError>;
   readonly delete: (params: {

@@ -6,7 +6,7 @@ import {
   sortShowSummaries,
   showIdPrefix,
   showsRpcReactivityKey,
-  type ShowColor,
+  type Color,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
@@ -38,7 +38,7 @@ const makeTemporaryShowId = (): ShowId => {
 
 const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSummary["name"];
 
-const optimisticShowColor = (color: ShowColor): ShowSummary["color"] => color;
+const optimisticShowColor = (color: Color): ShowSummary["color"] => color;
 
 const showsQueryAtom = RpcClient.query("ListShows", undefined, {
   reactivityKeys: showsRpcReactivityKey,

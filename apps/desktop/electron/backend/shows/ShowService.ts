@@ -5,7 +5,7 @@ import {
   sortShowSummaries,
   RpcError,
   type ShowFileDocument,
-  type ShowColor,
+  type Color,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
@@ -20,12 +20,12 @@ export class ShowService extends Context.Service<
     readonly list: Effect.Effect<ReadonlyArray<ShowSummary>, RpcError>;
     readonly create: (params: {
       readonly name: string;
-      readonly color: ShowColor;
+      readonly color: Color;
     }) => Effect.Effect<ShowSummary, RpcError>;
     readonly edit: (params: {
       readonly id: ShowId;
       readonly name: string;
-      readonly color: ShowColor;
+      readonly color: Color;
     }) => Effect.Effect<ShowSummary, RpcError>;
     readonly delete: (id: ShowId) => Effect.Effect<void, RpcError>;
   }
@@ -64,7 +64,7 @@ const makeShowService = Effect.fnUntraced(function* () {
     color,
   }: {
     readonly name: string;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) {
     const id = yield* ids.makeShowId;
     const filePath = yield* showFile
@@ -84,7 +84,7 @@ const makeShowService = Effect.fnUntraced(function* () {
   }: {
     readonly id: ShowId;
     readonly name: string;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) {
     const showName = yield* decodeShowName(name).pipe(
       Effect.mapError(toRpcError("Show name cannot be empty.")),

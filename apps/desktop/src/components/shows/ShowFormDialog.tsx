@@ -1,6 +1,6 @@
 import * as React from "react";
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
-import { showColors, type ShowColor, type ShowName } from "@showtime/contracts";
+import { colors, type Color, type ShowName } from "@showtime/contracts";
 import { Exit } from "effect";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +32,7 @@ export function ShowFormDialog() {
   const isOpen = dialog.type === "create" || dialog.type === "edit";
   const isEdit = dialog.type === "edit";
   const [name, setName] = React.useState("");
-  const [color, setColor] = React.useState<ShowColor>("sky");
+  const [color, setColor] = React.useState<Color>("sky");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | undefined>();
 
@@ -129,7 +129,7 @@ export function ShowFormDialog() {
               </PopoverTrigger>
               <PopoverContent align="start">
                 <div className="grid grid-cols-6 gap-2">
-                  {showColors.map((option) => (
+                  {colors.map((option) => (
                     <button
                       key={option}
                       type="button"

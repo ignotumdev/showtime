@@ -1,7 +1,7 @@
 import iconUrl from "../../../../assets/icon.svg";
 import {
   microphonesRpcReactivityKey,
-  type ShowColor,
+  type Color,
   type ShowId,
   type ShowName,
 } from "@showtime/contracts";
@@ -21,7 +21,7 @@ type TitleBarProps = {
   liveShow?: {
     readonly id: ShowId;
     readonly name: ShowName;
-    readonly color: ShowColor;
+    readonly color: Color;
   };
   stack?: "default" | "above-content" | "below-content";
 };

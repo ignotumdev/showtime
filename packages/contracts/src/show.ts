@@ -1,9 +1,9 @@
 import { Effect, Schema, SchemaGetter } from "effect";
-import { ShowColor } from "./color.js";
+import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
 import { Microphone } from "./microphone.js";
 
-export { ShowColor, showColors } from "./color.js";
+export { Color, colors } from "./color.js";
 export { idAlphabet, idSuffixLength } from "./ids.js";
 
 export const showIdPrefix = "show_";
@@ -46,9 +46,9 @@ const MicrophonesWithLegacyDefault = Schema.optional(Schema.Array(Microphone)).p
   }),
 );
 
-const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
-  Schema.decodeTo(Schema.toType(ShowColor), {
-    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as ShowColor)),
+const ColorWithLegacyDefault = Schema.optional(Color).pipe(
+  Schema.decodeTo(Schema.toType(Color), {
+    decode: SchemaGetter.withDefault(Effect.succeed("neutral" as Color)),
     encode: SchemaGetter.required(),
   }),
 );
@@ -56,7 +56,7 @@ const ShowColorWithLegacyDefault = Schema.optional(ShowColor).pipe(
 export const ShowConfig = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ShowColorWithLegacyDefault,
+  color: ColorWithLegacyDefault,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -146,7 +146,7 @@ export type ShowDiscoveryError = ShowDiscoveryDirectoryError | ShowDiscoveryStat
 export const ShowSummary = Schema.Struct({
   id: ShowId,
   name: ShowName,
-  color: ShowColor,
+  color: Color,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });

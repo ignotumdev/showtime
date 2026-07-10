@@ -11,7 +11,7 @@ import {
   ShowFileWriteError,
   type ShowFileError,
   type ShowFileDocument,
-  type ShowColor,
+  type Color,
   type ShowId,
 } from "@showtime/contracts";
 import { ShowPaths } from "./ShowPaths";
@@ -25,7 +25,7 @@ interface ShowFileShape {
   readonly create: (params: {
     readonly id: ShowId;
     readonly name: string;
-    readonly color: ShowColor;
+    readonly color: Color;
   }) => Effect.Effect<string, ShowFileError>;
   readonly update: (
     filePath: string,

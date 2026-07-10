@@ -1,7 +1,7 @@
-import { type ShowColor } from "@showtime/contracts";
+import { type Color } from "@showtime/contracts";
 
 export const microphoneColorClassNames: Record<
-  ShowColor,
+  Color,
   { readonly background: string; readonly text: string }
 > = {
   red: { background: "bg-red-800", text: "text-red-300" },

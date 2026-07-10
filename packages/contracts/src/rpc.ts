@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup as EffectRpcGroup } from "effect/unstable/rpc";
 import { Microphone, MicrophoneId, MicrophoneNumber } from "./microphone.js";
-import { ShowColor, ShowId, ShowName, ShowSummary } from "./show.js";
+import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
 
 export const rpcHost = "127.0.0.1";
 export const rpcPort = 34987;
@@ -19,12 +19,12 @@ export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
 export const RpcGroup = EffectRpcGroup.make(
   Rpc.make("ListShows", { success: Schema.Array(ShowSummary), error: RpcError }),
   Rpc.make("CreateShow", {
-    payload: { name: ShowName, color: ShowColor },
+    payload: { name: ShowName, color: Color },
     success: ShowSummary,
     error: RpcError,
   }),
   Rpc.make("EditShow", {
-    payload: { id: ShowId, name: ShowName, color: ShowColor },
+    payload: { id: ShowId, name: ShowName, color: Color },
     success: ShowSummary,
     error: RpcError,
   }),
@@ -39,7 +39,7 @@ export const RpcGroup = EffectRpcGroup.make(
     error: RpcError,
   }),
   Rpc.make("CreateMicrophone", {
-    payload: { showId: ShowId, color: ShowColor },
+    payload: { showId: ShowId, color: Color },
     success: Microphone,
     error: RpcError,
   }),
@@ -48,7 +48,7 @@ export const RpcGroup = EffectRpcGroup.make(
       showId: ShowId,
       id: MicrophoneId,
       number: MicrophoneNumber,
-      color: ShowColor,
+      color: Color,
       name: Schema.optional(Schema.String),
     },
     success: Microphone,

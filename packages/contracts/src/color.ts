@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-export const showColors = [
+export const colors = [
   "red",
   "orange",
   "amber",
@@ -21,5 +21,5 @@ export const showColors = [
   "neutral",
 ] as const;
 
-export const ShowColor = Schema.Literals(showColors);
-export type ShowColor = typeof ShowColor.Type;
+export const Color = Schema.Literals(colors);
+export type Color = typeof Color.Type;
