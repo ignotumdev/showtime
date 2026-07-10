@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { makeRpcPath, rpcHost, rpcPort } from "@showtime/contracts";
 import * as Ids from "./ids/Ids";
 import * as MicrophoneService from "./microphones/MicrophoneService";
+import * as MixService from "./mixes/MixService";
 import * as HomeDirectory from "./platform/HomeDirectory";
 import * as Rpc from "./rpc/Rpc";
 import * as ShowDiscovery from "./shows/ShowDiscovery";
@@ -33,7 +34,7 @@ const makeRpcLive = (token: string) => {
   const RpcProtocol = makeRpcProtocol(token);
 
   return Rpc.layer.pipe(
-    Layer.provide(Layer.mergeAll(ShowService.layer, MicrophoneService.layer)),
+    Layer.provide(Layer.mergeAll(ShowService.layer, MicrophoneService.layer, MixService.layer)),
     Layer.provideMerge(RpcProtocol),
     Layer.provide(HttpRouter.serve(RpcProtocol, { disableListenLog: true })),
     Layer.provide(NodeHttpServer.layer(createServer, { host: rpcHost, port: rpcPort })),
