@@ -21,6 +21,7 @@ export const MicrophoneNumber = Schema.Number.pipe(
       expected: "a positive whole number",
     }),
   ),
+  Schema.brand("MicrophoneNumber"),
 );
 export type MicrophoneNumber = typeof MicrophoneNumber.Type;
 

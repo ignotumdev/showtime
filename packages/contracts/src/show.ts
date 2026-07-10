@@ -4,8 +4,6 @@ import { idAlphabet, idSuffixLength } from "./ids.js";
 import { Microphone } from "./microphone.js";
 
 export { Color, colors } from "./color.js";
-export { idAlphabet, idSuffixLength } from "./ids.js";
-
 export const showIdPrefix = "show_";
 const showIdPattern = new RegExp(`^${showIdPrefix}[${idAlphabet}]{${idSuffixLength}}$`);
 

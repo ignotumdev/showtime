@@ -1,11 +1,16 @@
 import { Context, Effect, Layer, Path } from "effect";
 import { FileSystem } from "effect/FileSystem";
-import { ShowDiscoveryDirectoryError, ShowDiscoveryStatError } from "@showtime/contracts";
+import {
+  ShowDiscoveryDirectoryError,
+  ShowDiscoveryStatError,
+  type ShowFileDocument,
+} from "@showtime/contracts";
 import { ShowFile } from "./ShowFile";
 import { ShowPaths } from "./ShowPaths";
 
 export interface DiscoveredShowFile {
   readonly path: string;
+  readonly document: ShowFileDocument;
 }
 
 export class ShowDiscovery extends Context.Service<
@@ -79,7 +84,7 @@ const makeShowDiscovery = Effect.fnUntraced(function* () {
         continue;
       }
 
-      discovered.push({ path: filePath });
+      discovered.push({ path: filePath, document: parsed.success });
       yield* Effect.logInfo("Discovered show file", filePath);
     }
 

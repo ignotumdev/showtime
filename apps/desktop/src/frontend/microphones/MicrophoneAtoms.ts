@@ -1,8 +1,8 @@
 import { DateTime } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
-  idAlphabet,
-  idSuffixLength,
+  makeTemporaryId,
+  MicrophoneNumber,
   microphoneIdPrefix,
   microphonesRpcReactivityKey,
   type Microphone,
@@ -19,13 +19,8 @@ export type MicrophoneListItem = Microphone & { readonly pending?: boolean };
 
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 
-const makeTemporaryMicrophoneId = (): MicrophoneId => {
-  const suffix = Array.from(
-    { length: idSuffixLength },
-    () => idAlphabet[Math.floor(Math.random() * idAlphabet.length)],
-  ).join("");
-  return `${microphoneIdPrefix}${suffix}` as MicrophoneId;
-};
+const makeTemporaryMicrophoneId = (): MicrophoneId =>
+  makeTemporaryId(microphoneIdPrefix) as MicrophoneId;
 
 export const microphoneAtoms = Atom.family((showId: ShowId) => {
   const query = RpcClient.query(
@@ -50,7 +45,9 @@ export const microphoneAtoms = Atom.family((showId: ShowId) => {
     Atom.optimisticFn({
       reducer: (current, input: MutationInput<typeof createMicrophoneMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
-        const nextNumber = Math.max(0, ...current.value.map((mic) => mic.number)) + 1;
+        const nextNumber = MicrophoneNumber.make(
+          Math.max(0, ...current.value.map((mic) => mic.number)) + 1,
+        );
         const now = DateTime.nowUnsafe();
         const microphone: MicrophoneListItem = {
           id: makeTemporaryMicrophoneId(),

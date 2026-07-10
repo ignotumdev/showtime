@@ -1,7 +1,6 @@
 import { colors, type Color } from "@showtime/contracts";
 
-export const randomShowColor = (): Color =>
-  colors[Math.floor(Math.random() * colors.length)] ?? "sky";
+export const randomShowColor = (): Color => colors[Math.floor(Math.random() * colors.length)];
 
 export const showColorClassNames: Record<Color, string> = {
   red: "bg-red-500",

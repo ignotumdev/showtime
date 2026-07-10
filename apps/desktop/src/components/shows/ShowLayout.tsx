@@ -48,7 +48,7 @@ export function ShowLayout() {
               <span className="block truncate">{showName}</span>
             </Link>
           </SidebarHeader>
-          <SidebarContent className="p-2">
+          <SidebarContent>
             <SidebarGroup>
               <SidebarMenu>
                 <ShowSidebarLink

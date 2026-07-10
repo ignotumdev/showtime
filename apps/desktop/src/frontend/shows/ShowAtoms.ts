@@ -1,8 +1,7 @@
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   compareShowSummaries,
-  idAlphabet,
-  idSuffixLength,
+  makeTemporaryId,
   sortShowSummaries,
   showIdPrefix,
   showsRpcReactivityKey,
@@ -27,14 +26,7 @@ export type ShowListItem = ShowSummary & {
 const sortShowListItems = (shows: ReadonlyArray<ShowListItem>) =>
   [...shows].sort(compareShowSummaries);
 
-const makeTemporaryShowId = (): ShowId => {
-  const suffix = Array.from(
-    { length: idSuffixLength },
-    () => idAlphabet[Math.floor(Math.random() * idAlphabet.length)],
-  ).join("");
-
-  return `${showIdPrefix}${suffix}` as ShowId;
-};
+const makeTemporaryShowId = (): ShowId => makeTemporaryId(showIdPrefix) as ShowId;
 
 const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSummary["name"];
 

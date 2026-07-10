@@ -3,7 +3,7 @@ import {
   RpcError,
   type Microphone,
   type MicrophoneId,
-  type MicrophoneNumber,
+  MicrophoneNumber,
   type Color,
   type ShowId,
 } from "@showtime/contracts";
@@ -50,13 +50,14 @@ const make = Effect.fnUntraced(function* () {
   const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const found = yield* repository.findById(showId);
     const id = yield* ids.makeMicrophoneId;
-    const number =
+    const number = MicrophoneNumber.make(
       Math.max(
         0,
         ...found.document.microphones
           .filter((microphone) => microphone.deletedAt === undefined)
           .map((microphone) => microphone.number),
-      ) + 1;
+      ) + 1,
+    );
     const now = yield* DateTime.now;
     const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
     yield* showFile
@@ -78,9 +79,12 @@ const make = Effect.fnUntraced(function* () {
     }
     const trimmedName = params.name?.trim();
     const now = yield* DateTime.now;
-    const { name: _existingName, ...existingWithoutName } = existing;
+    const existingForUpdate =
+      params.name === undefined
+        ? existing
+        : (({ name: _existingName, ...existingWithoutName }) => existingWithoutName)(existing);
     const microphone: Microphone = {
-      ...existingWithoutName,
+      ...existingForUpdate,
       id: params.id,
       number: params.number,
       color: params.color,

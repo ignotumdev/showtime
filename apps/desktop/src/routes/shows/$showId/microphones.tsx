@@ -121,23 +121,33 @@ function MicrophoneCard({
   const [number, setNumber] = React.useState(String(microphone.number));
   const [name, setName] = React.useState(microphone.name ?? "");
   const [color, setColor] = React.useState(microphone.color);
+  const [saveError, setSaveError] = React.useState<string>();
   React.useEffect(() => {
     setNumber(String(microphone.number));
     setName(microphone.name ?? "");
     setColor(microphone.color);
+    setSaveError(undefined);
   }, [microphone.color, microphone.name, microphone.number]);
 
-  const save = (next: { number?: number; name?: string; color?: Color }) =>
-    edit({
+  const save = async (next: { number?: number; name?: string; color?: Color }) => {
+    setSaveError(undefined);
+    const result = await edit({
       payload: {
         showId,
         id: microphone.id,
         number: (next.number ?? (Number(number) || microphone.number)) as MicrophoneNumber,
         color: next.color ?? color,
-        ...((next.name ?? name).trim() ? { name: (next.name ?? name).trim() } : {}),
+        ...(next.name !== undefined
+          ? { name: next.name.trim() }
+          : name.trim()
+            ? { name: name.trim() }
+            : {}),
       },
       reactivityKeys: microphonesRpcReactivityKey(showId),
     });
+    if (Exit.isFailure(result)) setSaveError(rpcErrorMessageFromCause(result.cause));
+    return result;
+  };
 
   const parsedNumber = Number(number);
   const duplicate =
@@ -147,7 +157,10 @@ function MicrophoneCard({
     const valid =
       Number.isSafeInteger(parsedNumber) && parsedNumber >= 1 ? parsedNumber : microphone.number;
     setNumber(String(valid));
-    if (valid !== microphone.number) await save({ number: valid });
+    if (valid !== microphone.number) {
+      const result = await save({ number: valid });
+      if (Exit.isFailure(result)) setNumber(String(microphone.number));
+    }
   };
 
   const colors = microphoneColorClassNames[color];
@@ -206,7 +219,8 @@ function MicrophoneCard({
                   className="relative flex size-8 items-center justify-center rounded-md outline-none ring-ring/50 hover:bg-accent focus-visible:ring-3"
                   onClick={async () => {
                     setColor(option);
-                    await save({ color: option });
+                    const result = await save({ color: option });
+                    if (Exit.isFailure(result)) setColor(microphone.color);
                   }}
                 >
                   <span
@@ -236,7 +250,10 @@ function MicrophoneCard({
             className="text-center"
             onChange={(event) => setName(event.currentTarget.value)}
             onBlur={async () => {
-              if (name.trim() !== (microphone.name ?? "")) await save({ name });
+              if (name.trim() !== (microphone.name ?? "")) {
+                const result = await save({ name });
+                if (Exit.isFailure(result)) setName(microphone.name ?? "");
+              }
             }}
             onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
           />
@@ -249,6 +266,11 @@ function MicrophoneCard({
           >
             Number already in use
           </p>
+          {saveError && (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {saveError}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -297,9 +319,9 @@ function MicrophoneDeleteDialog({
     <Dialog open={microphone !== undefined} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete microphone?</DialogTitle>
+          <DialogTitle>Remove microphone?</DialogTitle>
           <DialogDescription>
-            This will permanently delete {label}. This cannot be undone.
+            This will remove {label} from the active microphone list.
           </DialogDescription>
         </DialogHeader>
         {deleteError && (
@@ -312,7 +334,7 @@ function MicrophoneDeleteDialog({
             Cancel
           </DialogClose>
           <Button variant="destructive" disabled={isDeleting} onClick={confirmDelete}>
-            <Trash2Icon /> {isDeleting ? "Deleting..." : "Delete"}
+            <Trash2Icon /> {isDeleting ? "Removing..." : "Remove"}
           </Button>
         </DialogFooter>
       </DialogContent>
