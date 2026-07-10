@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { ArrowLeftIcon, ListMusicIcon, Mic2Icon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, ListMusicIcon, Mic2Icon, PlusIcon, SpeakerIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -57,6 +57,12 @@ export function ShowLayout() {
                   label="Microphones"
                   icon={Mic2Icon}
                 />
+                <ShowSidebarLink
+                  to="/shows/$showId/mixes"
+                  params={{ showId }}
+                  label="Mixes"
+                  icon={SpeakerIcon}
+                />
               </SidebarMenu>
             </SidebarGroup>
 
@@ -111,7 +117,11 @@ export function ShowLayout() {
 
 type ShowSidebarLinkProps = (
   | {
-      readonly to: "/shows/$showId" | "/shows/$showId/microphones" | "/shows/$showId/setlist";
+      readonly to:
+        | "/shows/$showId"
+        | "/shows/$showId/microphones"
+        | "/shows/$showId/mixes"
+        | "/shows/$showId/setlist";
       readonly params: { readonly showId: string };
     }
   | {

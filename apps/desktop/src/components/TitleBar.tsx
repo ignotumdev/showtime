@@ -1,6 +1,7 @@
 import iconUrl from "../../../../assets/icon.svg";
 import {
   microphonesRpcReactivityKey,
+  mixesRpcReactivityKey,
   type Color,
   type ShowId,
   type ShowName,
@@ -14,6 +15,7 @@ import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
 import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
+import { mixAtoms } from "@/frontend/mixes/MixAtoms";
 
 type TitleBarProps = {
   hideName?: boolean;
@@ -39,6 +41,7 @@ export function TitleBar({
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
   const isMicrophonesRoute = pathname.endsWith("/microphones");
+  const isMixesRoute = pathname.endsWith("/mixes");
   const isLiveRoute = pathname.includes("/live");
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
@@ -85,8 +88,26 @@ export function TitleBar({
           </Button>
         )}
         {isMicrophonesRoute && showId && <AddMicrophoneButton showId={showId as ShowId} />}
+        {isMixesRoute && showId && <AddMixButton showId={showId as ShowId} />}
       </div>
     </header>
+  );
+}
+
+function AddMixButton({ showId }: { readonly showId: ShowId }) {
+  const createMix = useAtomSet(mixAtoms(showId).create);
+  return (
+    <Button
+      size="sm"
+      onClick={() =>
+        createMix({
+          payload: { showId, color: randomShowColor() },
+          reactivityKeys: mixesRpcReactivityKey(showId),
+        })
+      }
+    >
+      <PlusIcon /> Add mix
+    </Button>
   );
 }
 

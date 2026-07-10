@@ -18,6 +18,7 @@ describe("ShowFileDocument", () => {
         updatedAt: "2026-07-02T10:01:00.000Z",
       },
       microphones: [],
+      mixes: [],
     });
 
     expect(encode(decoded)).toEqual({
@@ -31,6 +32,7 @@ describe("ShowFileDocument", () => {
         updatedAt: "2026-07-02T10:01:00.000Z",
       },
       microphones: [],
+      mixes: [],
     });
   });
 
@@ -55,6 +57,7 @@ describe("ShowFileDocument", () => {
           deletedAt: "2026-07-02T10:04:00.000Z",
         },
       ],
+      mixes: [],
     });
 
     expect(encode(decoded).microphones).toEqual([
@@ -82,6 +85,7 @@ describe("ShowFileDocument", () => {
           updatedAt: "2026-07-02T10:00:00.000Z",
         },
         microphones: [],
+        mixes: [],
       }),
     ).toThrow();
   });
@@ -100,6 +104,7 @@ describe("ShowFileDocument", () => {
             updatedAt: "2026-07-02T10:00:00.000Z",
           },
           microphones: [],
+          mixes: [],
         }),
       ),
     ).rejects.toThrow();

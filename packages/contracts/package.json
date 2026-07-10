@@ -12,6 +12,9 @@
       "import": "./src/index.ts"
     }
   },
+  "scripts": {
+    "test": "vp test run"
+  },
   "dependencies": {
     "effect": "catalog:"
   }

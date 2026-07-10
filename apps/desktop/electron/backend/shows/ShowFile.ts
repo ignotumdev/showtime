@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, Layer, Path, Random } from "effect";
+import { Context, DateTime, Effect, Layer, PartitionedSemaphore, Path, Random } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import {
   decodeShowFileDocument,
@@ -13,6 +13,9 @@ import {
   type ShowFileDocument,
   type Color,
   type ShowId,
+  mainMixId,
+  MixId,
+  MixNumber,
 } from "@showtime/contracts";
 import { ShowPaths } from "./ShowPaths";
 
@@ -41,6 +44,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path.Path;
   const paths = yield* ShowPaths;
+  const updateSemaphore = yield* PartitionedSemaphore.make<string>({ permits: 1 });
 
   const read: ShowFileShape["read"] = Effect.fnUntraced(function* (filePath) {
     const content = yield* fs
@@ -101,28 +105,39 @@ const makeShowFile = Effect.fnUntraced(function* () {
         updatedAt: now,
       },
       microphones: [],
+      mixes: [
+        {
+          id: MixId.make(mainMixId),
+          number: MixNumber.make("LR"),
+          color: "sky",
+          name: "Main",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
     });
     return filePath;
   });
 
-  const update: ShowFileShape["update"] = Effect.fnUntraced(function* (filePath, updateDocument) {
-    const document = yield* read(filePath);
-    const next = yield* Effect.try({
-      try: () => updateDocument(document),
-      catch: (cause) => new ShowFileUpdateError({ path: filePath, cause }),
-    });
-    const now = yield* DateTime.now;
-    const refreshed = {
-      ...next,
-      config: {
-        ...next.config,
-        updatedAt: now,
-      },
-    };
+  const update: ShowFileShape["update"] = (filePath, updateDocument) =>
+    Effect.gen(function* () {
+      const document = yield* read(filePath);
+      const next = yield* Effect.try({
+        try: () => updateDocument(document),
+        catch: (cause) => new ShowFileUpdateError({ path: filePath, cause }),
+      });
+      const now = yield* DateTime.now;
+      const refreshed = {
+        ...next,
+        config: {
+          ...next.config,
+          updatedAt: now,
+        },
+      };
 
-    yield* write(filePath, refreshed);
-    return refreshed;
-  });
+      yield* write(filePath, refreshed);
+      return refreshed;
+    }).pipe(updateSemaphore.withPermit(filePath));
 
   return ShowFile.of({ read, write, create, update });
 });
