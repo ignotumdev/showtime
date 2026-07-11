@@ -15,10 +15,10 @@ export const MicrophoneId = Schema.String.pipe(
 );
 export type MicrophoneId = typeof MicrophoneId.Type;
 
-export const MicrophoneNumber = Schema.Number.pipe(
+export const MicrophoneNumber = Schema.String.pipe(
   Schema.check(
-    Schema.makeFilter((value) => Number.isSafeInteger(value) && value >= 1, {
-      expected: "a positive whole number",
+    Schema.makeFilter((value) => value.trim().length > 0, {
+      expected: "a non-empty microphone label",
     }),
   ),
   Schema.brand("MicrophoneNumber"),

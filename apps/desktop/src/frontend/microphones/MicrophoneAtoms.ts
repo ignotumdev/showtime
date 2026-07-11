@@ -46,7 +46,12 @@ export const microphoneAtoms = Atom.family((showId: ShowId) => {
       reducer: (current, input: MutationInput<typeof createMicrophoneMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
         const nextNumber = MicrophoneNumber.make(
-          Math.max(0, ...current.value.map((mic) => mic.number)) + 1,
+          String(
+            Math.max(
+              0,
+              ...current.value.map((mic) => Number(mic.number)).filter(Number.isSafeInteger),
+            ) + 1,
+          ),
         );
         const now = DateTime.nowUnsafe();
         const microphone: MicrophoneListItem = {

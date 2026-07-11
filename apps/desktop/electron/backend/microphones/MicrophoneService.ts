@@ -50,23 +50,25 @@ const make = Effect.fnUntraced(function* () {
   const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const found = yield* repository.findById(showId);
     const id = yield* ids.makeMicrophoneId;
-    const number = MicrophoneNumber.make(
-      Math.max(
-        0,
-        ...found.document.microphones
-          .filter((microphone) => microphone.deletedAt === undefined)
-          .map((microphone) => microphone.number),
-      ) + 1,
-    );
     const now = yield* DateTime.now;
-    const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
-    yield* showFile
-      .update(found.path, (document) => ({
-        ...document,
-        microphones: [...document.microphones, microphone],
-      }))
+    const updated = yield* showFile
+      .update(found.path, (document) => {
+        const number = MicrophoneNumber.make(
+          String(
+            Math.max(
+              0,
+              ...document.microphones
+                .filter((microphone) => microphone.deletedAt === undefined)
+                .map((microphone) => Number(microphone.number))
+                .filter(Number.isSafeInteger),
+            ) + 1,
+          ),
+        );
+        const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
+        return { ...document, microphones: [...document.microphones, microphone] };
+      })
       .pipe(Effect.mapError(toRpcError("Could not add microphone.")));
-    return microphone;
+    return updated.microphones.find((microphone) => microphone.id === id)!;
   });
 
   const edit: MicrophoneServiceShape["edit"] = Effect.fnUntraced(function* (params) {
