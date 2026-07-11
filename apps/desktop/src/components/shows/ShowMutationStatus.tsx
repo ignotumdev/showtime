@@ -3,9 +3,9 @@ import { AlertCircleIcon, CheckIcon, XIcon } from "lucide-react";
 import { Atom } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import { showMutationAtoms } from "@/frontend/shows/ShowAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { showMutationAtoms } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { getShowMutationStatusState } from "./ShowMutationStatusState";
 
 export function ShowMutationStatus() {

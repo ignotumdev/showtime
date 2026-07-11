@@ -3,8 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
-import { makeRpcWebSocketUrl } from "@showtime/contracts";
-import { startBackend } from "./backend";
+import { makeBackendRuntime } from "@showtime/backend";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,8 +29,13 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 let backendStarted = false;
+let backendShutdownStarted = false;
+const rpcHost = "127.0.0.1";
+const rpcPort = 34987;
 const rpcToken = randomBytes(32).toString("base64url");
-const rpcWebSocketUrl = makeRpcWebSocketUrl(rpcToken);
+const rpcPath = `/rpc/${encodeURIComponent(rpcToken)}` as const;
+const rpcWebSocketUrl = `ws://${rpcHost}:${rpcPort}${rpcPath}`;
+const backendRuntime = makeBackendRuntime({ host: rpcHost, port: rpcPort, rpcPath });
 
 function getAppIconPath() {
   if (app.isPackaged) {
@@ -109,23 +113,35 @@ app.on("activate", () => {
   }
 });
 
+app.on("before-quit", (event) => {
+  if (!backendStarted || backendShutdownStarted) return;
+
+  event.preventDefault();
+  backendShutdownStarted = true;
+  void backendRuntime.dispose().finally(() => {
+    backendStarted = false;
+    app.quit();
+  });
+});
+
 if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     ipcMain.handle("showtime:rpc-web-socket-url", () => rpcWebSocketUrl);
 
-    Effect.runPromise(
-      startBackend(rpcToken, () => {
+    backendRuntime
+      .runPromise(Effect.void)
+      .then(() => {
         backendStarted = true;
         createWindow();
-      }),
-    ).catch((error: unknown) => {
-      console.error("Showtime backend startup failed", error);
-      dialog.showErrorBox(
-        "Showtime could not start",
-        "The local Showtime backend could not start. Please close other Showtime windows and try again.",
-      );
-      app.quit();
-    });
+      })
+      .catch((error: unknown) => {
+        console.error("Showtime backend startup failed", error);
+        dialog.showErrorBox(
+          "Showtime could not start",
+          "The local Showtime backend could not start. Please close other Showtime windows and try again.",
+        );
+        app.quit();
+      });
   });
 }

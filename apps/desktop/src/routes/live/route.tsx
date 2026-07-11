@@ -1,9 +1,9 @@
 import { TitleBar } from "@/components/TitleBar";
 import { LiveTitleBarStatus } from "@/components/live/LiveTitleBarStatus";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
-import { endLiveSession, useLiveElapsed } from "@/frontend/live/LiveSession";
-import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
+import { songAtoms } from "@/client";
+import { endLiveSession, useLiveElapsed } from "@/lib/LiveSession";
+import { useAtomValue } from "@effect/atom-react";
+import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ShowId } from "@showtime/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";

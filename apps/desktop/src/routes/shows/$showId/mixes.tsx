@@ -4,7 +4,6 @@ import { AlertCircleIcon, CheckIcon, SpeakerIcon, Trash2Icon } from "lucide-reac
 import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
-  mixesRpcReactivityKey,
   mainMixId,
   colors as colorOptions,
   type MixNumber,
@@ -34,9 +33,9 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import { editMixAtom, mixAtoms, type MixListItem } from "@/frontend/mixes/MixAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { mixesRpcReactivityKey, mixAtoms, type MixListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/mixes")({ component: RouteComponent });
@@ -112,7 +111,7 @@ function MixCard({
   readonly showId: ShowId;
   readonly onDelete: () => void;
 }) {
-  const edit = useAtomSet(editMixAtom, { mode: "promiseExit" });
+  const edit = useAtomSet(mixAtoms(showId).edit, { mode: "promiseExit" });
   const [number, setNumber] = React.useState(String(mix.number));
   const [name, setName] = React.useState(mix.name ?? "");
   const [color, setColor] = React.useState(mix.color);
