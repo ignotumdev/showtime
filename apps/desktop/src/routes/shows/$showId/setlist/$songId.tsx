@@ -64,7 +64,7 @@ function RouteComponent() {
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const mixesResult = useAtomValue(mixAtoms(typedShowId).mixes);
   const microphonesResult = useAtomValue(microphoneAtoms(typedShowId).microphones);
-  const songs = AsyncResult.isSuccess(songsResult) ? songsResult.value : [];
+  const songs = AsyncResult.getOrElse(songsResult, () => []);
   const songIndex = songs.findIndex((song) => song.id === songId);
   const song = songs[songIndex];
   const mixes = AsyncResult.isSuccess(mixesResult) ? mixesResult.value : [];
