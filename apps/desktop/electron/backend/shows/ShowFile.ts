@@ -115,6 +115,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
           updatedAt: now,
         },
       ],
+      songs: [],
     });
     return filePath;
   });

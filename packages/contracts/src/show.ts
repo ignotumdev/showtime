@@ -3,6 +3,7 @@ import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
 import { Microphone } from "./microphone.js";
 import { Mix } from "./mix.js";
+import { Song } from "./song.js";
 
 export { Color, colors } from "./color.js";
 export const showIdPrefix = "show_";
@@ -55,6 +56,7 @@ export const ShowFileDocument = Schema.Struct({
   config: ShowConfig,
   microphones: Schema.Array(Microphone),
   mixes: Schema.Array(Mix),
+  songs: Schema.Array(Song),
 });
 
 export type ShowFileDocument = typeof ShowFileDocument.Type;

@@ -19,6 +19,7 @@ describe("ShowFileDocument", () => {
       },
       microphones: [],
       mixes: [],
+      songs: [],
     });
 
     expect(encode(decoded)).toEqual({
@@ -33,6 +34,7 @@ describe("ShowFileDocument", () => {
       },
       microphones: [],
       mixes: [],
+      songs: [],
     });
   });
 
@@ -58,6 +60,7 @@ describe("ShowFileDocument", () => {
         },
       ],
       mixes: [],
+      songs: [],
     });
 
     expect(encode(decoded).microphones).toEqual([
@@ -86,6 +89,25 @@ describe("ShowFileDocument", () => {
         },
         microphones: [],
         mixes: [],
+        songs: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects show files that do not contain songs", () => {
+    expect(() =>
+      decode({
+        type: "showtime-show",
+        version: "dev",
+        config: {
+          id: "show_0123456789abcdef",
+          name: "Soundcheck",
+          color: "sky",
+          createdAt: "2026-07-02T10:00:00.000Z",
+          updatedAt: "2026-07-02T10:00:00.000Z",
+        },
+        microphones: [],
+        mixes: [],
       }),
     ).toThrow();
   });
@@ -105,6 +127,7 @@ describe("ShowFileDocument", () => {
           },
           microphones: [],
           mixes: [],
+          songs: [],
         }),
       ),
     ).rejects.toThrow();

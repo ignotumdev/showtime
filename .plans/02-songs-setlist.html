@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>02 - Songs and Setlist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-white text-zinc-950 antialiased">
+    <main class="mx-auto max-w-5xl px-6 py-10">
+      <header class="border-b border-zinc-200 pb-6">
+        <p class="text-sm font-medium text-sky-700">Plan 02</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight">Songs and Setlist</h1>
+        <p class="mt-3 max-w-3xl text-zinc-600">
+          Add persistent songs to a show, let engineers arrange the setlist by dragging, and
+          provide a focused song page for notes and per-mix microphone assignments. The design
+          stays minimal, predictable, and usable during soundcheck and a live show.
+        </p>
+      </header>
+
+      <section class="mt-8 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Scope</h2>
+          <p class="mt-2 text-sm text-zinc-600">Contracts, persistence, RPC, reactive state, sidebar, all-songs view, and song detail view.</p>
+        </div>
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Primary workflow</h2>
+          <p class="mt-2 text-sm text-zinc-600">Create a song, reorder it, open it, add notes, and choose microphones for every mix.</p>
+        </div>
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Reliability rule</h2>
+          <p class="mt-2 text-sm text-zinc-600">Optimistic interactions must visibly roll back and report an error when persistence fails.</p>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Product decisions</h2>
+        <div class="mt-4 overflow-hidden rounded-lg border border-zinc-200">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-zinc-50 text-zinc-700">
+              <tr><th class="px-4 py-3 font-medium">Decision</th><th class="px-4 py-3 font-medium">Plan</th></tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-200">
+              <tr><td class="px-4 py-3 font-medium">Song notes</td><td class="px-4 py-3 text-zinc-600">One optional song-level notes field, shown before all mix cards.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Mix assignments</td><td class="px-4 py-3 text-zinc-600">Each song stores zero or more microphone IDs for each mix. An empty selection is valid.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Order</td><td class="px-4 py-3 text-zinc-600">The active array order is canonical. The displayed song number is its one-based position, not a persistent identity.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Deletion</td><td class="px-4 py-3 text-zinc-600">Soft-delete with <code>deletedAt</code>. Deleted songs disappear from the active setlist; surviving songs close the numbering gap.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Missing references</td><td class="px-4 py-3 text-zinc-600">Deleted mixes or microphones are excluded from the UI. Their stale IDs are tolerated on read and pruned on the next song edit.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Data model</h2>
+        <p class="mt-2 text-sm text-zinc-600">
+          Add a dedicated <code>song.ts</code> contract. Keep persistence normalized by referencing
+          existing mix and microphone IDs instead of copying their names, numbers, or colors.
+        </p>
+        <pre class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"><code>Song {
+  id: SongId                         // branded "song_" + standard suffix
+  name: SongName                     // trimmed, non-blank
+  artist: SongArtist                 // trimmed, non-blank
+  notes?: string                     // absent when blank
+  mixAssignments: Array&lt;{
+    mixId: MixId                     // at most one entry per mix
+    microphoneIds: Array&lt;MicrophoneId&gt; // unique IDs, stable mic-list order
+  }&gt;
+  createdAt: DateTimeUtc
+  updatedAt: DateTimeUtc
+  deletedAt?: DateTimeUtc
+}</code></pre>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>Add <code>songs: Schema.Array(Song)</code> to <code>ShowFileDocument</code> and initialize it to <code>[]</code> for newly created shows.</li>
+          <li>Use the order of non-deleted entries in <code>songs</code> as the setlist order. Reordering changes array order and refreshes the show file timestamp.</li>
+          <li>Validate assignment uniqueness and reject duplicate microphone IDs within one mix assignment.</li>
+          <li>Do not store a mutable song number. This prevents number/order drift after deletion or drag operations.</li>
+        </ul>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Song detail design</h2>
+        <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+          <div class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start gap-3 border-b border-zinc-200 pb-4">
+              <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-800 text-sm font-bold text-white">3</div>
+              <div class="min-w-0 flex-1">
+                <div class="text-lg font-semibold">Fix You</div>
+                <div class="text-sm text-zinc-500">Coldplay</div>
+              </div>
+              <button type="button" class="rounded-md border border-zinc-200 px-3 py-1.5 text-sm" aria-label="Song actions">•••</button>
+            </div>
+            <div class="mt-4 rounded-lg border border-zinc-200 p-4">
+              <div class="text-sm font-semibold">Notes</div>
+              <div class="mt-2 text-sm text-zinc-500">Quiet opening. Watch the vocal cue before verse two.</div>
+            </div>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+              <div class="rounded-lg border border-zinc-200 p-4">
+                <div class="flex items-center justify-between"><span class="font-semibold">LR · Main</span><span class="text-xs text-zinc-500">3 microphones</span></div>
+                <div class="mt-3 flex flex-wrap gap-2"><span class="rounded-md border px-2 py-1 text-xs">1 Lead vocal</span><span class="rounded-md border px-2 py-1 text-xs">4 Guitar</span><span class="rounded-md border px-2 py-1 text-xs">8 Keys</span></div>
+              </div>
+              <div class="rounded-lg border border-zinc-200 p-4">
+                <div class="flex items-center justify-between"><span class="font-semibold">1 · IEM Alex</span><span class="text-xs text-zinc-500">2 microphones</span></div>
+                <div class="mt-3 flex flex-wrap gap-2"><span class="rounded-md border px-2 py-1 text-xs">1 Lead vocal</span><span class="rounded-md border px-2 py-1 text-xs">8 Keys</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>The header shows the computed song number in the same visual language as the sidebar, then editable name and artist. The ellipsis menu is on the far right and initially contains only <strong>Delete song</strong>.</li>
+          <li>Deleting requires the standard confirmation dialog. After success, navigate to <strong>All songs</strong>; on failure, keep the page and show the error.</li>
+          <li>The Notes card comes first and uses a plain multiline textarea. Save on blur with a small saving/error state; remove the property when the trimmed value is empty.</li>
+          <li>Render one mix card for every active mix, ordered like the Mixes screen. Each card displays its label/name and a clean list of active microphones with checkboxes or toggle rows.</li>
+          <li>Use existing <code>@/components/ui</code> defaults. Only apply layout classes; preserve the repository rule against restyling shared primitives.</li>
+          <li>Loading, empty, disconnected, and save-failure states must remain readable without shifting the page structure.</li>
+        </ul>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">All songs and sidebar</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-zinc-200 p-4">
+            <h3 class="font-semibold">All songs view</h3>
+            <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+              <li>Show an ordered, full-width list rather than cards so sequence is immediately scannable.</li>
+              <li>Each row has a drag handle, computed number, song name, artist, and a link/open affordance.</li>
+              <li>The whole row may be a drag preview, but only the handle initiates dragging to avoid accidental moves while navigating.</li>
+              <li>Provide keyboard reordering from the handle and announce movement through an ARIA live region.</li>
+              <li>Disable additional reorder commits while one is in flight. Keep an optimistic local order, then rollback on failure.</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-zinc-200 p-4">
+            <h3 class="font-semibold">Setlist sidebar</h3>
+            <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+              <li>Replace <code>placeholderSongs</code> with the live songs atom.</li>
+              <li>Show the current one-based number, truncated song name, and artist badge.</li>
+              <li>Make the Setlist plus action create a song through a small dialog asking for name and artist, then navigate to the new song.</li>
+              <li>Reflect optimistic create, delete, and reorder results immediately and consistently in both sidebar and main content.</li>
+              <li>When no songs exist, keep <strong>All songs</strong> visible and show a friendly empty state with an Add song action.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">RPC surface and service behavior</h2>
+        <div class="mt-4 overflow-hidden rounded-lg border border-zinc-200">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-zinc-50 text-zinc-700"><tr><th class="px-4 py-3 font-medium">RPC</th><th class="px-4 py-3 font-medium">Behavior</th></tr></thead>
+            <tbody class="divide-y divide-zinc-200">
+              <tr><td class="px-4 py-3 font-mono text-xs">ListSongs(showId)</td><td class="px-4 py-3 text-zinc-600">Return active songs in canonical setlist order.</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">CreateSong(showId, name, artist)</td><td class="px-4 py-3 text-zinc-600">Trim and validate values, append to the active setlist, and return the song.</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">EditSong(showId, id, name, artist, notes, mixAssignments)</td><td class="px-4 py-3 text-zinc-600">Validate referenced active mixes/microphones, normalize assignments, update atomically, and return the song.</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">ReorderSongs(showId, orderedSongIds)</td><td class="px-4 py-3 text-zinc-600">Require every active song ID exactly once; preserve deleted records; persist one atomic order change.</td></tr>
+              <tr><td class="px-4 py-3 font-mono text-xs">DeleteSong(showId, id)</td><td class="px-4 py-3 text-zinc-600">Set <code>updatedAt</code> and <code>deletedAt</code> together.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-4 text-sm text-zinc-600">
+          Add <code>songsRpcReactivityKey(showId)</code>. All successful mutations invalidate that
+          key so the sidebar, list, and detail page converge after reconnects or partial optimistic
+          updates. Route handlers should delegate to <code>SongService</code>; file update locking and
+          atomic writes remain owned by <code>ShowFile</code>.
+        </p>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Proposed file changes</h2>
+        <pre class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"><code>packages/contracts/src/
+  song.ts                              # Song schemas, IDs, names, assignments
+  show.ts                              # Add songs to ShowFileDocument
+  rpc.ts                               # Song RPCs and reactivity key
+  index.ts                             # Public exports
+
+apps/desktop/electron/backend/
+  ids/Ids.ts                           # makeSongId
+  songs/SongService.ts                 # list/create/edit/reorder/delete
+  songs/SongService.test.ts
+  rpc/Rpc.ts                           # Handlers
+  index.ts                             # Song service layer
+  shows/ShowFile.ts                    # Initialize songs: []
+  shows/ShowFile.test.ts
+
+apps/desktop/src/frontend/songs/
+  SongAtoms.ts                         # Query and optimistic mutations
+
+apps/desktop/src/components/songs/
+  SongCreateDialog.tsx
+  SongDeleteDialog.tsx
+  SongHeader.tsx
+  SongNotesCard.tsx
+  SongMixCard.tsx
+  SortableSongList.tsx
+
+apps/desktop/src/components/shows/
+  ShowLayout.tsx                       # Live ordered sidebar songs
+
+apps/desktop/src/routes/shows/$showId/setlist/
+  index.tsx                            # Ordered all-songs list
+  $songId.tsx                          # Song detail page</code></pre>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Implementation sequence</h2>
+        <ol class="mt-4 space-y-4">
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">1.</span> Contracts and persistence</h3><p class="mt-2 text-sm text-zinc-600">Define Effect schemas and branded IDs, export them, add <code>songs</code> to the show document, initialize new files, and extend ID generation. Update fixtures immediately so schema tests continue to represent valid files.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">2.</span> Effect-native song service</h3><p class="mt-2 text-sm text-zinc-600">Implement all operations through <code>ShowRepository</code> and <code>ShowFile.update</code>. Reuse existing error translation patterns. Centralize normalization and reference validation in shared helpers rather than duplicating it across operations.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">3.</span> RPC and reactive atoms</h3><p class="mt-2 text-sm text-zinc-600">Expose typed RPCs and handlers, wire the service layer, then create a song atom family with SWR behavior and optimistic create/delete/reorder/edit reducers. Keep server results authoritative.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">4.</span> Sidebar and creation flow</h3><p class="mt-2 text-sm text-zinc-600">Remove placeholders, render live songs, enable the plus button, and share one creation dialog between the sidebar and the empty all-songs state.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">5.</span> All-songs drag ordering</h3><p class="mt-2 text-sm text-zinc-600">Build the accessible sortable list. Prefer the drag-and-drop package already present in the workspace; if none is installed, add a maintained keyboard-capable library rather than implementing pointer geometry locally.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">6.</span> Song detail page</h3><p class="mt-2 text-sm text-zinc-600">Build the header, notes card, mix cards, microphone selection controls, and delete workflow. Derive displayed labels from current mix/microphone queries so edits elsewhere appear without rewriting songs.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">7.</span> Failure and load testing</h3><p class="mt-2 text-sm text-zinc-600">Exercise rapid reorders, reconnects, deleted references, concurrent edits, and write failures. Confirm that atomic persistence, rollback behavior, and final ordering remain predictable.</p></li>
+        </ol>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Testing plan</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold">Contract and backend</h3><ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600"><li>Accept valid songs and reject blank names/artists, malformed IDs, duplicate assignments, and duplicate microphone IDs.</li><li>Create appends; edit preserves identity/creation time; delete soft-deletes; list filters deleted songs.</li><li>Reorder rejects missing, duplicate, foreign, or deleted IDs without modifying the file.</li><li>Deleted mix/microphone references do not crash list/read behavior.</li><li>Parallel updates serialize through the show-file semaphore and always leave valid JSON.</li></ul></div>
+          <div class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold">Renderer and workflow</h3><ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600"><li>Sidebar and all-songs list display identical order and numbering.</li><li>Pointer and keyboard reorder produce the same ordered ID payload.</li><li>Failed reorder rolls back and announces the failure.</li><li>Notes and microphone selections survive navigation and refresh.</li><li>Deleting the open song routes safely to All songs.</li><li>Empty, loading, stale-with-refresh, and hard-failure states are covered.</li></ul></div>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Acceptance criteria</h2>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>A user can create a song with a required name and artist and see it immediately in both setlist views.</li>
+          <li>Every active song has a stable ID and timestamps, supports optional notes, and may be soft-deleted.</li>
+          <li>The song number always matches its current position in the active ordered setlist.</li>
+          <li>The all-songs list can be reordered with pointer and keyboard input, and the order survives restart.</li>
+          <li>The detail header contains number, name, artist, and an ellipsis menu whose sole option is Delete.</li>
+          <li>Notes appear first; one minimal card follows for every active mix, with assignable active microphones.</li>
+          <li>Failures never silently discard edits or leave sidebar and page ordering permanently inconsistent.</li>
+          <li>All new contracts, services, and critical interaction reducers have automated tests.</li>
+        </ul>
+      </section>
+
+      <footer class="mt-12 border-t border-zinc-200 pt-5 text-sm text-zinc-500">
+        Showtime implementation plan · Songs and Setlist
+      </footer>
+    </main>
+  </body>
+</html>

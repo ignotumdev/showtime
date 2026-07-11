@@ -16,6 +16,7 @@ import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
 import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
 import { mixAtoms } from "@/frontend/mixes/MixAtoms";
+import { useCreateSong } from "@/components/songs/useCreateSong";
 
 type TitleBarProps = {
   hideName?: boolean;
@@ -42,9 +43,11 @@ export function TitleBar({
   const isShowsRoute = pathname === "/";
   const isMicrophonesRoute = pathname.endsWith("/microphones");
   const isMixesRoute = pathname.endsWith("/mixes");
+  const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
   const isLiveRoute = pathname.includes("/live");
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
+  const songCreator = useCreateSong((showId ?? "") as ShowId);
 
   return (
     <header
@@ -89,7 +92,17 @@ export function TitleBar({
         )}
         {isMicrophonesRoute && showId && <AddMicrophoneButton showId={showId as ShowId} />}
         {isMixesRoute && showId && <AddMixButton showId={showId as ShowId} />}
+        {isAllSongsRoute && showId && (
+          <Button size="sm" disabled={songCreator.isCreating} onClick={songCreator.createSong}>
+            <PlusIcon /> {songCreator.isCreating ? "Adding..." : "Add song"}
+          </Button>
+        )}
       </div>
+      {isAllSongsRoute && songCreator.error && (
+        <span role="alert" className="ml-2 text-xs text-destructive">
+          {songCreator.error}
+        </span>
+      )}
     </header>
   );
 }

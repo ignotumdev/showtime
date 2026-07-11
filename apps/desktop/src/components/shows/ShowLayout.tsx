@@ -1,4 +1,4 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, ListMusicIcon, Mic2Icon, PlusIcon, SpeakerIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,16 +21,27 @@ import { TitleBar } from "../TitleBar";
 import { showColorClassNames } from "./show-color";
 import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
-
-const placeholderSongs = [
-  { id: "its-my-life", title: "It's My Life", artist: "Bon Jovi" },
-  { id: "fix-you", title: "Fix You", artist: "Coldplay" },
-] as const;
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Option } from "effect";
+import type { ShowId } from "@showtime/contracts";
+import { useAtomValue } from "@/frontend/react/AtomProvider";
+import { songAtoms } from "@/frontend/songs/SongAtoms";
+import { useCreateSong } from "@/components/songs/useCreateSong";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
+  const typedShowId = showId as ShowId;
+  const songsResult = useAtomValue(songAtoms(typedShowId).songs);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
+  const songs = AsyncResult.isSuccess(songsResult)
+    ? songsResult.value
+    : AsyncResult.isFailure(songsResult)
+      ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
+      : [];
+  const songCreator = useCreateSong(typedShowId);
 
   return (
     <React.Fragment>
@@ -68,9 +79,21 @@ export function ShowLayout() {
 
             <SidebarGroup>
               <SidebarGroupLabel>Setlist</SidebarGroupLabel>
-              <SidebarGroupAction type="button" aria-label="Add song" disabled>
-                <PlusIcon />
-              </SidebarGroupAction>
+              {!isAllSongsRoute && (
+                <SidebarGroupAction
+                  type="button"
+                  aria-label="Add song"
+                  disabled={songCreator.isCreating}
+                  onClick={songCreator.createSong}
+                >
+                  <PlusIcon />
+                </SidebarGroupAction>
+              )}
+              {!isAllSongsRoute && songCreator.error && (
+                <p role="alert" className="px-2 text-xs text-destructive">
+                  {songCreator.error}
+                </p>
+              )}
               <SidebarGroupContent>
                 <SidebarMenu>
                   <ShowSidebarLink
@@ -79,12 +102,12 @@ export function ShowLayout() {
                     label="All songs"
                     icon={ListMusicIcon}
                   />
-                  {placeholderSongs.map((song, id) => (
+                  {songs.map((song, id) => (
                     <ShowSidebarLink
                       key={song.id}
                       to="/shows/$showId/setlist/$songId"
                       params={{ showId, songId: song.id }}
-                      label={song.title}
+                      label={song.name || "New song"}
                       badge={song.artist}
                       number={id + 1}
                     />

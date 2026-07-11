@@ -2,6 +2,14 @@ import { Schema } from "effect";
 import { Rpc, RpcGroup as EffectRpcGroup } from "effect/unstable/rpc";
 import { Microphone, MicrophoneId, MicrophoneNumber } from "./microphone.js";
 import { Mix, MixId, MixNumber } from "./mix.js";
+import {
+  Song,
+  SongArtist,
+  SongId,
+  SongMicrophoneName,
+  SongMixAssignment,
+  SongName,
+} from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
 
 export const rpcHost = "127.0.0.1";
@@ -86,8 +94,42 @@ export const RpcGroup = EffectRpcGroup.make(
     success: Schema.Void,
     error: RpcError,
   }),
+  Rpc.make("ListSongs", {
+    payload: { showId: ShowId },
+    success: Schema.Array(Song),
+    error: RpcError,
+  }),
+  Rpc.make("CreateSong", {
+    payload: { showId: ShowId, name: SongName, artist: SongArtist },
+    success: Song,
+    error: RpcError,
+  }),
+  Rpc.make("EditSong", {
+    payload: {
+      showId: ShowId,
+      id: SongId,
+      name: SongName,
+      artist: SongArtist,
+      notes: Schema.optional(Schema.String),
+      mixAssignments: Schema.Array(SongMixAssignment),
+      microphoneNames: Schema.Array(SongMicrophoneName),
+    },
+    success: Song,
+    error: RpcError,
+  }),
+  Rpc.make("ReorderSongs", {
+    payload: { showId: ShowId, orderedSongIds: Schema.Array(SongId) },
+    success: Schema.Array(Song),
+    error: RpcError,
+  }),
+  Rpc.make("DeleteSong", {
+    payload: { showId: ShowId, id: SongId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
 );
 
 export const showsRpcReactivityKey = ["shows"] as const;
 export const microphonesRpcReactivityKey = (showId: ShowId) => ["microphones", showId] as const;
 export const mixesRpcReactivityKey = (showId: ShowId) => ["mixes", showId] as const;
+export const songsRpcReactivityKey = (showId: ShowId) => ["songs", showId] as const;

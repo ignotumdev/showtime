@@ -14,6 +14,7 @@ import * as ShowFile from "./shows/ShowFile";
 import * as ShowPaths from "./shows/ShowPaths";
 import * as ShowRepository from "./shows/ShowRepository";
 import * as ShowService from "./shows/ShowService";
+import * as SongService from "./songs/SongService";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
@@ -34,7 +35,14 @@ const makeRpcLive = (token: string) => {
   const RpcProtocol = makeRpcProtocol(token);
 
   return Rpc.layer.pipe(
-    Layer.provide(Layer.mergeAll(ShowService.layer, MicrophoneService.layer, MixService.layer)),
+    Layer.provide(
+      Layer.mergeAll(
+        ShowService.layer,
+        MicrophoneService.layer,
+        MixService.layer,
+        SongService.layer,
+      ),
+    ),
     Layer.provideMerge(RpcProtocol),
     Layer.provide(HttpRouter.serve(RpcProtocol, { disableListenLog: true })),
     Layer.provide(NodeHttpServer.layer(createServer, { host: rpcHost, port: rpcPort })),
