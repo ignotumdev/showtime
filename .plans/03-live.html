@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>03 - Live Route</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-white text-zinc-950 antialiased">
+    <main class="mx-auto max-w-5xl px-6 py-10">
+      <header class="border-b border-zinc-200 pb-6">
+        <p class="text-sm font-medium text-sky-700">Plan 03</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight">Live route</h1>
+        <p class="mt-3 max-w-3xl text-zinc-600">
+          Replace the Live placeholder with a large, read-only song view optimized for quick
+          scanning during a show. Keep the current position and elapsed live time visible in the
+          title bar, and make previous/next navigation available at the screen edges.
+        </p>
+      </header>
+
+      <section class="mt-8 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Primary workflow</h2>
+          <p class="mt-2 text-sm text-zinc-600">Open Live, read the current song, and move backward or forward without editing anything.</p>
+        </div>
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Performance rule</h2>
+          <p class="mt-2 text-sm text-zinc-600">Derive the view from the existing reactive song, mix, and microphone atoms; add no polling except the local elapsed-time display.</p>
+        </div>
+        <div class="rounded-lg border border-zinc-200 p-4">
+          <h2 class="text-sm font-semibold">Safety rule</h2>
+          <p class="mt-2 text-sm text-zinc-600">The route is strictly read-only. No live-screen control may mutate songs, notes, assignments, mixes, or microphones.</p>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Target layout</h2>
+        <p class="mt-2 text-sm text-zinc-600">
+          This mockup communicates hierarchy and placement. The implementation must use the
+          default project <code>Button</code>, <code>Badge</code>, and <code>Card</code> styles rather
+          than restyling shared UI primitives.
+        </p>
+        <div class="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-50 shadow-sm">
+          <div class="grid h-12 grid-cols-[1fr_auto_1fr] items-center border-b border-zinc-800 px-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <button type="button" class="rounded-md px-2 py-1 text-sm text-zinc-300">&#8592; Back</button>
+              <span class="truncate text-base font-semibold">Fix You</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-zinc-300">3 of 12 songs</span>
+              <span class="rounded-full bg-red-950 px-2.5 py-1 font-medium text-red-300">LIVE 01:24:18</span>
+            </div>
+            <div aria-hidden="true"></div>
+          </div>
+
+          <div class="relative min-h-[560px] px-20 py-14">
+            <button type="button" aria-label="Previous song" class="absolute left-4 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md border border-zinc-700 text-2xl">&#8249;</button>
+            <button type="button" aria-label="Next song" class="absolute right-4 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md border border-zinc-700 text-2xl">&#8250;</button>
+
+            <div class="mx-auto max-w-3xl text-center">
+              <div class="text-6xl font-bold tracking-tight text-zinc-400">3</div>
+              <h3 class="mt-2 text-4xl font-semibold tracking-tight">Fix You</h3>
+              <p class="mt-2 text-lg text-zinc-400">Coldplay</p>
+            </div>
+
+            <div class="mx-auto mt-10 grid max-w-4xl gap-3 md:grid-cols-2">
+              <article class="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left">
+                <h4 class="font-medium">LR &middot; Main</h4>
+                <div class="mt-3 space-y-2">
+                  <div class="flex items-center gap-2"><span class="flex size-7 items-center justify-center rounded-md bg-sky-700 text-sm font-bold">1</span><span>Lead vocal</span></div>
+                  <div class="flex items-center gap-2"><span class="flex size-7 items-center justify-center rounded-md bg-amber-700 text-sm font-bold">4</span><span>Acoustic guitar</span></div>
+                </div>
+              </article>
+              <article class="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left">
+                <h4 class="font-medium">1 &middot; Alex</h4>
+                <div class="mt-3 space-y-2">
+                  <div class="flex items-center gap-2"><span class="flex size-7 items-center justify-center rounded-md bg-sky-700 text-sm font-bold">1</span><span>Chris</span></div>
+                  <div class="flex items-center gap-2"><span class="flex size-7 items-center justify-center rounded-md bg-violet-700 text-sm font-bold">8</span><span>Keys</span></div>
+                </div>
+              </article>
+            </div>
+
+            <article class="mx-auto mt-4 max-w-4xl rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left">
+              <h4 class="font-medium">Notes</h4>
+              <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-300">Quiet opening. Watch the vocal cue before verse two.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Product decisions</h2>
+        <div class="mt-4 overflow-hidden rounded-lg border border-zinc-200">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-zinc-50 text-zinc-700"><tr><th class="px-4 py-3 font-medium">Area</th><th class="px-4 py-3 font-medium">Behavior</th></tr></thead>
+            <tbody class="divide-y divide-zinc-200">
+              <tr><td class="px-4 py-3 font-medium">Title bar</td><td class="px-4 py-3 text-zinc-600">Keep Back on the left, show the current song name beside it at a larger size, then center <strong>x of y songs</strong> followed by a destructive <strong>LIVE HH:MM:SS</strong> badge. Preserve the native window-control safe area.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Song identity</td><td class="px-4 py-3 text-zinc-600">Center a large one-based setlist number, song name, and artist. Hide the artist line when its trimmed value is empty.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Navigation</td><td class="px-4 py-3 text-zinc-600">Place Previous at the left edge and Next at the right edge. Disable Previous on song 1 and Next on the final song; never wrap around.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Mix cards</td><td class="px-4 py-3 text-zinc-600">Render active mixes in existing mix order, Main first, in a responsive grid. Only show a card when it has at least one active assigned microphone.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Microphones</td><td class="px-4 py-3 text-zinc-600">Only list microphones assigned to that mix. Show the colored number and resolved name, with no checkbox or edit affordance.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Name resolution</td><td class="px-4 py-3 text-zinc-600">Use the song-specific microphone name override first, then the global microphone name, then <strong>Microphone {number}</strong>.</td></tr>
+              <tr><td class="px-4 py-3 font-medium">Notes</td><td class="px-4 py-3 text-zinc-600">Put one read-only Notes card below all mix cards. Preserve line breaks. Hide the card when notes are absent or blank.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Live session and timer</h2>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>Entering <code>/live/$showId</code> starts a live session if that show has no active local session; reopening or refreshing the same live route resumes its existing start time.</li>
+          <li>Persist <code>startedAt</code> per show in a small renderer-owned live-session module. The timer is UI state, not show configuration, and must not trigger RPC writes.</li>
+          <li>Compute elapsed time from <code>Date.now() - startedAt</code> on each tick instead of incrementing a counter. This prevents drift when rendering stalls or the machine is under load.</li>
+          <li>Update at most once per second, pause the interval while the document is hidden, and immediately recompute on visibility return.</li>
+          <li>The Back action explicitly ends and clears the local live session before returning to the show. Normal rerenders, reconnects, and route remounts must not reset it.</li>
+          <li>Format elapsed time as <code>HH:MM:SS</code>, allowing hours above 23. The badge always includes the word <strong>LIVE</strong> so color is not the only signal.</li>
+        </ul>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Navigation and route state</h2>
+        <p class="mt-2 text-sm text-zinc-600">
+          Store the selected song in the URL as a search parameter, for example
+          <code>/live/show_123?song=song_456</code>. This makes refresh and renderer remount behavior
+          deterministic without introducing mutable global selection state.
+        </p>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>If the URL references an active song, display its current position in canonical setlist order.</li>
+          <li>If the parameter is absent or invalid, select the first active song and replace the URL. If the current song is deleted during Live, select the song now occupying the same index, falling back to the new final song.</li>
+          <li>Previous and Next replace only the search parameter, preserving the live session. Support <kbd class="rounded border bg-zinc-50 px-1.5 py-0.5">ArrowLeft</kbd> and <kbd class="rounded border bg-zinc-50 px-1.5 py-0.5">ArrowRight</kbd> when focus is not inside an interactive control.</li>
+          <li>Buttons use explicit labels such as <strong>Previous song: Yellow</strong> and <strong>Next song: Clocks</strong>. Disabled edge buttons remain visible so layout never shifts.</li>
+          <li>Keep the side controls outside the scrolling content column and large enough for quick pointer use. At narrow widths, anchor them near the bottom corners so they do not cover song content.</li>
+        </ul>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Read-only projection</h2>
+        <pre class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"><code>LiveSongView = {
+  position: currentSongIndex + 1
+  total: activeSongs.length
+  name: currentSong.name
+  artist?: trim(currentSong.artist) || undefined
+  mixes: orderedActiveMixes.flatMap(mix =&gt; {
+    assignment = currentSong.mixAssignments.find(item =&gt; item.mixId === mix.id)
+    microphones = activeMicrophones
+      .filter(mic =&gt; assignment?.microphoneIds.includes(mic.id))
+      .map(mic =&gt; ({
+        number: mic.number,
+        color: mic.color,
+        name: songOverride(mic.id) ?? mic.name ?? `Microphone ${mic.number}`
+      }))
+    return microphones.length ? [{ mix, microphones }] : []
+  })
+  notes?: trim(currentSong.notes) || undefined
+}</code></pre>
+        <p class="mt-3 text-sm text-zinc-600">
+          Put this pure projection in a shared module and unit-test it independently. It centralizes
+          filtering, ordering, fallback labels, and stale-reference handling instead of spreading
+          those rules through JSX.
+        </p>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Loading and failure behavior</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-zinc-200 p-4">
+            <h3 class="font-semibold">Predictable display</h3>
+            <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+              <li>Show the standard loading empty state only when no cached songs exist.</li>
+              <li>When stale data exists during refresh or reconnect, keep the current song visible and do not move focus.</li>
+              <li>Ignore deleted or unknown mix and microphone IDs instead of failing the entire view.</li>
+              <li>Use stable IDs as React keys so a data refresh does not recreate every card.</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-zinc-200 p-4">
+            <h3 class="font-semibold">Empty and hard failure</h3>
+            <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+              <li>An empty setlist shows <strong>No songs in this setlist</strong> with only a Back action.</li>
+              <li>A hard load failure with no cached data shows a concise connection error and a retry action.</li>
+              <li>Missing assignments show no mix section; missing notes show no Notes card.</li>
+              <li>Navigation remains disabled until a valid current song is available.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Proposed file changes</h2>
+        <pre class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-800"><code>apps/desktop/src/routes/live/
+  route.tsx                         # Live-aware title bar shell and Back/end-session action
+  $showId.tsx                       # Queries, URL song selection, loading/error/empty states
+
+apps/desktop/src/components/live/
+  LiveSong.tsx                      # Large song heading, mix grid, and notes card
+  LiveSongNavigation.tsx            # Previous/next edge buttons and arrow-key navigation
+  LiveTitleBarStatus.tsx            # x of y plus elapsed destructive badge
+
+apps/desktop/src/frontend/live/
+  LiveSession.ts                    # Persisted per-show startedAt and drift-free elapsed hook
+  LiveSongView.ts                   # Pure read-only projection and label resolution
+  LiveSongView.test.ts
+  LiveSession.test.ts
+
+apps/desktop/src/components/
+  TitleBar.tsx                      # Accept a Live-specific left/status slot without route logic duplication</code></pre>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Implementation sequence</h2>
+        <ol class="mt-4 space-y-4">
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">1.</span> Pure live projection</h3><p class="mt-2 text-sm text-zinc-600">Build and test the function that joins songs, mixes, microphones, assignments, and song-level microphone-name overrides. Reuse the existing color-class mapping.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">2.</span> Session timer</h3><p class="mt-2 text-sm text-zinc-600">Create the per-show start/resume/end abstraction and drift-free elapsed hook. Keep storage and interval cleanup out of route components.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">3.</span> Title bar API</h3><p class="mt-2 text-sm text-zinc-600">Extend <code>TitleBar</code> with composable Live content slots so the current song, position, and timer fit without embedding atom reads in the shared title bar.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">4.</span> Read-only song content</h3><p class="mt-2 text-sm text-zinc-600">Render the large centered identity, responsive non-empty mix cards, active microphone rows, and optional notes card using shared UI defaults.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">5.</span> Navigation</h3><p class="mt-2 text-sm text-zinc-600">Add URL-based selection, edge buttons, keyboard shortcuts, disabled boundaries, and deterministic recovery when the selected song disappears.</p></li>
+          <li class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold"><span class="text-sky-700">6.</span> Reliability pass</h3><p class="mt-2 text-sm text-zinc-600">Exercise cached refresh, reconnect, renderer remount, rapid navigation, setlist changes during Live, and long-running timer behavior before replacing the placeholder route.</p></li>
+        </ol>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Testing plan</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold">Projection and timing</h3><ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600"><li>Projects only active, assigned microphones and non-empty mixes.</li><li>Resolves song override, global name, and fallback label in that order.</li><li>Ignores stale IDs while preserving source order.</li><li>Formats zero, one hour, and more than 24 hours correctly.</li><li>Resuming uses the stored start time; ending clears only that show.</li></ul></div>
+          <div class="rounded-lg border border-zinc-200 p-4"><h3 class="font-semibold">Route and interaction</h3><ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-600"><li>Missing song parameter selects the first song.</li><li>Buttons and arrow keys navigate one song without wrapping.</li><li>First/last disabled states and accessible names are correct.</li><li>Deleting/reordering the current song selects a deterministic neighbor.</li><li>The Live screen exposes no inputs or mutation calls.</li><li>Cached content stays visible through a failed refresh.</li></ul></div>
+        </div>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Acceptance criteria</h2>
+        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-600">
+          <li>The title bar shows the current song prominently, <strong>x of y songs</strong>, and a destructive badge with elapsed live time.</li>
+          <li>The content centers a large song number and name, with a smaller muted artist only when present.</li>
+          <li>Previous and Next controls sit at the left and right edges, move exactly one song, and disable at setlist boundaries.</li>
+          <li>Mix cards lay out next to one another and contain only active assigned microphones.</li>
+          <li>Each microphone row contains only its colored number and resolved name; song-specific names win.</li>
+          <li>A read-only Notes card appears below the mix grid only when notes exist.</li>
+          <li>The timer survives rerenders, reconnects, and route remounts without drift and stops when Back ends Live.</li>
+          <li>Loading, empty, stale, missing-reference, and hard-failure states never expose editing controls or crash the route.</li>
+        </ul>
+      </section>
+
+      <footer class="mt-12 border-t border-zinc-200 pt-5 text-sm text-zinc-500">
+        Showtime implementation plan &middot; Live route
+      </footer>
+    </main>
+  </body>
+</html>

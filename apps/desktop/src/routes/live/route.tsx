@@ -1,6 +1,12 @@
 import { TitleBar } from "@/components/TitleBar";
+import { LiveTitleBarStatus } from "@/components/live/LiveTitleBarStatus";
+import { songAtoms } from "@/frontend/songs/SongAtoms";
+import { endLiveSession, useLiveElapsed } from "@/frontend/live/LiveSession";
+import { useAtomValue } from "@/frontend/react/AtomProvider";
 import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import type { ShowId } from "@showtime/contracts";
+import { AsyncResult } from "effect/unstable/reactivity";
 import React from "react";
 
 export const Route = createFileRoute("/live")({
@@ -8,12 +14,58 @@ export const Route = createFileRoute("/live")({
 });
 
 function RouteComponent() {
-  const { show: liveShow } = useShowFromParams();
+  const { show: liveShow, showId } = useShowFromParams();
+  if (!showId) {
+    return (
+      <React.Fragment>
+        <TitleBar hideName={true} stack="above-content" />
+        <div className="h-screen overflow-hidden pt-10">
+          <Outlet />
+        </div>
+      </React.Fragment>
+    );
+  }
+
+  return <LiveRouteContent key={showId} liveShow={liveShow} showId={showId as ShowId} />;
+}
+
+function LiveRouteContent({
+  liveShow,
+  showId,
+}: {
+  readonly liveShow: ReturnType<typeof useShowFromParams>["show"];
+  readonly showId: ShowId;
+}) {
+  const typedShowId = showId;
+  const songsResult = useAtomValue(songAtoms(typedShowId).songs);
+  const songs = AsyncResult.getOrElse(songsResult, () => []).filter((song) => !song.deletedAt);
+  const search = useRouterState({ select: (state) => state.location.search });
+  const selectedId = typeof search.song === "string" ? search.song : undefined;
+  const selectedIndex = Math.max(
+    0,
+    songs.findIndex((song) => song.id === selectedId),
+  );
+  const selectedSong = songs[selectedIndex];
+  const elapsed = useLiveElapsed(typedShowId);
 
   return (
     <React.Fragment>
-      <TitleBar hideName={true} liveShow={liveShow} stack="below-content" />
-      <div className="min-h-screen px-3 py-10">
+      <TitleBar
+        hideName={true}
+        liveShow={liveShow}
+        liveStatus={
+          selectedSong ? (
+            <LiveTitleBarStatus
+              position={selectedIndex + 1}
+              total={songs.length}
+              elapsed={elapsed}
+            />
+          ) : undefined
+        }
+        onLiveBack={() => endLiveSession(typedShowId)}
+        stack="above-content"
+      />
+      <div className="h-screen overflow-hidden pt-10">
         <Outlet />
       </div>
     </React.Fragment>

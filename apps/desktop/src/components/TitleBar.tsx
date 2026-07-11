@@ -21,18 +21,22 @@ import { useCreateSong } from "@/components/songs/useCreateSong";
 type TitleBarProps = {
   hideName?: boolean;
   isMacOS?: boolean;
+  liveStatus?: React.ReactNode;
   liveShow?: {
     readonly id: ShowId;
     readonly name: ShowName;
     readonly color: Color;
   };
+  onLiveBack?: () => void;
   stack?: "default" | "above-content" | "below-content";
 };
 
 export function TitleBar({
   hideName = false,
   isMacOS = navigator.userAgent.includes("Macintosh"),
+  liveStatus,
   liveShow,
+  onLiveBack,
   stack = "default",
 }: TitleBarProps) {
   const pathname = useRouterState({
@@ -62,18 +66,29 @@ export function TitleBar({
         {isLiveRoute && (
           <Button
             variant="ghost"
+            onClick={onLiveBack}
             render={showId ? <Link to="/shows/$showId" params={{ showId }} /> : <Link to="/" />}
           >
             <ArrowLeftIcon /> Back
           </Button>
         )}
+        {isLiveRoute && liveShow && (
+          <span className="flex min-w-0 max-w-72 items-center gap-2">
+            <span className={`${showColorClassName} size-4 shrink-0 rounded`} />
+            <span className="truncate text-sm font-semibold text-[#fafafa]">{liveShow.name}</span>
+          </span>
+        )}
       </div>
-      {liveShow && (
+      {isLiveRoute && liveStatus ? (
+        <div className="pointer-events-none ml-2 flex min-w-0 flex-1 items-center">
+          {liveStatus}
+        </div>
+      ) : liveShow && !isLiveRoute ? (
         <div className="pointer-events-none absolute left-1/2 flex max-w-[min(28rem,calc(100%-12rem))] -translate-x-1/2 items-center gap-2">
           <span className={`${showColorClassName} size-4 shrink-0 rounded`} />
           <span className="truncate text-sm font-semibold text-[#fafafa]">{liveShow.name}</span>
         </div>
-      )}
+      ) : null}
       {!hideName && (
         <div className="flex min-w-0 items-center gap-2.25">
           <img className="size-6 shrink-0" src={iconUrl} alt="" />
