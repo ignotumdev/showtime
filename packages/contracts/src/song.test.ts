@@ -41,5 +41,11 @@ describe("Song", () => {
         ],
       }),
     ).toThrow();
+    expect(() =>
+      decode({
+        ...valid,
+        microphoneNames: [valid.microphoneNames[0], valid.microphoneNames[0]],
+      }),
+    ).toThrow();
   });
 });

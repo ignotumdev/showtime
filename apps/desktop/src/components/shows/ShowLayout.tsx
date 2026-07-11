@@ -1,4 +1,4 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, ListMusicIcon, Mic2Icon, PlusIcon, SpeakerIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ import { showColorClassNames } from "./show-color";
 import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { Option } from "effect";
 import type { ShowId } from "@showtime/contracts";
 import { useAtomValue } from "@/frontend/react/AtomProvider";
 import { songAtoms } from "@/frontend/songs/SongAtoms";
@@ -33,7 +34,13 @@ export function ShowLayout() {
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
   const typedShowId = showId as ShowId;
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
-  const songs = AsyncResult.isSuccess(songsResult) ? songsResult.value : [];
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
+  const songs = AsyncResult.isSuccess(songsResult)
+    ? songsResult.value
+    : AsyncResult.isFailure(songsResult)
+      ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
+      : [];
   const songCreator = useCreateSong(typedShowId);
 
   return (
@@ -72,15 +79,17 @@ export function ShowLayout() {
 
             <SidebarGroup>
               <SidebarGroupLabel>Setlist</SidebarGroupLabel>
-              <SidebarGroupAction
-                type="button"
-                aria-label="Add song"
-                disabled={songCreator.isCreating}
-                onClick={songCreator.createSong}
-              >
-                <PlusIcon />
-              </SidebarGroupAction>
-              {songCreator.error && (
+              {!isAllSongsRoute && (
+                <SidebarGroupAction
+                  type="button"
+                  aria-label="Add song"
+                  disabled={songCreator.isCreating}
+                  onClick={songCreator.createSong}
+                >
+                  <PlusIcon />
+                </SidebarGroupAction>
+              )}
+              {!isAllSongsRoute && songCreator.error && (
                 <p role="alert" className="px-2 text-xs text-destructive">
                   {songCreator.error}
                 </p>

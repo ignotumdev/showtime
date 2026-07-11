@@ -96,12 +96,14 @@ export const songAtoms = Atom.family((showId: ShowId) => {
       reducer: (current, input: MutationInput<typeof reorderSongsMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
         const byId = new Map(current.value.map((song) => [song.id, song]));
-        return AsyncResult.success(
-          input.payload.orderedSongIds.flatMap((id) => {
+        const orderedIds = new Set(input.payload.orderedSongIds);
+        return AsyncResult.success([
+          ...input.payload.orderedSongIds.flatMap((id) => {
             const song = byId.get(id);
             return song ? [song] : [];
           }),
-        );
+          ...current.value.filter((song) => !orderedIds.has(song.id)),
+        ]);
       },
       fn: reorderSongsMutation,
     }),

@@ -153,23 +153,49 @@ const make = Effect.fnUntraced(function* () {
     );
     const notes = params.notes?.trim();
     const now = yield* DateTime.now;
-    const song: Song = {
-      id: existing.id,
-      name,
-      artist,
-      mixAssignments,
-      ...(microphoneNames.length ? { microphoneNames } : {}),
-      createdAt: existing.createdAt,
-      updatedAt: now,
-      ...(notes ? { notes } : {}),
-    };
-    yield* showFile
-      .update(found.path, (document) => ({
-        ...document,
-        songs: document.songs.map((item) => (item.id === params.id ? song : item)),
-      }))
+    const updated = yield* showFile
+      .update(found.path, (document) => {
+        const current = document.songs.find(
+          (item) => item.id === params.id && item.deletedAt === undefined,
+        );
+        if (!current) throw new Error("Song not found.");
+
+        const currentMixIds = new Set(
+          document.mixes.filter((mix) => mix.deletedAt === undefined).map((mix) => mix.id),
+        );
+        const currentMicrophoneIds = new Set(
+          document.microphones
+            .filter((microphone) => microphone.deletedAt === undefined)
+            .map((microphone) => microphone.id),
+        );
+        if (
+          mixAssignments.some(
+            (assignment) =>
+              !currentMixIds.has(assignment.mixId) ||
+              assignment.microphoneIds.some((id) => !currentMicrophoneIds.has(id)),
+          ) ||
+          microphoneNames.some((item) => !currentMicrophoneIds.has(item.microphoneId))
+        ) {
+          throw new Error("A referenced mix or microphone no longer exists.");
+        }
+
+        const song: Song = {
+          id: current.id,
+          name,
+          artist,
+          mixAssignments,
+          ...(microphoneNames.length ? { microphoneNames } : {}),
+          createdAt: current.createdAt,
+          updatedAt: now,
+          ...(notes ? { notes } : {}),
+        };
+        return {
+          ...document,
+          songs: document.songs.map((item) => (item.id === params.id ? song : item)),
+        };
+      })
       .pipe(Effect.mapError(toRpcError("Could not save song.")));
-    return song;
+    return updated.songs.find((item) => item.id === params.id)!;
   });
 
   const reorder: SongServiceShape["reorder"] = Effect.fnUntraced(function* (params) {

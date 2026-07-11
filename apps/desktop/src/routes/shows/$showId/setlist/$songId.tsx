@@ -82,6 +82,19 @@ function RouteComponent() {
       </Empty>
     );
   }
+  if (AsyncResult.isFailure(songsResult) && songs.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AlertCircleIcon />
+          </EmptyMedia>
+          <EmptyTitle>Song could not be loaded</EmptyTitle>
+          <EmptyDescription>Check your connection and try again.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
   if (!song) {
     return (
       <Empty>
@@ -131,6 +144,7 @@ function SongDetail({
     song.microphoneNames ?? [],
   );
   const [isSaving, setIsSaving] = React.useState(false);
+  const isSavingRef = React.useRef(false);
   const [saveError, setSaveError] = React.useState<string>();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
@@ -177,7 +191,7 @@ function SongDetail({
   ) => {
     const nextName = (next?.name ?? name).trim();
     const nextArtist = (next?.artist ?? artist).trim();
-    if (blockUi && isSaving) return false;
+    if (blockUi && isSavingRef.current) return false;
     const activeMixIds = new Set(mixes.map((mix) => mix.id));
     const activeMicrophoneIds = new Set(microphones.map((microphone) => microphone.id));
     const normalizedAssignments = (next?.assignments ?? assignments).flatMap((assignment) => {
@@ -188,7 +202,10 @@ function SongDetail({
     const normalizedMicrophoneNames = (next?.microphoneNames ?? microphoneNames).filter((item) =>
       activeMicrophoneIds.has(item.microphoneId),
     );
-    if (blockUi) setIsSaving(true);
+    if (blockUi) {
+      isSavingRef.current = true;
+      setIsSaving(true);
+    }
     setSaveError(undefined);
     const result = await edit({
       payload: {
@@ -202,7 +219,10 @@ function SongDetail({
       },
       reactivityKeys: songsRpcReactivityKey(showId),
     });
-    if (blockUi) setIsSaving(false);
+    if (blockUi) {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
     if (Exit.isFailure(result)) {
       setSaveError(rpcErrorMessageFromCause(result.cause));
       setName(song.name);
@@ -216,7 +236,7 @@ function SongDetail({
   };
 
   const toggleMicrophone = (mixId: Mix["id"], microphoneId: MicrophoneId) => {
-    if (isSaving) return;
+    if (isSavingRef.current) return;
     const existing = assignments.find((assignment) => assignment.mixId === mixId);
     const selected = new Set(existing?.microphoneIds ?? []);
     if (selected.has(microphoneId)) {
@@ -232,7 +252,7 @@ function SongDetail({
       ...(microphoneIds.length ? [{ mixId, microphoneIds }] : []),
     ];
     setAssignments(next);
-    void save({ assignments: next }, false);
+    void save({ assignments: next });
   };
 
   return (

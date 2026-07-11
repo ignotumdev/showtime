@@ -98,7 +98,7 @@ export function TitleBar({
           </Button>
         )}
       </div>
-      {songCreator.error && (
+      {isAllSongsRoute && songCreator.error && (
         <span role="alert" className="ml-2 text-xs text-destructive">
           {songCreator.error}
         </span>

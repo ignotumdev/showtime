@@ -29,6 +29,7 @@ function RouteComponent() {
   const songs = AsyncResult.isSuccess(result) ? result.value : [];
   const [previewSongs, setPreviewSongs] = React.useState<ReadonlyArray<SongListItem>>(songs);
   const [draggedId, setDraggedId] = React.useState<SongId>();
+  const didDropRef = React.useRef(false);
   const [isReordering, setIsReordering] = React.useState(false);
   const [announcement, setAnnouncement] = React.useState("");
   const [error, setError] = React.useState<string>();
@@ -75,8 +76,9 @@ function RouteComponent() {
     });
   };
 
-  const finishDrag = () => {
+  const commitDrag = () => {
     if (!draggedId) return;
+    didDropRef.current = true;
     const moved = previewSongs.find((song) => song.id === draggedId);
     const changed = previewSongs.some((song, index) => song.id !== songs[index]?.id);
     setDraggedId(undefined);
@@ -84,6 +86,15 @@ function RouteComponent() {
       setAnnouncement(`${moved.name} moved to position ${previewSongs.indexOf(moved) + 1}.`);
       void commitOrder(previewSongs, moved.name);
     }
+  };
+
+  const cancelDrag = () => {
+    if (didDropRef.current) {
+      didDropRef.current = false;
+      return;
+    }
+    setDraggedId(undefined);
+    setPreviewSongs(songs);
   };
 
   return (
@@ -132,7 +143,7 @@ function RouteComponent() {
               }}
               onDrop={(event) => {
                 event.preventDefault();
-                finishDrag();
+                commitDrag();
               }}
               className="group flex min-h-16 items-center border-b transition-[background-color,opacity,transform] last:border-b-0 hover:bg-accent/50"
             >
@@ -142,12 +153,13 @@ function RouteComponent() {
                 disabled={isReordering || ("pending" in song && song.pending === true)}
                 aria-label={`Move ${song.name}. Position ${index + 1} of ${songs.length}. Use arrow keys to reorder.`}
                 onDragStart={(event) => {
+                  didDropRef.current = false;
                   setPreviewSongs(songs);
                   setDraggedId(song.id);
                   event.dataTransfer.effectAllowed = "move";
                   event.dataTransfer.setData("text/plain", song.id);
                 }}
-                onDragEnd={finishDrag}
+                onDragEnd={cancelDrag}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowUp" && index > 0) {
                     event.preventDefault();
