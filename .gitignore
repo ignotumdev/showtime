@@ -39,3 +39,6 @@ release
 
 # TS Build
 apps/desktop/tsconfig.node.tsbuildinfo
+
+# Codex
+.codex
