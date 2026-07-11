@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
+import { isFailureWithoutValue } from "@/frontend/react/AsyncResult";
 import { mixAtoms } from "@/frontend/mixes/MixAtoms";
 import { useAtomRefresh, useAtomValue } from "@/frontend/react/AtomProvider";
 import { songAtoms } from "@/frontend/songs/SongAtoms";
@@ -97,9 +98,9 @@ function RouteComponent() {
     );
   }
   if (
-    AsyncResult.isFailure(songsResult) ||
-    AsyncResult.isFailure(mixesResult) ||
-    AsyncResult.isFailure(microphonesResult)
+    isFailureWithoutValue(songsResult) ||
+    isFailureWithoutValue(mixesResult) ||
+    isFailureWithoutValue(microphonesResult)
   ) {
     return (
       <Empty>
