@@ -11,16 +11,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { useAtomSet } from "@/frontend/react/AtomProvider";
+import { useAtomSet } from "@effect/atom-react";
 import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
-import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
+import { showDialogAtom } from "@/frontend";
 import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
 import { formatRelativeDate } from "@/lib/dates";
 import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { ShowFormDialog } from "@/components/shows/ShowFormDialog";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { Spinner } from "@/components/ui/spinner";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { rpcErrorMessageFromCause } from "@/frontend";
 
 export const Route = createFileRoute("/shows/$showId/")({
   component: RouteComponent,

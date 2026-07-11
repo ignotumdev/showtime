@@ -4,7 +4,6 @@ import { AlertCircleIcon, CheckIcon, SpeakerIcon, Trash2Icon } from "lucide-reac
 import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
-  mixesRpcReactivityKey,
   mainMixId,
   colors as colorOptions,
   type MixNumber,
@@ -34,9 +33,9 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import { editMixAtom, mixAtoms, type MixListItem } from "@/frontend/mixes/MixAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { editMixAtom, mixesRpcReactivityKey, mixAtoms, type MixListItem } from "@/frontend";
+import { rpcErrorMessageFromCause } from "@/frontend";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/mixes")({ component: RouteComponent });

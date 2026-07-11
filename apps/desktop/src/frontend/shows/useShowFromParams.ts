@@ -1,8 +1,8 @@
 import { useParams } from "@tanstack/react-router";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { showsAtom } from "./ShowAtoms";
+import { useAtomValue } from "@effect/atom-react";
+import { showsAtom } from "@/frontend";
 
 export function useShowFromParams() {
   const params = useParams({ strict: false });

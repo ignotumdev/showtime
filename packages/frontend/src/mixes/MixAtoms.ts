@@ -1,0 +1,84 @@
+import { DateTime } from "effect";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import {
+  makeTemporaryId,
+  MixNumber,
+  mixIdPrefix,
+  type Mix,
+  type MixId,
+  type ShowId,
+} from "@showtime/contracts";
+import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
+import { mixesRpcReactivityKey } from "../rpc/Reactivity.js";
+
+export type MixListItem = Mix & { readonly pending?: boolean };
+type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
+const makeTemporaryMixId = (): MixId => makeTemporaryId(mixIdPrefix) as MixId;
+
+export const makeMixAtoms = (
+  RpcClient: ShowtimeRpcClient,
+  options?: { readonly focusSignal?: Atom.Atom<unknown> },
+) => {
+  const createMixMutation = RpcClient.mutation("mixes.create");
+  const deleteMixMutation = RpcClient.mutation("mixes.delete");
+  const editMixAtom = RpcClient.mutation("mixes.edit");
+
+  const mixAtoms = Atom.family((showId: ShowId) => {
+    const query = RpcClient.query(
+      "mixes.list",
+      { showId },
+      {
+        reactivityKeys: mixesRpcReactivityKey(showId),
+        serializationKey: showId,
+        timeToLive: "5 minutes",
+      },
+    ).pipe(
+      Atom.swr({
+        staleTime: 10_000,
+        revalidateOnMount: true,
+        revalidateOnFocus: true,
+        focusSignal: options?.focusSignal,
+      }),
+    );
+    const mixes = query.pipe(Atom.optimistic);
+    const create = mixes.pipe(
+      Atom.optimisticFn({
+        reducer: (current, input: MutationInput<typeof createMixMutation>) => {
+          if (!AsyncResult.isSuccess(current)) return current;
+          const currentMixes = current.value;
+          const nextNumber = MixNumber.make(
+            String(
+              Math.max(
+                0,
+                ...currentMixes.map((mix) => Number(mix.number)).filter(Number.isSafeInteger),
+              ) + 1,
+            ),
+          );
+          const now = DateTime.nowUnsafe();
+          const mix: MixListItem = {
+            id: makeTemporaryMixId(),
+            number: nextNumber,
+            color: input.payload.color,
+            createdAt: now,
+            updatedAt: now,
+            pending: true,
+          };
+          return AsyncResult.success([...currentMixes, mix]);
+        },
+        fn: createMixMutation,
+      }),
+    );
+    const deleteMix = mixes.pipe(
+      Atom.optimisticFn({
+        reducer: (current, input: MutationInput<typeof deleteMixMutation>) => {
+          if (!AsyncResult.isSuccess(current)) return current;
+          return AsyncResult.success(current.value.filter((mix) => mix.id !== input.payload.id));
+        },
+        fn: deleteMixMutation,
+      }),
+    );
+    return { mixes, create, delete: deleteMix } as const;
+  });
+
+  return { editMixAtom, mixAtoms } as const;
+};

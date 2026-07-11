@@ -15,8 +15,8 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { useAtomSet } from "@/frontend/react/AtomProvider";
-import { showDialogAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
+import { useAtomSet } from "@effect/atom-react";
+import { showDialogAtom, type ShowListItem } from "@/frontend";
 import { formatRelativeDate } from "@/lib/dates";
 import { showColorClassNames } from "./show-color";
 

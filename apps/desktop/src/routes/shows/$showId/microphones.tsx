@@ -4,7 +4,6 @@ import { AlertCircleIcon, CheckIcon, Mic2Icon, Trash2Icon } from "lucide-react";
 import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
-  microphonesRpcReactivityKey,
   colors as colorOptions,
   type MicrophoneNumber,
   type Color,
@@ -32,13 +31,14 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
   editMicrophoneAtom,
   microphoneAtoms,
+  microphonesRpcReactivityKey,
   type MicrophoneListItem,
-} from "@/frontend/microphones/MicrophoneAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+} from "@/frontend";
+import { rpcErrorMessageFromCause } from "@/frontend";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/microphones")({ component: RouteComponent });

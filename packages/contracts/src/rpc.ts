@@ -12,47 +12,39 @@ import {
 } from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
 
-export const rpcHost = "127.0.0.1";
-export const rpcPort = 34987;
-export const rpcPathPrefix = "/rpc";
-
-export const makeRpcPath = (token: string) => `${rpcPathPrefix}/${encodeURIComponent(token)}`;
-export const makeRpcWebSocketUrl = (token: string) =>
-  `ws://${rpcHost}:${rpcPort}${makeRpcPath(token)}`;
-
 export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
 
-export const RpcGroup = EffectRpcGroup.make(
-  Rpc.make("ListShows", { success: Schema.Array(ShowSummary), error: RpcError }),
-  Rpc.make("CreateShow", {
+export const ShowtimeRpcs = EffectRpcGroup.make(
+  Rpc.make("shows.list", { success: Schema.Array(ShowSummary), error: RpcError }),
+  Rpc.make("shows.create", {
     payload: { name: ShowName, color: Color },
     success: ShowSummary,
     error: RpcError,
   }),
-  Rpc.make("EditShow", {
+  Rpc.make("shows.edit", {
     payload: { id: ShowId, name: ShowName, color: Color },
     success: ShowSummary,
     error: RpcError,
   }),
-  Rpc.make("DeleteShow", {
+  Rpc.make("shows.delete", {
     payload: { id: ShowId },
     success: Schema.Void,
     error: RpcError,
   }),
-  Rpc.make("ListMicrophones", {
+  Rpc.make("microphones.list", {
     payload: { showId: ShowId },
     success: Schema.Array(Microphone),
     error: RpcError,
   }),
-  Rpc.make("CreateMicrophone", {
+  Rpc.make("microphones.create", {
     payload: { showId: ShowId, color: Color },
     success: Microphone,
     error: RpcError,
   }),
-  Rpc.make("EditMicrophone", {
+  Rpc.make("microphones.edit", {
     payload: {
       showId: ShowId,
       id: MicrophoneId,
@@ -63,22 +55,22 @@ export const RpcGroup = EffectRpcGroup.make(
     success: Microphone,
     error: RpcError,
   }),
-  Rpc.make("DeleteMicrophone", {
+  Rpc.make("microphones.delete", {
     payload: { showId: ShowId, id: MicrophoneId },
     success: Schema.Void,
     error: RpcError,
   }),
-  Rpc.make("ListMixes", {
+  Rpc.make("mixes.list", {
     payload: { showId: ShowId },
     success: Schema.Array(Mix),
     error: RpcError,
   }),
-  Rpc.make("CreateMix", {
+  Rpc.make("mixes.create", {
     payload: { showId: ShowId, color: Color },
     success: Mix,
     error: RpcError,
   }),
-  Rpc.make("EditMix", {
+  Rpc.make("mixes.edit", {
     payload: {
       showId: ShowId,
       id: MixId,
@@ -89,22 +81,22 @@ export const RpcGroup = EffectRpcGroup.make(
     success: Mix,
     error: RpcError,
   }),
-  Rpc.make("DeleteMix", {
+  Rpc.make("mixes.delete", {
     payload: { showId: ShowId, id: MixId },
     success: Schema.Void,
     error: RpcError,
   }),
-  Rpc.make("ListSongs", {
+  Rpc.make("songs.list", {
     payload: { showId: ShowId },
     success: Schema.Array(Song),
     error: RpcError,
   }),
-  Rpc.make("CreateSong", {
+  Rpc.make("songs.create", {
     payload: { showId: ShowId, name: SongName, artist: SongArtist },
     success: Song,
     error: RpcError,
   }),
-  Rpc.make("EditSong", {
+  Rpc.make("songs.edit", {
     payload: {
       showId: ShowId,
       id: SongId,
@@ -117,19 +109,14 @@ export const RpcGroup = EffectRpcGroup.make(
     success: Song,
     error: RpcError,
   }),
-  Rpc.make("ReorderSongs", {
+  Rpc.make("songs.reorder", {
     payload: { showId: ShowId, orderedSongIds: Schema.Array(SongId) },
     success: Schema.Array(Song),
     error: RpcError,
   }),
-  Rpc.make("DeleteSong", {
+  Rpc.make("songs.delete", {
     payload: { showId: ShowId, id: SongId },
     success: Schema.Void,
     error: RpcError,
   }),
 );
-
-export const showsRpcReactivityKey = ["shows"] as const;
-export const microphonesRpcReactivityKey = (showId: ShowId) => ["microphones", showId] as const;
-export const mixesRpcReactivityKey = (showId: ShowId) => ["mixes", showId] as const;
-export const songsRpcReactivityKey = (showId: ShowId) => ["songs", showId] as const;

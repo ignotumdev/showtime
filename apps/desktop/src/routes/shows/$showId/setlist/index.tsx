@@ -4,7 +4,6 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Exit } from "effect";
 import { AlertCircleIcon, GripVerticalIcon, ListMusicIcon } from "lucide-react";
 import type { ShowId, SongId } from "@showtime/contracts";
-import { songsRpcReactivityKey } from "@showtime/contracts";
 import {
   Empty,
   EmptyDescription,
@@ -13,9 +12,9 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import { songAtoms, type SongListItem } from "@/frontend/songs/SongAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { songAtoms, songsRpcReactivityKey, type SongListItem } from "@/frontend";
+import { rpcErrorMessageFromCause } from "@/frontend";
 
 export const Route = createFileRoute("/shows/$showId/setlist/")({
   component: RouteComponent,

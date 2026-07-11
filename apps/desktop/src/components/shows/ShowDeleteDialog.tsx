@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAtom, useAtomSet } from "@/frontend/react/AtomProvider";
-import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/frontend/shows/ShowAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtom, useAtomSet } from "@effect/atom-react";
+import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/frontend";
+import { rpcErrorMessageFromCause } from "@/frontend";
 
 type ShowDeleteDialogProps = {
   readonly onDeleted?: () => void | Promise<void>;

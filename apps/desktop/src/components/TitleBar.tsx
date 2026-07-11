@@ -1,21 +1,19 @@
 import iconUrl from "../../../../assets/icon.svg";
-import {
-  microphonesRpcReactivityKey,
-  mixesRpcReactivityKey,
-  type Color,
-  type ShowId,
-  type ShowName,
-} from "@showtime/contracts";
+import { type Color, type ShowId, type ShowName } from "@showtime/contracts";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAtomSet } from "@/frontend/react/AtomProvider";
-import { showDialogAtom } from "@/frontend/shows/ShowAtoms";
+import { useAtomSet } from "@effect/atom-react";
+import {
+  microphoneAtoms,
+  microphonesRpcReactivityKey,
+  mixAtoms,
+  mixesRpcReactivityKey,
+  showDialogAtom,
+} from "@/frontend";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
-import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
-import { mixAtoms } from "@/frontend/mixes/MixAtoms";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 
 type TitleBarProps = {

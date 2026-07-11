@@ -24,8 +24,8 @@ import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Option } from "effect";
 import type { ShowId } from "@showtime/contracts";
-import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
+import { useAtomValue } from "@effect/atom-react";
+import { songAtoms } from "@/frontend";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 
 export function ShowLayout() {
