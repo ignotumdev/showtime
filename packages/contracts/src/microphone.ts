@@ -15,15 +15,27 @@ export const MicrophoneId = Schema.String.pipe(
 );
 export type MicrophoneId = typeof MicrophoneId.Type;
 
-export const MicrophoneNumber = Schema.Number.pipe(
+export const MicrophoneNumber = Schema.String.pipe(
   Schema.check(
-    Schema.makeFilter((value) => Number.isSafeInteger(value) && value >= 1, {
-      expected: "a positive whole number",
+    Schema.makeFilter((value) => value.trim().length > 0, {
+      expected: "a non-empty microphone label",
     }),
   ),
   Schema.brand("MicrophoneNumber"),
 );
 export type MicrophoneNumber = typeof MicrophoneNumber.Type;
+
+const canonicalPositiveIntegerPattern = /^[1-9]\d*$/;
+
+export const nextMicrophoneNumber = (numbers: Iterable<string>): MicrophoneNumber => {
+  let maximum = 0;
+  for (const number of numbers) {
+    if (!canonicalPositiveIntegerPattern.test(number)) continue;
+    const value = Number(number);
+    if (Number.isSafeInteger(value)) maximum = Math.max(maximum, value);
+  }
+  return MicrophoneNumber.make(String(maximum + 1));
+};
 
 export const Microphone = Schema.Struct({
   id: MicrophoneId,

@@ -52,7 +52,7 @@ describe("ShowFileDocument", () => {
       microphones: [
         {
           id: "mic_0123456789abcdef",
-          number: 1,
+          number: "1",
           color: "rose",
           createdAt: "2026-07-02T10:02:00.000Z",
           updatedAt: "2026-07-02T10:03:00.000Z",
@@ -66,7 +66,7 @@ describe("ShowFileDocument", () => {
     expect(encode(decoded).microphones).toEqual([
       {
         id: "mic_0123456789abcdef",
-        number: 1,
+        number: "1",
         color: "rose",
         createdAt: "2026-07-02T10:02:00.000Z",
         updatedAt: "2026-07-02T10:03:00.000Z",

@@ -129,13 +129,13 @@ function MicrophoneCard({
     setSaveError(undefined);
   }, [microphone.color, microphone.name, microphone.number]);
 
-  const save = async (next: { number?: number; name?: string; color?: Color }) => {
+  const save = async (next: { number?: string; name?: string; color?: Color }) => {
     setSaveError(undefined);
     const result = await edit({
       payload: {
         showId,
         id: microphone.id,
-        number: (next.number ?? (Number(number) || microphone.number)) as MicrophoneNumber,
+        number: ((next.number ?? number.trim()) || microphone.number) as MicrophoneNumber,
         color: next.color ?? color,
         ...(next.name !== undefined
           ? { name: next.name.trim() }
@@ -149,13 +149,12 @@ function MicrophoneCard({
     return result;
   };
 
-  const parsedNumber = Number(number);
-  const duplicate =
-    Number.isSafeInteger(parsedNumber) &&
-    microphones.some((other) => other.id !== microphone.id && other.number === parsedNumber);
+  const trimmedNumber = number.trim();
+  const duplicate = microphones.some(
+    (other) => other.id !== microphone.id && other.number.trim() === trimmedNumber,
+  );
   const commitNumber = async () => {
-    const valid =
-      Number.isSafeInteger(parsedNumber) && parsedNumber >= 1 ? parsedNumber : microphone.number;
+    const valid = trimmedNumber || microphone.number;
     setNumber(String(valid));
     if (valid !== microphone.number) {
       const result = await save({ number: valid });
@@ -191,15 +190,14 @@ function MicrophoneCard({
             }
           >
             <input
-              aria-label="Microphone number"
-              inputMode="numeric"
+              aria-label="Microphone label"
               value={number}
               onFocus={(event) => event.currentTarget.select()}
               onClick={(event) => {
                 event.stopPropagation();
                 event.currentTarget.select();
               }}
-              onChange={(event) => setNumber(event.currentTarget.value.replace(/\D/g, ""))}
+              onChange={(event) => setNumber(event.currentTarget.value)}
               onBlur={commitNumber}
               onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
               className={cn(
@@ -264,7 +262,7 @@ function MicrophoneCard({
             )}
             role={duplicate ? "alert" : undefined}
           >
-            Number already in use
+            Label already in use
           </p>
           {saveError && (
             <p role="alert" className="mt-1 text-xs text-destructive">

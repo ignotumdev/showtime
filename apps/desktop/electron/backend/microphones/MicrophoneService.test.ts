@@ -69,7 +69,7 @@ describe("MicrophoneService", () => {
       }).pipe(Effect.provide(makeLayer(home))),
     );
 
-    expect(result.afterEditWithoutName.map(({ number }) => number)).toEqual([1, 1]);
+    expect(result.afterEditWithoutName.map(({ number }) => number)).toEqual(["1", "1"]);
     expect(result.afterEditWithoutName[1]).toMatchObject({ color: "amber", name: "Lead vocal" });
     expect(result.afterDelete).toEqual([result.afterEditWithoutName[1]]);
     expect(result.first.createdAt).toEqual(result.first.updatedAt);
