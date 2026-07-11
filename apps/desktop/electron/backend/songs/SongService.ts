@@ -7,6 +7,7 @@ import {
   type Song,
   type SongArtist,
   type SongId,
+  type SongMicrophoneName,
   type SongMixAssignment,
   type SongName,
 } from "@showtime/contracts";
@@ -28,6 +29,7 @@ interface SongServiceShape {
     readonly artist: SongArtist;
     readonly notes?: string;
     readonly mixAssignments: ReadonlyArray<SongMixAssignment>;
+    readonly microphoneNames: ReadonlyArray<SongMicrophoneName>;
   }) => Effect.Effect<Song, RpcError>;
   readonly reorder: (params: {
     readonly showId: ShowId;
@@ -112,6 +114,15 @@ const make = Effect.fnUntraced(function* () {
         );
       }
     }
+    if (
+      new Set(params.microphoneNames.map((item) => item.microphoneId)).size !==
+        params.microphoneNames.length ||
+      params.microphoneNames.some((item) => !activeMicrophoneIds.has(item.microphoneId))
+    ) {
+      return yield* Effect.fail(
+        new RpcError({ message: "A named microphone is invalid or no longer exists." }),
+      );
+    }
 
     const requestedByMix = new Map(params.mixAssignments.map((item) => [item.mixId, item]));
     const mixAssignments: Array<SongMixAssignment> = found.document.mixes
@@ -125,6 +136,15 @@ const make = Effect.fnUntraced(function* () {
           .map((microphone) => microphone.id);
         return microphoneIds.length > 0 ? [{ mixId: mix.id, microphoneIds }] : [];
       });
+    const microphoneNames = activeMicrophones.flatMap((microphone) => {
+      const requestedName = params.microphoneNames
+        .find((item) => item.microphoneId === microphone.id)
+        ?.name.trim();
+      const inheritedName = microphone.name?.trim() ?? "";
+      return requestedName && requestedName !== inheritedName
+        ? [{ microphoneId: microphone.id, name: requestedName }]
+        : [];
+    });
     const name = yield* decodeSongName(params.name.trim()).pipe(
       Effect.mapError(toRpcError("Invalid song name.")),
     );
@@ -138,6 +158,7 @@ const make = Effect.fnUntraced(function* () {
       name,
       artist,
       mixAssignments,
+      ...(microphoneNames.length ? { microphoneNames } : {}),
       createdAt: existing.createdAt,
       updatedAt: now,
       ...(notes ? { notes } : {}),

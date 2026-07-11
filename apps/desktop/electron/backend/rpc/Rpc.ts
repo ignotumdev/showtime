@@ -35,13 +35,14 @@ const handlers = RpcGroup.toLayer(
       DeleteMix: ({ showId, id }) => mixes.delete({ showId, id }),
       ListSongs: ({ showId }) => songs.list(showId),
       CreateSong: ({ showId, name, artist }) => songs.create({ showId, name, artist }),
-      EditSong: ({ showId, id, name, artist, notes, mixAssignments }) =>
+      EditSong: ({ showId, id, name, artist, notes, mixAssignments, microphoneNames }) =>
         songs.edit({
           showId,
           id,
           name,
           artist,
           mixAssignments,
+          microphoneNames,
           ...(notes === undefined ? {} : { notes }),
         }),
       ReorderSongs: ({ showId, orderedSongIds }) => songs.reorder({ showId, orderedSongIds }),

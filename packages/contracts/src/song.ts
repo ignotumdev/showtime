@@ -35,6 +35,12 @@ export const SongMixAssignment = Schema.Struct({
 });
 export type SongMixAssignment = typeof SongMixAssignment.Type;
 
+export const SongMicrophoneName = Schema.Struct({
+  microphoneId: MicrophoneId,
+  name: Schema.String,
+});
+export type SongMicrophoneName = typeof SongMicrophoneName.Type;
+
 const UniqueMixAssignments = Schema.Array(SongMixAssignment).pipe(
   Schema.check(
     Schema.makeFilter(
@@ -51,6 +57,7 @@ export const Song = Schema.Struct({
   artist: SongArtist,
   notes: Schema.optional(Schema.String),
   mixAssignments: UniqueMixAssignments,
+  microphoneNames: Schema.optional(Schema.Array(SongMicrophoneName)),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
   deletedAt: Schema.optional(Schema.DateTimeUtcFromString),

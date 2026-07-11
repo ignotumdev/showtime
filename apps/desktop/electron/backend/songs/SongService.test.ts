@@ -63,6 +63,7 @@ describe("SongService", () => {
           name: "" as SongName,
           artist: "" as SongArtist,
           mixAssignments: [],
+          microphoneNames: [],
         });
       }).pipe(Effect.provide(makeLayer(home))),
     );
@@ -89,6 +90,7 @@ describe("SongService", () => {
           artist: first.artist,
           notes: "  Opening cue  ",
           mixAssignments: [{ mixId: "mix_main" as never, microphoneIds: [microphone.id] }],
+          microphoneNames: [],
         });
         const reordered = yield* songs.reorder({
           showId: show.id,
@@ -104,6 +106,50 @@ describe("SongService", () => {
     expect(result.reordered.map((song) => song.name)).toEqual(["Second", "First"]);
     expect(result.listed.map((song) => song.name)).toEqual(["First"]);
     expect(result.edited.createdAt).toEqual(result.first.createdAt);
+  });
+
+  it("stores a song-specific microphone name and removes it when it matches the inherited name", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const microphones = yield* MicrophoneService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const song = yield* songs.create({ showId: show.id, ...songInput("First") });
+        const createdMicrophone = yield* microphones.create({ showId: show.id, color: "rose" });
+        const microphone = yield* microphones.edit({
+          showId: show.id,
+          id: createdMicrophone.id,
+          number: createdMicrophone.number,
+          color: createdMicrophone.color,
+          name: "Lead",
+        });
+        const overridden = yield* songs.edit({
+          showId: show.id,
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          mixAssignments: [],
+          microphoneNames: [{ microphoneId: microphone.id, name: "Keys" }],
+        });
+        const inherited = yield* songs.edit({
+          showId: show.id,
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          mixAssignments: [],
+          microphoneNames: [{ microphoneId: microphone.id, name: "  Lead  " }],
+        });
+        return { overridden, inherited };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.overridden.microphoneNames).toEqual([
+      { microphoneId: expect.any(String), name: "Keys" },
+    ]);
+    expect(result.inherited.microphoneNames).toBeUndefined();
   });
 
   it("rejects incomplete reorder payloads without changing the setlist", async () => {

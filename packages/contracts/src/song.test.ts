@@ -7,6 +7,7 @@ const valid = {
   name: "Fix You",
   artist: "Coldplay",
   mixAssignments: [{ mixId: "mix_main", microphoneIds: ["mic_0123456789abcdef"] }],
+  microphoneNames: [{ microphoneId: "mic_0123456789abcdef", name: "Lead" }],
   createdAt: "2026-07-10T20:00:00.000Z",
   updatedAt: "2026-07-10T20:00:00.000Z",
 };

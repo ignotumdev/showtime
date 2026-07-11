@@ -13,6 +13,7 @@ import {
   type Song,
   type SongArtist,
   type SongId,
+  type SongMicrophoneName,
   type SongMixAssignment,
   type SongName,
 } from "@showtime/contracts";
@@ -126,6 +127,9 @@ function SongDetail({
   const [assignments, setAssignments] = React.useState<ReadonlyArray<SongMixAssignment>>(
     song.mixAssignments,
   );
+  const [microphoneNames, setMicrophoneNames] = React.useState<ReadonlyArray<SongMicrophoneName>>(
+    song.microphoneNames ?? [],
+  );
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string>();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -140,6 +144,7 @@ function SongDetail({
     setArtist(song.artist);
     setNotes(song.notes ?? "");
     setAssignments(song.mixAssignments);
+    setMicrophoneNames(song.microphoneNames ?? []);
   }, [song]);
 
   React.useLayoutEffect(() => {
@@ -166,6 +171,7 @@ function SongDetail({
       readonly artist?: string;
       readonly notes?: string;
       readonly assignments?: ReadonlyArray<SongMixAssignment>;
+      readonly microphoneNames?: ReadonlyArray<SongMicrophoneName>;
     },
     blockUi = true,
   ) => {
@@ -179,6 +185,9 @@ function SongDetail({
       const microphoneIds = assignment.microphoneIds.filter((id) => activeMicrophoneIds.has(id));
       return microphoneIds.length > 0 ? [{ ...assignment, microphoneIds }] : [];
     });
+    const normalizedMicrophoneNames = (next?.microphoneNames ?? microphoneNames).filter((item) =>
+      activeMicrophoneIds.has(item.microphoneId),
+    );
     if (blockUi) setIsSaving(true);
     setSaveError(undefined);
     const result = await edit({
@@ -189,6 +198,7 @@ function SongDetail({
         artist: nextArtist as SongArtist,
         notes: next?.notes ?? notes,
         mixAssignments: normalizedAssignments,
+        microphoneNames: normalizedMicrophoneNames,
       },
       reactivityKeys: songsRpcReactivityKey(showId),
     });
@@ -199,6 +209,7 @@ function SongDetail({
       setArtist(song.artist);
       setNotes(song.notes ?? "");
       setAssignments(song.mixAssignments);
+      setMicrophoneNames(song.microphoneNames ?? []);
       return false;
     }
     return true;
@@ -309,10 +320,8 @@ function SongDetail({
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {orderedMixes.map((mix, index) => {
-                const selected = new Set(
-                  assignments.find((assignment) => assignment.mixId === mix.id)?.microphoneIds ??
-                    [],
-                );
+                const assignment = assignments.find((assignment) => assignment.mixId === mix.id);
+                const selected = new Set(assignment?.microphoneIds ?? []);
                 return (
                   <Card
                     key={mix.id}
@@ -352,11 +361,18 @@ function SongDetail({
                           const active = selected.has(microphone.id);
                           const colors = microphoneColorClassNames[microphone.color];
                           return (
-                            <button
+                            <div
                               key={microphone.id}
-                              type="button"
+                              role="button"
+                              tabIndex={0}
                               aria-pressed={active}
                               onClick={() => toggleMicrophone(mix.id, microphone.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  toggleMicrophone(mix.id, microphone.id);
+                                }
+                              }}
                               className={cn(
                                 "flex h-20 w-28 flex-col items-center justify-center gap-1 rounded-lg border bg-muted/50 px-3 py-2 text-center text-foreground outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
                                 !active && "hover:bg-muted",
@@ -369,12 +385,29 @@ function SongDetail({
                               <span className={cn("text-lg font-bold", !active && colors.text)}>
                                 {microphone.number}
                               </span>
-                              {microphone.name && (
-                                <span className="block w-full truncate text-center text-sm font-medium">
-                                  {microphone.name}
-                                </span>
-                              )}
-                            </button>
+                              <MicrophoneName
+                                microphone={microphone}
+                                microphoneNames={microphoneNames}
+                                disabled={isSaving}
+                                onSave={(value) => {
+                                  const trimmed = value.trim();
+                                  const override =
+                                    trimmed && trimmed !== (microphone.name?.trim() ?? "")
+                                      ? trimmed
+                                      : undefined;
+                                  const nextMicrophoneNames = [
+                                    ...microphoneNames.filter(
+                                      (item) => item.microphoneId !== microphone.id,
+                                    ),
+                                    ...(override
+                                      ? [{ microphoneId: microphone.id, name: override }]
+                                      : []),
+                                  ];
+                                  setMicrophoneNames(nextMicrophoneNames);
+                                  void save({ microphoneNames: nextMicrophoneNames }, false);
+                                }}
+                              />
+                            </div>
                           );
                         })
                       )}
@@ -394,6 +427,68 @@ function SongDetail({
         onOpenChange={setDeleteOpen}
       />
     </div>
+  );
+}
+
+function MicrophoneName({
+  microphone,
+  microphoneNames,
+  disabled,
+  onSave,
+}: {
+  readonly microphone: Microphone;
+  readonly microphoneNames: ReadonlyArray<SongMicrophoneName>;
+  readonly disabled: boolean;
+  readonly onSave: (value: string) => void;
+}) {
+  const inheritedName = microphone.name ?? "";
+  const displayedName =
+    microphoneNames.find((item) => item.microphoneId === microphone.id)?.name ?? inheritedName;
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(displayedName);
+
+  React.useEffect(() => setValue(displayedName), [displayedName]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="block w-full truncate text-center text-sm font-medium"
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          setValue(displayedName);
+          setEditing(true);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        {displayedName || "Add name"}
+      </button>
+    );
+  }
+
+  return (
+    <Input
+      autoFocus
+      aria-label={`Name override for microphone ${microphone.number}`}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => setValue(event.currentTarget.value)}
+      onBlur={() => {
+        setEditing(false);
+        if (value.trim() !== displayedName) onSave(value);
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") {
+          setValue(displayedName);
+          setEditing(false);
+        }
+      }}
+      onClick={(event) => event.stopPropagation()}
+      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-sm font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
+    />
   );
 }
 

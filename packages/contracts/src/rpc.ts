@@ -2,7 +2,14 @@ import { Schema } from "effect";
 import { Rpc, RpcGroup as EffectRpcGroup } from "effect/unstable/rpc";
 import { Microphone, MicrophoneId, MicrophoneNumber } from "./microphone.js";
 import { Mix, MixId, MixNumber } from "./mix.js";
-import { Song, SongArtist, SongId, SongMixAssignment, SongName } from "./song.js";
+import {
+  Song,
+  SongArtist,
+  SongId,
+  SongMicrophoneName,
+  SongMixAssignment,
+  SongName,
+} from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
 
 export const rpcHost = "127.0.0.1";
@@ -105,6 +112,7 @@ export const RpcGroup = EffectRpcGroup.make(
       artist: SongArtist,
       notes: Schema.optional(Schema.String),
       mixAssignments: Schema.Array(SongMixAssignment),
+      microphoneNames: Schema.Array(SongMicrophoneName),
     },
     success: Song,
     error: RpcError,

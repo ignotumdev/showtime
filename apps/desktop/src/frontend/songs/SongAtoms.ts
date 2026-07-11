@@ -80,6 +80,7 @@ export const songAtoms = Atom.family((showId: ShowId) => {
                   name: input.payload.name,
                   artist: input.payload.artist,
                   mixAssignments: input.payload.mixAssignments,
+                  microphoneNames: input.payload.microphoneNames,
                   ...(input.payload.notes ? { notes: input.payload.notes } : { notes: undefined }),
                 }
               : song,
