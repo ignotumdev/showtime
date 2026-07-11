@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { songAtoms, songsRpcReactivityKey, type SongListItem } from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { songAtoms, songsRpcReactivityKey, type SongListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 
 export const Route = createFileRoute("/shows/$showId/setlist/")({
   component: RouteComponent,

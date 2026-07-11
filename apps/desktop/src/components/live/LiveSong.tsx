@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
-import type { LiveSongView } from "@/frontend";
+import type { LiveSongView } from "@/client";
 import { cn } from "@/lib/utils";
 
 export function LiveSong({ song }: { readonly song: LiveSongView }) {

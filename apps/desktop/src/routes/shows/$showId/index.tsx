@@ -12,15 +12,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useAtomSet } from "@effect/atom-react";
-import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
-import { showDialogAtom } from "@/frontend";
-import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
+import { useRelativeDateNow } from "@/hooks/useRelativeDateNow";
+import { showDialogAtom } from "@/client";
+import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { formatRelativeDate } from "@/lib/dates";
 import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { ShowFormDialog } from "@/components/shows/ShowFormDialog";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { Spinner } from "@/components/ui/spinner";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { rpcErrorMessageFromCause } from "@/client";
 
 export const Route = createFileRoute("/shows/$showId/")({
   component: RouteComponent,

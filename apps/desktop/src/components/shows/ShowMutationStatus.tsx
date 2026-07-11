@@ -4,8 +4,8 @@ import { Atom } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { showMutationAtoms } from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { showMutationAtoms } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { getShowMutationStatusState } from "./ShowMutationStatusState";
 
 export function ShowMutationStatus() {

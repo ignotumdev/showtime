@@ -48,10 +48,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { cn } from "@/lib/utils";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { mixAtoms } from "@/frontend";
-import { microphoneAtoms } from "@/frontend";
-import { songAtoms, songsRpcReactivityKey } from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { mixAtoms } from "@/client";
+import { microphoneAtoms } from "@/client";
+import { songAtoms, songsRpcReactivityKey } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,

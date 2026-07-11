@@ -3,7 +3,7 @@ import { Exit } from "effect";
 import { useNavigate } from "@tanstack/react-router";
 import { type ShowId, type SongArtist, type SongName } from "@showtime/contracts";
 import { useAtomSet } from "@effect/atom-react";
-import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/frontend";
+import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
 
 export function useCreateSong(showId: ShowId) {
   const navigate = useNavigate();

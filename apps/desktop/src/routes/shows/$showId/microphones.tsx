@@ -37,8 +37,8 @@ import {
   microphoneAtoms,
   microphonesRpcReactivityKey,
   type MicrophoneListItem,
-} from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+} from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/microphones")({ component: RouteComponent });

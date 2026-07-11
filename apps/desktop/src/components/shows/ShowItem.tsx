@@ -16,7 +16,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { useAtomSet } from "@effect/atom-react";
-import { showDialogAtom, type ShowListItem } from "@/frontend";
+import { showDialogAtom, type ShowListItem } from "@/client";
 import { formatRelativeDate } from "@/lib/dates";
 import { showColorClassNames } from "./show-color";
 

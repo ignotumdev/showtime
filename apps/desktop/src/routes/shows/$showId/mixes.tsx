@@ -34,8 +34,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { editMixAtom, mixesRpcReactivityKey, mixAtoms, type MixListItem } from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { editMixAtom, mixesRpcReactivityKey, mixAtoms, type MixListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/mixes")({ component: RouteComponent });

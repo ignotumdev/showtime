@@ -10,7 +10,7 @@ import {
   mixAtoms,
   mixesRpcReactivityKey,
   showDialogAtom,
-} from "@/frontend";
+} from "@/client";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";

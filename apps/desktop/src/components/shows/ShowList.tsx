@@ -12,9 +12,9 @@ import {
 import { ItemGroup } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAtomValue } from "@effect/atom-react";
-import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
-import { showsAtom, type ShowListItem } from "@/frontend";
-import { rpcErrorMessageFromCause } from "@/frontend";
+import { useRelativeDateNow } from "@/hooks/useRelativeDateNow";
+import { showsAtom, type ShowListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { ShowItem } from "./ShowItem";
 import { Spinner } from "@/components/ui/spinner";
 
