@@ -2,7 +2,7 @@ import { DateTime } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   makeTemporaryId,
-  MicrophoneNumber,
+  nextMicrophoneNumber,
   microphoneIdPrefix,
   microphonesRpcReactivityKey,
   type Microphone,
@@ -45,14 +45,7 @@ export const microphoneAtoms = Atom.family((showId: ShowId) => {
     Atom.optimisticFn({
       reducer: (current, input: MutationInput<typeof createMicrophoneMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
-        const nextNumber = MicrophoneNumber.make(
-          String(
-            Math.max(
-              0,
-              ...current.value.map((mic) => Number(mic.number)).filter(Number.isSafeInteger),
-            ) + 1,
-          ),
-        );
+        const nextNumber = nextMicrophoneNumber(current.value.map((mic) => mic.number));
         const now = DateTime.nowUnsafe();
         const microphone: MicrophoneListItem = {
           id: makeTemporaryMicrophoneId(),

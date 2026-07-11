@@ -3,7 +3,8 @@ import {
   RpcError,
   type Microphone,
   type MicrophoneId,
-  MicrophoneNumber,
+  nextMicrophoneNumber,
+  type MicrophoneNumber,
   type Color,
   type ShowId,
 } from "@showtime/contracts";
@@ -53,16 +54,10 @@ const make = Effect.fnUntraced(function* () {
     const now = yield* DateTime.now;
     const updated = yield* showFile
       .update(found.path, (document) => {
-        const number = MicrophoneNumber.make(
-          String(
-            Math.max(
-              0,
-              ...document.microphones
-                .filter((microphone) => microphone.deletedAt === undefined)
-                .map((microphone) => Number(microphone.number))
-                .filter(Number.isSafeInteger),
-            ) + 1,
-          ),
+        const number = nextMicrophoneNumber(
+          document.microphones
+            .filter((microphone) => microphone.deletedAt === undefined)
+            .map((microphone) => microphone.number),
         );
         const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
         return { ...document, microphones: [...document.microphones, microphone] };

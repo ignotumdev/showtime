@@ -151,7 +151,7 @@ function MicrophoneCard({
 
   const trimmedNumber = number.trim();
   const duplicate = microphones.some(
-    (other) => other.id !== microphone.id && other.number === trimmedNumber,
+    (other) => other.id !== microphone.id && other.number.trim() === trimmedNumber,
   );
   const commitNumber = async () => {
     const valid = trimmedNumber || microphone.number;
