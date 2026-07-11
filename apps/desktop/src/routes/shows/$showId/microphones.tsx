@@ -32,12 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import {
-  editMicrophoneAtom,
-  microphoneAtoms,
-  microphonesRpcReactivityKey,
-  type MicrophoneListItem,
-} from "@/client";
+import { microphoneAtoms, microphonesRpcReactivityKey, type MicrophoneListItem } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 
@@ -117,7 +112,7 @@ function MicrophoneCard({
   readonly showId: ShowId;
   readonly onDelete: () => void;
 }) {
-  const edit = useAtomSet(editMicrophoneAtom, { mode: "promiseExit" });
+  const edit = useAtomSet(microphoneAtoms(showId).edit, { mode: "promiseExit" });
   const [number, setNumber] = React.useState(String(microphone.number));
   const [name, setName] = React.useState(microphone.name ?? "");
   const [color, setColor] = React.useState(microphone.color);

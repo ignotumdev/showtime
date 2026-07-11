@@ -10,6 +10,7 @@ import {
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { mixesRpcReactivityKey } from "../rpc/Reactivity.js";
+import { applyOptimisticNamedItemEdit } from "../internal/optimistic.js";
 
 export type MixListItem = Mix & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
@@ -21,7 +22,7 @@ export const makeMixAtoms = (
 ) => {
   const createMixMutation = RpcClient.mutation("mixes.create");
   const deleteMixMutation = RpcClient.mutation("mixes.delete");
-  const editMixAtom = RpcClient.mutation("mixes.edit");
+  const editMixMutation = RpcClient.mutation("mixes.edit");
 
   const mixAtoms = Atom.family((showId: ShowId) => {
     const query = RpcClient.query(
@@ -68,6 +69,18 @@ export const makeMixAtoms = (
         fn: createMixMutation,
       }),
     );
+    const edit = mixes.pipe(
+      Atom.optimisticFn({
+        reducer: (current, input: MutationInput<typeof editMixMutation>) => {
+          if (!AsyncResult.isSuccess(current)) return current;
+          const updatedAt = DateTime.nowUnsafe();
+          return AsyncResult.success(
+            current.value.map((mix) => applyOptimisticNamedItemEdit(mix, input.payload, updatedAt)),
+          );
+        },
+        fn: editMixMutation,
+      }),
+    );
     const deleteMix = mixes.pipe(
       Atom.optimisticFn({
         reducer: (current, input: MutationInput<typeof deleteMixMutation>) => {
@@ -77,8 +90,8 @@ export const makeMixAtoms = (
         fn: deleteMixMutation,
       }),
     );
-    return { mixes, create, delete: deleteMix } as const;
+    return { mixes, create, edit, delete: deleteMix } as const;
   });
 
-  return { editMixAtom, mixAtoms } as const;
+  return { mixAtoms } as const;
 };

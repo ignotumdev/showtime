@@ -11,8 +11,6 @@ export const {
   RpcClient,
   createShowAtom,
   deleteShowAtom,
-  editMicrophoneAtom,
-  editMixAtom,
   editShowAtom,
   microphoneAtoms,
   mixAtoms,

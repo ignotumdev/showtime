@@ -48,8 +48,8 @@ export const makeSongAtoms = (
           const now = DateTime.nowUnsafe();
           const song: SongListItem = {
             id: makeTemporarySongId(),
-            name: input.payload.name,
-            artist: input.payload.artist,
+            name: input.payload.name.trim() as Song["name"],
+            artist: input.payload.artist.trim() as Song["artist"],
             mixAssignments: [],
             createdAt: now,
             updatedAt: now,
@@ -73,18 +73,19 @@ export const makeSongAtoms = (
       Atom.optimisticFn({
         reducer: (current, input: MutationInput<typeof editSongMutation>) => {
           if (!AsyncResult.isSuccess(current)) return current;
+          const notes = input.payload.notes?.trim();
+          const updatedAt = DateTime.nowUnsafe();
           return AsyncResult.success(
             current.value.map((song) =>
               song.id === input.payload.id
                 ? {
                     ...song,
-                    name: input.payload.name,
-                    artist: input.payload.artist,
+                    name: input.payload.name.trim() as Song["name"],
+                    artist: input.payload.artist.trim() as Song["artist"],
                     mixAssignments: input.payload.mixAssignments,
                     microphoneNames: input.payload.microphoneNames,
-                    ...(input.payload.notes
-                      ? { notes: input.payload.notes }
-                      : { notes: undefined }),
+                    updatedAt,
+                    ...(notes ? { notes } : { notes: undefined }),
                   }
                 : song,
             ),

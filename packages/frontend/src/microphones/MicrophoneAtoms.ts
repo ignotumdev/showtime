@@ -10,6 +10,7 @@ import {
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { microphonesRpcReactivityKey } from "../rpc/Reactivity.js";
+import { applyOptimisticNamedItemEdit } from "../internal/optimistic.js";
 
 export type MicrophoneListItem = Microphone & { readonly pending?: boolean };
 
@@ -24,7 +25,7 @@ export const makeMicrophoneAtoms = (
 ) => {
   const createMicrophoneMutation = RpcClient.mutation("microphones.create");
   const deleteMicrophoneMutation = RpcClient.mutation("microphones.delete");
-  const editMicrophoneAtom = RpcClient.mutation("microphones.edit");
+  const editMicrophoneMutation = RpcClient.mutation("microphones.edit");
 
   const microphoneAtoms = Atom.family((showId: ShowId) => {
     const query = RpcClient.query(
@@ -63,6 +64,20 @@ export const makeMicrophoneAtoms = (
         fn: createMicrophoneMutation,
       }),
     );
+    const edit = microphones.pipe(
+      Atom.optimisticFn({
+        reducer: (current, input: MutationInput<typeof editMicrophoneMutation>) => {
+          if (!AsyncResult.isSuccess(current)) return current;
+          const updatedAt = DateTime.nowUnsafe();
+          return AsyncResult.success(
+            current.value.map((microphone) =>
+              applyOptimisticNamedItemEdit(microphone, input.payload, updatedAt),
+            ),
+          );
+        },
+        fn: editMicrophoneMutation,
+      }),
+    );
     const deleteMicrophone = microphones.pipe(
       Atom.optimisticFn({
         reducer: (current, input: MutationInput<typeof deleteMicrophoneMutation>) => {
@@ -72,8 +87,8 @@ export const makeMicrophoneAtoms = (
         fn: deleteMicrophoneMutation,
       }),
     );
-    return { microphones, create, delete: deleteMicrophone } as const;
+    return { microphones, create, edit, delete: deleteMicrophone } as const;
   });
 
-  return { editMicrophoneAtom, microphoneAtoms } as const;
+  return { microphoneAtoms } as const;
 };
