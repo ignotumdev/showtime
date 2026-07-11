@@ -4,12 +4,14 @@ import { RpcGroup } from "@showtime/contracts";
 import { MicrophoneService } from "../microphones/MicrophoneService";
 import { MixService } from "../mixes/MixService";
 import { ShowService } from "../shows/ShowService";
+import { SongService } from "../songs/SongService";
 
 const handlers = RpcGroup.toLayer(
   Effect.gen(function* () {
     const shows = yield* ShowService;
     const microphones = yield* MicrophoneService;
     const mixes = yield* MixService;
+    const songs = yield* SongService;
     return RpcGroup.of({
       ListShows: () => shows.list,
       CreateShow: ({ name, color }) => shows.create({ name, color }),
@@ -31,6 +33,20 @@ const handlers = RpcGroup.toLayer(
       EditMix: ({ showId, id, number, color, name }) =>
         mixes.edit({ showId, id, number, color, ...(name === undefined ? {} : { name }) }),
       DeleteMix: ({ showId, id }) => mixes.delete({ showId, id }),
+      ListSongs: ({ showId }) => songs.list(showId),
+      CreateSong: ({ showId, name, artist }) => songs.create({ showId, name, artist }),
+      EditSong: ({ showId, id, name, artist, notes, mixAssignments, microphoneNames }) =>
+        songs.edit({
+          showId,
+          id,
+          name,
+          artist,
+          mixAssignments,
+          microphoneNames,
+          ...(notes === undefined ? {} : { notes }),
+        }),
+      ReorderSongs: ({ showId, orderedSongIds }) => songs.reorder({ showId, orderedSongIds }),
+      DeleteSong: ({ showId, id }) => songs.delete({ showId, id }),
     });
   }),
 );

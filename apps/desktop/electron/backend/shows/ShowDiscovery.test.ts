@@ -92,6 +92,7 @@ describe("ShowDiscovery", () => {
         },
         microphones: [],
         mixes: [],
+        songs: [],
       }),
     );
     await writeFile(
@@ -108,6 +109,7 @@ describe("ShowDiscovery", () => {
         },
         microphones: [],
         mixes: [],
+        songs: [],
       }),
     );
     await writeFile(path.join(showsDirectory, "notes.txt"), "ignore");
@@ -148,6 +150,7 @@ describe("ShowDiscovery", () => {
       },
       microphones: [],
       mixes: [],
+      songs: [],
     };
     await writeFile(firstPath, JSON.stringify(validDocument));
     await writeFile(skippedPath, JSON.stringify(validDocument));
