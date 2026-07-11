@@ -40,9 +40,15 @@ function RouteComponent() {
   const refreshSongs = useAtomRefresh(songsAtom);
   const refreshMixes = useAtomRefresh(mixesAtom);
   const refreshMicrophones = useAtomRefresh(microphonesAtom);
-  const songs = AsyncResult.getOrElse(songsResult, () => []).filter((song) => !song.deletedAt);
-  const mixes = AsyncResult.getOrElse(mixesResult, () => []);
-  const microphones = AsyncResult.getOrElse(microphonesResult, () => []);
+  const songs = React.useMemo(
+    () => AsyncResult.getOrElse(songsResult, () => []).filter((song) => !song.deletedAt),
+    [songsResult],
+  );
+  const mixes = React.useMemo(() => AsyncResult.getOrElse(mixesResult, () => []), [mixesResult]);
+  const microphones = React.useMemo(
+    () => AsyncResult.getOrElse(microphonesResult, () => []),
+    [microphonesResult],
+  );
   const lastIndex = React.useRef(0);
   const selectedIndex = songs.findIndex((song) => song.id === selectedSongId);
   const recoveredIndex = songs.length === 0 ? -1 : Math.min(lastIndex.current, songs.length - 1);
@@ -65,27 +71,43 @@ function RouteComponent() {
     },
     [navigate, songs],
   );
+  const selectPreviousSong = React.useCallback(
+    () => selectSong(currentIndex - 1),
+    [currentIndex, selectSong],
+  );
+  const selectNextSong = React.useCallback(
+    () => selectSong(currentIndex + 1),
+    [currentIndex, selectSong],
+  );
 
-  if (AsyncResult.isInitial(songsResult)) {
+  if (
+    AsyncResult.isInitial(songsResult) ||
+    AsyncResult.isInitial(mixesResult) ||
+    AsyncResult.isInitial(microphonesResult)
+  ) {
     return (
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <Spinner />
           </EmptyMedia>
-          <EmptyTitle>Loading songs</EmptyTitle>
+          <EmptyTitle>Loading live data</EmptyTitle>
         </EmptyHeader>
       </Empty>
     );
   }
-  if (AsyncResult.isFailure(songsResult) && songs.length === 0) {
+  if (
+    AsyncResult.isFailure(songsResult) ||
+    AsyncResult.isFailure(mixesResult) ||
+    AsyncResult.isFailure(microphonesResult)
+  ) {
     return (
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <AlertCircleIcon />
           </EmptyMedia>
-          <EmptyTitle>Songs could not be loaded</EmptyTitle>
+          <EmptyTitle>Live data could not be loaded</EmptyTitle>
           <EmptyDescription>Check the connection and try again.</EmptyDescription>
         </EmptyHeader>
         <Button
@@ -122,8 +144,8 @@ function RouteComponent() {
       <LiveSongNavigation
         previous={previous?.name}
         next={next?.name}
-        onPrevious={() => selectSong(currentIndex - 1)}
-        onNext={() => selectSong(currentIndex + 1)}
+        onPrevious={selectPreviousSong}
+        onNext={selectNextSong}
       />
     </React.Fragment>
   );

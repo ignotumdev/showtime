@@ -15,6 +15,8 @@ export function LiveSongNavigation({
 }) {
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
       const target = event.target;
       if (
         target instanceof Element &&

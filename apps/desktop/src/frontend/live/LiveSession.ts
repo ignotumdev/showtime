@@ -49,13 +49,24 @@ export function formatLiveElapsed(milliseconds: number): string {
 }
 
 export function useLiveElapsed(showId: ShowId): string {
-  const [startedAt] = React.useState(() => getOrStartLiveSession(showId));
-  const elapsed = React.useCallback(() => formatLiveElapsed(Date.now() - startedAt), [startedAt]);
-  const [value, setValue] = React.useState(elapsed);
+  const [session, setSession] = React.useState<{
+    readonly showId: ShowId;
+    readonly startedAt: number;
+  }>();
+  const [now, setNow] = React.useState(Date.now);
+
+  React.useEffect(() => {
+    const committedAt = Date.now();
+    setSession({
+      showId,
+      startedAt: getOrStartLiveSession(showId, committedAt),
+    });
+    setNow(committedAt);
+  }, [showId]);
 
   React.useEffect(() => {
     let interval: number | undefined;
-    const update = () => setValue(elapsed());
+    const update = () => setNow(Date.now());
     const syncInterval = () => {
       if (interval !== undefined) window.clearInterval(interval);
       interval = undefined;
@@ -69,7 +80,8 @@ export function useLiveElapsed(showId: ShowId): string {
       document.removeEventListener("visibilitychange", syncInterval);
       if (interval !== undefined) window.clearInterval(interval);
     };
-  }, [elapsed]);
+  }, []);
 
-  return value;
+  const startedAt = session?.showId === showId ? session.startedAt : undefined;
+  return formatLiveElapsed(startedAt === undefined ? 0 : now - startedAt);
 }
