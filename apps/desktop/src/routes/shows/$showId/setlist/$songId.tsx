@@ -4,7 +4,6 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Exit } from "effect";
 import { AlertCircleIcon, EllipsisIcon, MusicIcon, Trash2Icon } from "lucide-react";
 import {
-  songsRpcReactivityKey,
   mainMixId,
   type Microphone,
   type MicrophoneId,
@@ -48,11 +47,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { cn } from "@/lib/utils";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import { mixAtoms } from "@/frontend/mixes/MixAtoms";
-import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { mixAtoms } from "@/client";
+import { microphoneAtoms } from "@/client";
+import { songAtoms, songsRpcReactivityKey } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,

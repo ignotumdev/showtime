@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/empty";
 import { ItemGroup } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { useRelativeDateNow } from "@/frontend/react/useRelativeDateNow";
-import { showsAtom, type ShowListItem } from "@/frontend/shows/ShowAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomValue } from "@effect/atom-react";
+import { useRelativeDateNow } from "@/hooks/useRelativeDateNow";
+import { showsAtom, type ShowListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { ShowItem } from "./ShowItem";
 import { Spinner } from "@/components/ui/spinner";
 

@@ -20,12 +20,12 @@ import React from "react";
 import { TitleBar } from "../TitleBar";
 import { showColorClassNames } from "./show-color";
 import { Badge } from "../ui/badge";
-import { useShowFromParams } from "@/frontend/shows/useShowFromParams";
+import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Option } from "effect";
 import type { ShowId } from "@showtime/contracts";
-import { useAtomValue } from "@/frontend/react/AtomProvider";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
+import { useAtomValue } from "@effect/atom-react";
+import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 
 export function ShowLayout() {

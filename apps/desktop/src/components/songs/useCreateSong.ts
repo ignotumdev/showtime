@@ -1,15 +1,9 @@
 import * as React from "react";
 import { Exit } from "effect";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  songsRpcReactivityKey,
-  type ShowId,
-  type SongArtist,
-  type SongName,
-} from "@showtime/contracts";
-import { useAtomSet } from "@/frontend/react/AtomProvider";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
+import { type ShowId, type SongArtist, type SongName } from "@showtime/contracts";
+import { useAtomSet } from "@effect/atom-react";
+import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
 
 export function useCreateSong(showId: ShowId) {
   const navigate = useNavigate();

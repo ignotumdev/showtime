@@ -4,7 +4,6 @@ import { AlertCircleIcon, CheckIcon, Mic2Icon, Trash2Icon } from "lucide-react";
 import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
-  microphonesRpcReactivityKey,
   colors as colorOptions,
   type MicrophoneNumber,
   type Color,
@@ -32,13 +31,9 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
-import { useAtomSet, useAtomValue } from "@/frontend/react/AtomProvider";
-import {
-  editMicrophoneAtom,
-  microphoneAtoms,
-  type MicrophoneListItem,
-} from "@/frontend/microphones/MicrophoneAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { microphoneAtoms, microphonesRpcReactivityKey, type MicrophoneListItem } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/shows/$showId/microphones")({ component: RouteComponent });
@@ -117,7 +112,7 @@ function MicrophoneCard({
   readonly showId: ShowId;
   readonly onDelete: () => void;
 }) {
-  const edit = useAtomSet(editMicrophoneAtom, { mode: "promiseExit" });
+  const edit = useAtomSet(microphoneAtoms(showId).edit, { mode: "promiseExit" });
   const [number, setNumber] = React.useState(String(microphone.number));
   const [name, setName] = React.useState(microphone.name ?? "");
   const [color, setColor] = React.useState(microphone.color);

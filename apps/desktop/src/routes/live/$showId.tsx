@@ -14,12 +14,12 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { microphoneAtoms } from "@/frontend/microphones/MicrophoneAtoms";
-import { isFailureWithoutValue } from "@/frontend/react/AsyncResult";
-import { mixAtoms } from "@/frontend/mixes/MixAtoms";
-import { useAtomRefresh, useAtomValue } from "@/frontend/react/AtomProvider";
-import { songAtoms } from "@/frontend/songs/SongAtoms";
-import { projectLiveSong } from "@/frontend/live/LiveSongView";
+import { microphoneAtoms } from "@/client";
+import { isFailureWithoutValue } from "@/client";
+import { mixAtoms } from "@/client";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { songAtoms } from "@/client";
+import { projectLiveSong } from "@/client";
 
 export const Route = createFileRoute("/live/$showId")({
   validateSearch: (search: Record<string, unknown>): { readonly song?: string } =>

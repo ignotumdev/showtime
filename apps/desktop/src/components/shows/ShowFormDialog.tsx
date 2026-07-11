@@ -13,14 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAtom, useAtomSet } from "@/frontend/react/AtomProvider";
-import {
-  createShowAtom,
-  editShowAtom,
-  showDialogAtom,
-  showMutationOptions,
-} from "@/frontend/shows/ShowAtoms";
-import { rpcErrorMessageFromCause } from "@/frontend/rpc/errors";
+import { useAtom, useAtomSet } from "@effect/atom-react";
+import { createShowAtom, editShowAtom, showDialogAtom, showMutationOptions } from "@/client";
+import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 import { randomShowColor, showColorClassNames } from "./show-color";
 import { Input } from "../ui/input";
