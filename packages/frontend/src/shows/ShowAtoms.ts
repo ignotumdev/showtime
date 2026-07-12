@@ -10,6 +10,7 @@ import {
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { showsRpcReactivityKey } from "../rpc/Reactivity.js";
+import { latestSnapshot } from "../rpc/LatestSnapshot.js";
 
 export type ShowDialogState =
   | { readonly type: "closed" }
@@ -32,22 +33,11 @@ const optimisticShowColor = (color: Color): ShowSummary["color"] => color;
 
 export const makeShowAtoms = (
   RpcClient: ShowtimeRpcClient,
-  options?: { readonly focusSignal?: Atom.Atom<unknown> },
+  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
 ) => {
   const showDialogAtom = Atom.make<ShowDialogState>({ type: "closed" });
 
-  const showsQueryAtom = RpcClient.query("shows.list", undefined, {
-    reactivityKeys: showsRpcReactivityKey,
-    serializationKey: "all",
-    timeToLive: "5 minutes",
-  }).pipe(
-    Atom.swr({
-      staleTime: 10_000,
-      revalidateOnMount: true,
-      revalidateOnFocus: true,
-      focusSignal: options?.focusSignal,
-    }),
-  );
+  const showsQueryAtom = RpcClient.query("shows.list", undefined).pipe(latestSnapshot);
 
   const showsAtom = showsQueryAtom.pipe(Atom.optimistic);
 

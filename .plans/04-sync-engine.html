@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime Sync Engine Plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        line-height: 1.55;
+      }
+      body { max-width: 920px; margin: 0 auto; padding: 48px 24px 96px; }
+      h1, h2 { line-height: 1.15; }
+      h1 { margin-bottom: 0.25rem; }
+      h2 { margin-top: 2.25rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .lede { font-size: 1.15rem; opacity: 0.82; }
+      .callout { border-inline-start: 4px solid currentColor; padding: 0.25rem 1rem; }
+      li + li { margin-top: 0.5rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid color-mix(in srgb, currentColor 24%, transparent); padding: 0.65rem; text-align: left; vertical-align: top; }
+      th { background: color-mix(in srgb, currentColor 7%, transparent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sync engine</h1>
+      <p class="lede">Replace point-in-time WebSocket reads with transactional, server-pushed full snapshots.</p>
+
+      <section>
+        <h2>Outcome</h2>
+        <p>
+          A mounted client query receives an initial authoritative snapshot and remains subscribed over the
+          existing Effect RPC WebSocket. After a successful mutation, the server invalidates the affected
+          resource and sends every subscriber a newly read complete snapshot. This iteration deliberately
+          sends whole arrays rather than deltas.
+        </p>
+        <div class="callout">
+          <p>
+            Correctness rule: a query snapshot and a mutation run inside the same transaction discipline.
+            Subscribers can observe the state before a mutation or the durable state after it, but no partial
+            intermediate state.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Effect v4 design</h2>
+        <ol>
+          <li>
+            Add a backend <code>SyncEngine</code> service as the single shared abstraction for synchronized
+            queries and mutations. It owns Effect's transaction/serialization primitive and the Effect v4
+            <code>Reactivity</code> service.
+          </li>
+          <li>
+            Implement <code>query(key, effect)</code> with <code>Reactivity.stream</code>. It runs immediately,
+            reruns on matching invalidation, coalesces invalidations that arrive during a read, and unregisters
+            when the RPC stream scope closes.
+          </li>
+          <li>
+            Implement <code>mutation(keys, effect)</code> so the durable mutation completes successfully inside
+            the transaction boundary before invalidation is published. Failed mutations publish nothing.
+          </li>
+          <li>
+            Keep the <code>Reactivity</code> layer process-wide in the backend graph so all WebSocket connections
+            share subscriptions and mutation notifications.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Contract and handler changes</h2>
+        <table>
+          <thead><tr><th>Area</th><th>Change</th><th>Invalidation key</th></tr></thead>
+          <tbody>
+            <tr><td>Shows</td><td><code>shows.list</code> becomes a streaming RPC; create/edit/delete republish the complete sorted show list.</td><td><code>shows</code></td></tr>
+            <tr><td>Microphones</td><td><code>microphones.list</code> becomes a streaming RPC scoped to a show; mutations republish its complete active microphone list.</td><td><code>microphones + showId</code></td></tr>
+            <tr><td>Mixes</td><td><code>mixes.list</code> becomes a streaming RPC scoped to a show; mutations republish its complete active mix list.</td><td><code>mixes + showId</code></td></tr>
+            <tr><td>Songs</td><td><code>songs.list</code> becomes a streaming RPC scoped to a show; create/edit/reorder/delete republish the complete active ordered setlist.</td><td><code>songs + showId</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          Shared keys move to the contracts package so backend and frontend cannot silently disagree about
+          subscription identity.
+        </p>
+      </section>
+
+      <section>
+        <h2>Frontend changes</h2>
+        <ul>
+          <li>Use Atom RPC's native streaming-query path for all four list resources.</li>
+          <li>Remove client-only mutation invalidation as the source of synchronization; remote mutations must update every connected window, not only the initiating one.</li>
+          <li>Retain optimistic mutation reducers for immediate interaction feedback. The next server snapshot remains authoritative and reconciles temporary values.</li>
+          <li>Remove point-in-time SWR/focus refresh behavior where the persistent stream now owns freshness.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Transaction and failure behavior</h2>
+        <ul>
+          <li>File writes remain atomic through the existing temporary-file rename strategy.</li>
+          <li>The sync transaction prevents query/mutation interleaving around repository discovery, rename, delete, and show-file updates.</li>
+          <li>Invalidation occurs only after a successful durable operation and while ordering is still controlled by the transaction.</li>
+          <li>Effect reactivity queues at most one follow-up rerun while a query is already running, preventing unbounded snapshot work under mutation bursts.</li>
+          <li>WebSocket interruption closes the scoped stream registration; reconnect creates a new stream and immediately emits a fresh full snapshot.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <ol>
+          <li>Unit-test the sync engine: initial snapshot, successful invalidation, no invalidation on failure, and serialized reads/writes.</li>
+          <li>Expand the WebSocket integration test to keep a list stream open and prove a mutation pushes a second full snapshot without issuing another read RPC.</li>
+          <li>Test isolation by show ID so a mutation in one show does not rerun another show's subscription.</li>
+          <li>Run repository checks, all tests, and builds; fix contract/type fallout from changing list RPCs to streams.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Not in this iteration</h2>
+        <ul>
+          <li>Delta protocols, revision vectors, resumable offsets, or persisted event logs.</li>
+          <li>Cross-process synchronization or watching show files changed by an external program.</li>
+          <li>Changing the optimistic UI behavior beyond adapting it to authoritative streamed snapshots.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

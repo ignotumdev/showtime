@@ -14,6 +14,7 @@ import * as ShowPaths from "./shows/ShowPaths.js";
 import * as ShowRepository from "./shows/ShowRepository.js";
 import * as ShowService from "./shows/ShowService.js";
 import * as SongService from "./songs/SongService.js";
+import * as SyncEngine from "./sync/SyncEngine.js";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
@@ -54,6 +55,7 @@ const makeRpcLive = (options: BackendOptions) => {
         MicrophoneService.layer,
         MixService.layer,
         SongService.layer,
+        SyncEngine.layer,
       ),
     ),
     Layer.provideMerge(RpcProtocol),

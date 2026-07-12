@@ -9,8 +9,8 @@ import {
   type ShowId,
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
-import { microphonesRpcReactivityKey } from "../rpc/Reactivity.js";
 import { applyOptimisticNamedItemEdit } from "../internal/optimistic.js";
+import { latestSnapshot } from "../rpc/LatestSnapshot.js";
 
 export type MicrophoneListItem = Microphone & { readonly pending?: boolean };
 
@@ -21,29 +21,14 @@ const makeTemporaryMicrophoneId = (): MicrophoneId =>
 
 export const makeMicrophoneAtoms = (
   RpcClient: ShowtimeRpcClient,
-  options?: { readonly focusSignal?: Atom.Atom<unknown> },
+  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
 ) => {
   const createMicrophoneMutation = RpcClient.mutation("microphones.create");
   const deleteMicrophoneMutation = RpcClient.mutation("microphones.delete");
   const editMicrophoneMutation = RpcClient.mutation("microphones.edit");
 
   const microphoneAtoms = Atom.family((showId: ShowId) => {
-    const query = RpcClient.query(
-      "microphones.list",
-      { showId },
-      {
-        reactivityKeys: microphonesRpcReactivityKey(showId),
-        serializationKey: showId,
-        timeToLive: "5 minutes",
-      },
-    ).pipe(
-      Atom.swr({
-        staleTime: 10_000,
-        revalidateOnMount: true,
-        revalidateOnFocus: true,
-        focusSignal: options?.focusSignal,
-      }),
-    );
+    const query = RpcClient.query("microphones.list", { showId }).pipe(latestSnapshot);
     const microphones = query.pipe(Atom.optimistic);
     const create = microphones.pipe(
       Atom.optimisticFn({
