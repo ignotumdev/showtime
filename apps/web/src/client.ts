@@ -1,9 +1,10 @@
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { makeShowtimeFrontend } from "@showtime/frontend";
+import { resolveRpcWebSocketUrl } from "./platform";
 
 const frontend = makeShowtimeFrontend({
-  webSocketUrl: Effect.promise(() => window.showtime.rpcWebSocketUrl()),
+  webSocketUrl: Effect.promise(resolveRpcWebSocketUrl),
   focusSignal: Atom.windowFocusSignal,
 });
 
