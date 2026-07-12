@@ -147,9 +147,11 @@ export const capturePairingFragment = async (
   try {
     storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
   } catch {
+    removePairingFragment();
     return {
       status: "failed",
-      message: "This browser could not save the connection. Free up site storage and try again.",
+      message:
+        "This browser could not save the connection after the link was used. Ask the engineer for a new link.",
     };
   }
   removePairingFragment();

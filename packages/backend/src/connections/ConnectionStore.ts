@@ -164,6 +164,11 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const disconnect = (signals: Iterable<Deferred.Deferred<void>>) =>
+    Effect.forEach(signals, (signal) => Deferred.succeed(signal, undefined), {
+      discard: true,
+    });
+
   const remove = (id: string) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
@@ -176,9 +181,7 @@ const make = Effect.gen(function* () {
           invitations: current.invitations.filter((item) => item.invitationId !== id),
         });
         const active = (yield* Ref.get(sessions)).get(id) ?? [];
-        yield* Effect.forEach(active, (signal) => Deferred.succeed(signal, undefined), {
-          discard: true,
-        });
+        yield* disconnect(active);
         yield* Effect.logInfo(client ? "Revoked client" : "Removed client invitation").pipe(
           Effect.annotateLogs({
             connectionId: id,
@@ -187,11 +190,6 @@ const make = Effect.gen(function* () {
         );
       }),
     );
-
-  const disconnect = (signals: Iterable<Deferred.Deferred<void>>) =>
-    Effect.forEach(signals, (signal) => Deferred.succeed(signal, undefined), {
-      discard: true,
-    });
 
   const withAuthorizedSession = <A, E, R, E2, R2>(
     clientId: string,

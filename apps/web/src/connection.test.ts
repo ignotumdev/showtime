@@ -80,6 +80,36 @@ describe("browser connection persistence", () => {
     expect(replaceState).not.toHaveBeenCalled();
   });
 
+  it("removes a consumed pairing fragment when saving the exchanged credentials fails", async () => {
+    const replaceState = vi.fn();
+    const setItem = vi.fn((key: string) => {
+      if (key === showtimeConnectionStorageKey) {
+        throw new DOMException("Storage unavailable", "SecurityError");
+      }
+    });
+    const request = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ version: 1, clientId, capability }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(
+      capturePairingFragment(
+        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        { setItem, removeItem: vi.fn() },
+        { replaceState },
+        request,
+      ),
+    ).resolves.toEqual({
+      status: "failed",
+      message:
+        "This browser could not save the connection after the link was used. Ask the engineer for a new link.",
+    });
+    expect(request).toHaveBeenCalledOnce();
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/#/");
+  });
+
   it("restores a validated record and creates its authenticated socket URL", () => {
     const connection = readStoredConnection({
       getItem: () => JSON.stringify({ version: 1, clientId, capability }),
