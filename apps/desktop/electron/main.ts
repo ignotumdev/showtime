@@ -1,10 +1,16 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
-import { makeBackendRuntime } from "@showtime/backend";
-import { desktopRpcWebSocketUrlChannel } from "@showtime/shared";
+import { ConnectionManager, makeBackendRuntime } from "@showtime/backend";
+import {
+  desktopConnectionsStateChannel,
+  desktopCreateInvitationChannel,
+  desktopPairingInfoChannel,
+  desktopRemoveConnectionChannel,
+  desktopRpcWebSocketUrlChannel,
+  desktopSetConnectionsEnabledChannel,
+} from "@showtime/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,12 +39,13 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null;
 let backendStarted = false;
 let backendShutdownStarted = false;
-const rpcHost = "127.0.0.1";
+const rpcHost = "0.0.0.0";
 const rpcPort = 34987;
-const rpcToken = randomBytes(32).toString("base64url");
-const rpcPath = `/rpc/${encodeURIComponent(rpcToken)}` as const;
-const rpcWebSocketUrl = `ws://${rpcHost}:${rpcPort}${rpcPath}`;
-const backendRuntime = makeBackendRuntime({ host: rpcHost, port: rpcPort, rpcPath });
+const backendRuntime = makeBackendRuntime({
+  host: rpcHost,
+  port: rpcPort,
+  webRoot: RENDERER_DIST,
+});
 
 function getAppIconPath() {
   if (app.isPackaged) {
@@ -125,11 +132,38 @@ app.on("before-quit", (event) => {
 if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
-    ipcMain.handle(desktopRpcWebSocketUrlChannel, () => rpcWebSocketUrl);
 
     backendRuntime
       .runPromise(Effect.void)
       .then(() => {
+        ipcMain.handle(desktopRpcWebSocketUrlChannel, () =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (connections) => connections.rpcWebSocketUrl),
+          ),
+        );
+        ipcMain.handle(desktopConnectionsStateChannel, () =>
+          backendRuntime.runPromise(Effect.flatMap(ConnectionManager, (_) => _.connectionsState)),
+        );
+        ipcMain.handle(desktopCreateInvitationChannel, (_event, name: string) =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (_) => _.createInvitation(name)),
+          ),
+        );
+        ipcMain.handle(desktopPairingInfoChannel, (_event, invitationId: string) =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (_) => _.pairingInfo(invitationId)),
+          ),
+        );
+        ipcMain.handle(desktopRemoveConnectionChannel, (_event, id: string) =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (_) => _.removeConnection(id)),
+          ),
+        );
+        ipcMain.handle(desktopSetConnectionsEnabledChannel, (_event, enabled: boolean) =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (_) => _.setConnectionsEnabled(enabled)),
+          ),
+        );
         backendStarted = true;
         createWindow();
       })

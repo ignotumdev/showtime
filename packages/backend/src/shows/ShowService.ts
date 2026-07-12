@@ -1,5 +1,4 @@
 import { Context, DateTime, Effect, Layer } from "effect";
-import { FileSystem } from "effect/FileSystem";
 import {
   decodeShowName,
   sortShowSummaries,
@@ -11,7 +10,6 @@ import {
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
 import { ShowFile } from "./ShowFile.js";
-import { ShowPaths } from "./ShowPaths.js";
 import { ShowRepository } from "./ShowRepository.js";
 
 export class ShowService extends Context.Service<
@@ -46,11 +44,9 @@ const toSummary = (document: ShowFileDocument): ShowSummary => ({
 });
 
 const makeShowService = Effect.fnUntraced(function* () {
-  const fs = yield* FileSystem;
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
   const showFile = yield* ShowFile;
-  const paths = yield* ShowPaths;
 
   const list = repository.list.pipe(
     Effect.map((documents) =>
@@ -73,6 +69,7 @@ const makeShowService = Effect.fnUntraced(function* () {
     const document = yield* showFile
       .read(filePath)
       .pipe(Effect.mapError(toRpcError("Could not read created show.")));
+    yield* repository.insert({ path: filePath, document });
 
     return toSummary(document);
   });
@@ -89,18 +86,8 @@ const makeShowService = Effect.fnUntraced(function* () {
     const showName = yield* decodeShowName(name).pipe(
       Effect.mapError(toRpcError("Show name cannot be empty.")),
     );
-    const found = yield* repository.findById(id);
-    const nextPath = yield* paths.makeShowFilePath({ id, name });
-    const targetPath = nextPath === found.path ? found.path : nextPath;
-
-    if (targetPath !== found.path) {
-      yield* fs
-        .rename(found.path, targetPath)
-        .pipe(Effect.mapError(toRpcError("Could not rename show file.")));
-    }
-
-    const document = yield* showFile
-      .update(targetPath, (current) => ({
+    const { document } = yield* repository
+      .update(id, (current) => ({
         ...current,
         config: {
           ...current.config,
@@ -114,8 +101,7 @@ const makeShowService = Effect.fnUntraced(function* () {
   });
 
   const deleteShow = Effect.fnUntraced(function* (id: ShowId) {
-    const found = yield* repository.findById(id);
-    yield* fs.remove(found.path).pipe(Effect.mapError(toRpcError("Could not delete show.")));
+    yield* repository.delete(id);
   });
 
   return ShowService.of({

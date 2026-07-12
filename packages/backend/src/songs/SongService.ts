@@ -12,7 +12,6 @@ import {
   type SongName,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
-import { ShowFile } from "../shows/ShowFile.js";
 import { ShowRepository } from "../shows/ShowRepository.js";
 
 interface SongServiceShape {
@@ -50,7 +49,6 @@ const toRpcError = (message: string) => (cause: unknown) => new RpcError({ messa
 const make = Effect.fnUntraced(function* () {
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
-  const showFile = yield* ShowFile;
 
   const list: SongServiceShape["list"] = Effect.fnUntraced(function* (showId) {
     return (yield* repository.findById(showId)).document.songs.filter(
@@ -59,7 +57,6 @@ const make = Effect.fnUntraced(function* () {
   });
 
   const create: SongServiceShape["create"] = Effect.fnUntraced(function* (params) {
-    const found = yield* repository.findById(params.showId);
     const id = yield* ids.makeSongId;
     const name = yield* decodeSongName(params.name.trim()).pipe(
       Effect.mapError(toRpcError("Invalid song name.")),
@@ -76,8 +73,8 @@ const make = Effect.fnUntraced(function* () {
       createdAt: now,
       updatedAt: now,
     };
-    yield* showFile
-      .update(found.path, (document) => ({ ...document, songs: [...document.songs, song] }))
+    yield* repository
+      .update(params.showId, (document) => ({ ...document, songs: [...document.songs, song] }))
       .pipe(Effect.mapError(toRpcError("Could not add song.")));
     return song;
   });
@@ -153,8 +150,8 @@ const make = Effect.fnUntraced(function* () {
     );
     const notes = params.notes?.trim();
     const now = yield* DateTime.now;
-    const updated = yield* showFile
-      .update(found.path, (document) => {
+    const { document: updated } = yield* repository
+      .update(params.showId, (document) => {
         const current = document.songs.find(
           (item) => item.id === params.id && item.deletedAt === undefined,
         );
@@ -199,10 +196,9 @@ const make = Effect.fnUntraced(function* () {
   });
 
   const reorder: SongServiceShape["reorder"] = Effect.fnUntraced(function* (params) {
-    const found = yield* repository.findById(params.showId);
     const requested = params.orderedSongIds;
-    const updated = yield* showFile
-      .update(found.path, (document) => {
+    const { document: updated } = yield* repository
+      .update(params.showId, (document) => {
         const active = document.songs.filter((song) => song.deletedAt === undefined);
         if (
           requested.length !== active.length ||
@@ -231,8 +227,8 @@ const make = Effect.fnUntraced(function* () {
       return yield* Effect.fail(new RpcError({ message: "Song not found." }));
     }
     const now = yield* DateTime.now;
-    yield* showFile
-      .update(found.path, (document) => ({
+    yield* repository
+      .update(params.showId, (document) => ({
         ...document,
         songs: document.songs.map((song) =>
           song.id === params.id ? { ...song, updatedAt: now, deletedAt: now } : song,
