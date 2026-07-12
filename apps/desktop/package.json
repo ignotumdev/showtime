@@ -8,46 +8,22 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vp dev",
-    "build": "tsc && vp build && electron-builder",
-    "preview": "vp preview",
-    "test": "vp test run"
+    "dev": "vp dev --config electron.vite.config.ts",
+    "build": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder"
   },
   "dependencies": {
-    "@base-ui/react": "catalog:",
-    "@effect/atom-react": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@fontsource-variable/inter": "catalog:",
     "@showtime/backend": "workspace:*",
-    "@showtime/contracts": "workspace:*",
-    "@showtime/frontend": "workspace:*",
-    "@tanstack/react-router": "catalog:",
-    "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
-    "effect": "catalog:",
-    "lucide-react": "catalog:",
-    "nanoid": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "scheduler": "catalog:",
-    "shadcn": "catalog:",
-    "tailwind-merge": "catalog:",
-    "tw-animate-css": "catalog:"
+    "@showtime/shared": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "catalog:",
-    "@tanstack/router-plugin": "catalog:",
     "@types/node": "catalog:",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "^6.0.3",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
-    "tailwindcss": "catalog:",
     "typescript": "^5.2.2",
     "vite": "catalog:",
     "vite-plugin-electron": "^1.1.0",
-    "vite-plugin-electron-renderer": "^1.0.0",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   }

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "ready": "vp check && vp run -r test && vp run -r build",
+    "dev:web": "vp run web#dev",
     "dev:desktop": "vp run desktop#dev"
   },
   "devDependencies": {

@@ -7,8 +7,12 @@
   directories: {
     output: "release/${version}",
   },
-  files: ["dist", "dist-electron"],
+  files: ["dist-electron"],
   extraResources: [
+    {
+      from: "../web/dist",
+      to: "web",
+    },
     {
       from: "../../assets",
       to: "assets",
