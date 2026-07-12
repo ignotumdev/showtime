@@ -15,6 +15,7 @@
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@showtime/contracts": "workspace:*",
+    "@showtime/shared": "workspace:*",
     "effect": "catalog:",
     "nanoid": "catalog:"
   },

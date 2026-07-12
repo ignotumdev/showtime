@@ -9,7 +9,6 @@ import {
   type ShowId,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
-import { ShowFile } from "../shows/ShowFile.js";
 import { ShowRepository } from "../shows/ShowRepository.js";
 
 interface MixServiceShape {
@@ -40,7 +39,6 @@ const toRpcError = (message: string) => (cause: unknown) => new RpcError({ messa
 const make = Effect.fnUntraced(function* () {
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
-  const showFile = yield* ShowFile;
 
   const list: MixServiceShape["list"] = Effect.fnUntraced(function* (showId) {
     return (yield* repository.findById(showId)).document.mixes.filter(
@@ -49,11 +47,10 @@ const make = Effect.fnUntraced(function* () {
   });
 
   const create: MixServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
-    const found = yield* repository.findById(showId);
     const id = yield* ids.makeMixId;
     const now = yield* DateTime.now;
-    const updated = yield* showFile
-      .update(found.path, (document) => {
+    const { document: updated } = yield* repository
+      .update(showId, (document) => {
         const number = MixNumber.make(
           String(
             Math.max(
@@ -92,8 +89,8 @@ const make = Effect.fnUntraced(function* () {
       updatedAt: now,
       ...(trimmedName ? { name: trimmedName } : {}),
     };
-    yield* showFile
-      .update(found.path, (document) => ({
+    yield* repository
+      .update(params.showId, (document) => ({
         ...document,
         mixes: document.mixes.map((item) => (item.id === params.id ? mix : item)),
       }))
@@ -110,8 +107,8 @@ const make = Effect.fnUntraced(function* () {
       return yield* Effect.fail(new RpcError({ message: "Mix not found." }));
     }
     const now = yield* DateTime.now;
-    yield* showFile
-      .update(found.path, (document) => ({
+    yield* repository
+      .update(params.showId, (document) => ({
         ...document,
         mixes: document.mixes.map((mix) =>
           mix.id === params.id ? { ...mix, updatedAt: now, deletedAt: now } : mix,

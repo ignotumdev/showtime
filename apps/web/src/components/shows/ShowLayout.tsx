@@ -27,6 +27,14 @@ import type { ShowId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
+import { useConnectionSnapshot, type ConnectionStatus } from "@/connection-state";
+
+const connectionLabels: Record<ConnectionStatus, string> = {
+  connecting: "Connecting",
+  connected: "Connected",
+  reconnecting: "Reconnecting",
+  disconnected: "Disconnected",
+};
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -42,6 +50,7 @@ export function ShowLayout() {
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
   const songCreator = useCreateSong(typedShowId);
+  const connection = useConnectionSnapshot();
 
   return (
     <React.Fragment>
@@ -57,6 +66,7 @@ export function ShowLayout() {
             >
               <span className={`${showColorClassName} size-6 shrink-0 rounded-md`} />
               <span className="block truncate">{showName}</span>
+              <Badge variant="secondary">{connectionLabels[connection.status]}</Badge>
             </Link>
           </SidebarHeader>
           <SidebarContent>

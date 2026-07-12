@@ -16,6 +16,7 @@ import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { isDesktopHost } from "@/platform";
+import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 
 type TitleBarProps = {
   hideName?: boolean;
@@ -100,6 +101,7 @@ export function TitleBar({
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
+        {desktopHost && <ConnectionDialog />}
         {isShowsRoute && (
           <Button size="sm" onClick={() => setDialog({ type: "create" })}>
             <PlusIcon />
