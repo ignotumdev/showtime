@@ -256,12 +256,12 @@ function SongDetail({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <div className="flex items-start gap-3 pb-4">
+      <div className="flex items-start gap-2 pb-2 sm:gap-3 sm:pb-4">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-neutral-700 text-lg font-bold leading-none text-neutral-300">
           {number}
         </div>
         <div className="grid min-w-0 flex-1 gap-1">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
             <Input
               aria-label="Song name"
               placeholder="New song"
@@ -272,9 +272,12 @@ function SongDetail({
                 if (name.trim() !== song.name) void save({ name });
               }}
               onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-              className="h-auto min-w-0 max-w-full w-auto shrink border-transparent bg-transparent px-2 py-1 text-2xl font-semibold shadow-none [field-sizing:content] focus-visible:bg-input/30 disabled:bg-transparent disabled:opacity-100 md:text-2xl dark:bg-transparent dark:disabled:bg-transparent dark:focus-visible:bg-input/30"
+              className="h-auto w-full min-w-0 max-w-full border-transparent bg-transparent px-2 py-1 text-xl font-semibold shadow-none focus-visible:bg-input/30 disabled:bg-transparent disabled:opacity-100 sm:w-auto sm:shrink sm:text-2xl sm:[field-sizing:content] dark:bg-transparent dark:disabled:bg-transparent dark:focus-visible:bg-input/30"
             />
-            <Badge variant="outline" className="min-w-0 max-w-64 shrink">
+            <Badge
+              variant="outline"
+              className="ml-2 min-w-0 max-w-[calc(100%-0.5rem)] shrink sm:ml-0 sm:max-w-64"
+            >
               <Input
                 aria-label="Artist"
                 placeholder="Artist"
@@ -372,7 +375,7 @@ function SongDetail({
                         {mix.id === mainMixId && <Badge>Main mix</Badge>}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-[repeat(auto-fill,7rem)] gap-2">
+                    <CardContent className="grid grid-cols-2 gap-2 min-[480px]:grid-cols-[repeat(auto-fill,7rem)]">
                       {microphones.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No microphones available.</p>
                       ) : (
@@ -393,7 +396,7 @@ function SongDetail({
                                 }
                               }}
                               className={cn(
-                                "flex h-20 w-28 flex-col items-center justify-center gap-1 rounded-lg border bg-muted/50 px-3 py-2 text-center text-foreground outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+                                "flex h-20 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg border bg-muted/50 px-2 py-2 text-center text-foreground outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 min-[480px]:w-28 min-[480px]:px-3",
                                 !active && "hover:bg-muted",
                                 active && colors.background,
                                 active && colors.text,

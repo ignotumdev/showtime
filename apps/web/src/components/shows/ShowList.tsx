@@ -75,7 +75,7 @@ function ShowItems({ shows }: { readonly shows: ReadonlyArray<ShowListItem> }) {
   const now = useRelativeDateNow(updatedAtValues);
 
   return (
-    <ScrollArea className="h-full w-full px-4">
+    <ScrollArea className="h-full w-full sm:px-4">
       <ItemGroup>
         {shows.map((show) => (
           <div key={show.id} role="listitem">

@@ -50,7 +50,7 @@ function RouteComponent() {
   const [microphoneToDelete, setMicrophoneToDelete] = React.useState<MicrophoneListItem>();
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col h-full">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
       {AsyncResult.isInitial(result) ? (
         <Empty>
           <EmptyHeader>
@@ -80,7 +80,7 @@ function RouteComponent() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
           {microphones.map((microphone) => (
             <MicrophoneCard
               key={microphone.id}
@@ -167,7 +167,7 @@ function MicrophoneCard({
         aria-label={`Delete microphone ${number}`}
         disabled={microphone.pending}
         onClick={onDelete}
-        className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
+        className="absolute top-2 right-2 md:opacity-0 md:transition-opacity md:group-hover/card:opacity-100 md:focus-visible:opacity-100"
       >
         <Trash2Icon />
       </Button>

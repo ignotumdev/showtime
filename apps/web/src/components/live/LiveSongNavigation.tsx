@@ -36,28 +36,33 @@ export function LiveSongNavigation({
   }, [next, onNext, onPrevious, previous]);
 
   return (
-    <nav aria-label="Setlist navigation">
-      <div className="fixed bottom-4 left-4 z-20 sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2">
+    <nav
+      aria-label="Setlist navigation"
+      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 gap-2 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:pointer-events-none sm:inset-0 sm:block sm:border-0 sm:bg-transparent sm:p-0"
+    >
+      <div className="min-w-0 sm:pointer-events-auto sm:fixed sm:top-1/2 sm:left-4 sm:-translate-y-1/2">
         <Button
           variant="outline"
           size="lg"
           disabled={!previous}
           aria-label={previous ? `Previous song: ${previous}` : "Start of setlist"}
           onClick={onPrevious}
+          className="w-full min-w-0 sm:w-auto"
         >
           <ChevronLeftIcon />
-          <span className="max-w-40 truncate">{previous ?? "Start"}</span>
+          <span className="min-w-0 flex-1 truncate sm:max-w-40">{previous ?? "Start"}</span>
         </Button>
       </div>
-      <div className="fixed right-4 bottom-4 z-20 sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2">
+      <div className="min-w-0 sm:pointer-events-auto sm:fixed sm:top-1/2 sm:right-4 sm:-translate-y-1/2">
         <Button
           variant="outline"
           size="lg"
           disabled={!next}
           aria-label={next ? `Next song: ${next}` : "End of setlist"}
           onClick={onNext}
+          className="w-full min-w-0 sm:w-auto"
         >
-          <span className="max-w-40 truncate">{next ?? "End"}</span>
+          <span className="min-w-0 flex-1 truncate sm:max-w-40">{next ?? "End"}</span>
           <ChevronRightIcon />
         </Button>
       </div>

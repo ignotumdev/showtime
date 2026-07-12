@@ -29,7 +29,7 @@ export function ShowItem({ show, now }: ShowItemProps) {
   const setDialog = useAtomSet(showDialogAtom);
 
   return (
-    <Item variant="outline" className="relative">
+    <Item variant="outline" className="relative min-h-16">
       <Link
         to="/shows/$showId"
         params={{ showId: show.id }}

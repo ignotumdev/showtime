@@ -14,7 +14,12 @@ export function LiveTitleBarStatus({
       <Badge variant="destructive">{elapsed}</Badge>
       <span className="ml-auto flex">
         <Badge variant="outline">
-          {position} of {total} songs
+          <span className="sm:hidden">
+            {position}/{total}
+          </span>
+          <span className="hidden sm:inline">
+            {position} of {total} songs
+          </span>
         </Badge>
       </span>
     </div>
