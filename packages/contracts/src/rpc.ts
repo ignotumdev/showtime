@@ -18,7 +18,7 @@ export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
 }) {}
 
 export const ShowtimeRpcs = EffectRpcGroup.make(
-  Rpc.make("shows.list", { success: Schema.Array(ShowSummary), error: RpcError }),
+  Rpc.make("shows.list", { success: Schema.Array(ShowSummary), error: RpcError, stream: true }),
   Rpc.make("shows.create", {
     payload: { name: ShowName, color: Color },
     success: ShowSummary,
@@ -38,6 +38,7 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     payload: { showId: ShowId },
     success: Schema.Array(Microphone),
     error: RpcError,
+    stream: true,
   }),
   Rpc.make("microphones.create", {
     payload: { showId: ShowId, color: Color },
@@ -64,6 +65,7 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     payload: { showId: ShowId },
     success: Schema.Array(Mix),
     error: RpcError,
+    stream: true,
   }),
   Rpc.make("mixes.create", {
     payload: { showId: ShowId, color: Color },
@@ -90,6 +92,7 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     payload: { showId: ShowId },
     success: Schema.Array(Song),
     error: RpcError,
+    stream: true,
   }),
   Rpc.make("songs.create", {
     payload: { showId: ShowId, name: SongName, artist: SongArtist },
