@@ -82,7 +82,7 @@ describe("ShowDiscovery", () => {
       path.join(showsDirectory, "valid.showtime"),
       JSON.stringify({
         type: "showtime-show",
-        version: "dev",
+        version: 1,
         config: {
           id: "show_0123456789abcdef",
           name: "Valid",
@@ -99,7 +99,7 @@ describe("ShowDiscovery", () => {
       path.join(showsDirectory, "invalid.showtime"),
       JSON.stringify({
         type: "showtime-show",
-        version: "dev",
+        version: 1,
         config: {
           id: "show_0123456789abcdef",
           name: "Invalid",
@@ -140,7 +140,7 @@ describe("ShowDiscovery", () => {
     await mkdir(showsDirectory, { recursive: true });
     const validDocument = {
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id: "show_0123456789abcdef",
         name: "Valid",

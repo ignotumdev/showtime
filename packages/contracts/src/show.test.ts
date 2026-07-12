@@ -9,7 +9,7 @@ describe("ShowFileDocument", () => {
   it("decodes and encodes Effect DateTime values from JSON strings", () => {
     const decoded = decode({
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id: "show_0123456789abcdef",
         name: "Soundcheck",
@@ -24,7 +24,7 @@ describe("ShowFileDocument", () => {
 
     expect(encode(decoded)).toEqual({
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id: "show_0123456789abcdef",
         name: "Soundcheck",
@@ -41,7 +41,7 @@ describe("ShowFileDocument", () => {
   it("decodes and encodes microphone lifecycle timestamps", () => {
     const decoded = decode({
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id: "show_0123456789abcdef",
         name: "Soundcheck",
@@ -79,7 +79,7 @@ describe("ShowFileDocument", () => {
     expect(() =>
       decode({
         type: "showtime-show",
-        version: "dev",
+        version: 1,
         config: {
           id: "show_0123456789abcdef",
           name: "   ",
@@ -98,7 +98,7 @@ describe("ShowFileDocument", () => {
     expect(() =>
       decode({
         type: "showtime-show",
-        version: "dev",
+        version: 1,
         config: {
           id: "show_0123456789abcdef",
           name: "Soundcheck",
@@ -117,7 +117,7 @@ describe("ShowFileDocument", () => {
       Effect.runPromise(
         Schema.decodeUnknownEffect(ShowFileDocument)({
           type: "showtime-show",
-          version: "dev",
+          version: 1,
           config: {
             id: "show_0123456789abcdef",
             name: "Soundcheck",

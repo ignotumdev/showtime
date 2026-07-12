@@ -22,7 +22,7 @@ export type ShowId = typeof ShowId.Type;
 
 export const parseShowId = Schema.decodeUnknownSync(ShowId);
 
-export const ShowConfigVersion = Schema.Literal("dev");
+export const ShowConfigVersion = Schema.Literal(1);
 export type ShowConfigVersion = typeof ShowConfigVersion.Type;
 
 export const ShowFileType = Schema.Literal("showtime-show");
