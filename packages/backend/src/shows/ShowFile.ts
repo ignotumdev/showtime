@@ -98,7 +98,7 @@ const makeShowFile = Effect.fnUntraced(function* () {
     );
     yield* write(filePath, {
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id,
         name: showName,

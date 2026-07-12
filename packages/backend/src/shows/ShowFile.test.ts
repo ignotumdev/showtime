@@ -51,7 +51,7 @@ describe("ShowFile", () => {
     const json = JSON.parse(await readFile(filePath, "utf8")) as unknown;
     expect(json).toMatchObject({
       type: "showtime-show",
-      version: "dev",
+      version: 1,
       config: {
         id: "show_0123456789abcdef",
         name: "Main Hall / Night 1",
@@ -87,7 +87,7 @@ describe("ShowFile", () => {
 
     const persisted = JSON.parse(await readFile(filePath, "utf8")) as {
       readonly type: "showtime-show";
-      readonly version: "dev";
+      readonly version: 1;
       readonly config: {
         readonly name: string;
         readonly color: string;
@@ -99,7 +99,7 @@ describe("ShowFile", () => {
     expect(result.config.name).toBe("Soundcheck Updated");
     expect(result.config.color).toBe("rose");
     expect(persisted.type).toBe("showtime-show");
-    expect(persisted.version).toBe("dev");
+    expect(persisted.version).toBe(1);
     expect(persisted.config.name).toBe("Soundcheck Updated");
     expect(persisted.config.color).toBe("rose");
     expect(DateTime.toEpochMillis(result.config.updatedAt)).toBeGreaterThanOrEqual(
