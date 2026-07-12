@@ -26,7 +26,11 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(showsSyncKey, shows.create({ name, color })),
       "shows.edit": ({ id, name, color }) =>
         sync.mutation(showsSyncKey, shows.edit({ id, name, color })),
-      "shows.delete": ({ id }) => sync.mutation(showsSyncKey, shows.delete(id)),
+      "shows.delete": ({ id }) =>
+        sync.mutation(
+          [...showsSyncKey, ...microphonesSyncKey(id), ...mixesSyncKey(id), ...songsSyncKey(id)],
+          shows.delete(id),
+        ),
       "microphones.list": ({ showId }) =>
         sync.query(microphonesSyncKey(showId), microphones.list(showId)),
       "microphones.create": ({ showId, color }) =>
