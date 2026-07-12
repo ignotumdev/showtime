@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime Local Connections Plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        line-height: 1.55;
+      }
+      body { max-width: 980px; margin: 0 auto; padding: 48px 24px 96px; }
+      h1, h2, h3 { line-height: 1.15; }
+      h1 { margin-bottom: 0.25rem; }
+      h2 { margin-top: 2.25rem; }
+      h3 { margin-top: 1.5rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .lede { font-size: 1.15rem; opacity: 0.82; }
+      .callout { border-inline-start: 4px solid currentColor; padding: 0.25rem 1rem; }
+      li + li { margin-top: 0.5rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid color-mix(in srgb, currentColor 24%, transparent); padding: 0.65rem; text-align: left; vertical-align: top; }
+      th { background: color-mix(in srgb, currentColor 7%, transparent); }
+      .flow { padding: 1rem 1.25rem; background: color-mix(in srgb, currentColor 6%, transparent); overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Trusted local-network connections</h1>
+      <p class="lede">
+        Let a phone, tablet, or laptop scan Showtime once, load the bundled web app directly from the
+        desktop instance, and reconnect to its Effect RPC WebSocket without internet access.
+      </p>
+
+      <section>
+        <h2>Outcome</h2>
+        <p>
+          The desktop backend runs one HTTP server on the LAN. That server serves the production web build
+          and upgrades authenticated requests to the existing Effect RPC WebSocket. A “Connect device” dialog
+          in the Electron renderer presents a QR code containing the current LAN address and a high-entropy
+          pairing capability. The browser consumes the capability once, stores it in local storage, removes it
+          from the address bar/history, and uses it on every later WebSocket connection.
+        </p>
+        <div class="callout">
+          <p>
+            This is capability-based access for a trusted local network, not public-internet authentication.
+            Merely discovering Showtime's IP or loading its JavaScript must not grant access to show data.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>User flow</h2>
+        <pre class="flow">Desktop toolbar → Connect device → choose a reachable network if needed → scan QR
+Phone browser → HTTP app loads locally → pairing fragment is saved and erased → WebSocket connects
+Later visit to the same address → saved capability is reused automatically</pre>
+        <ol>
+          <li>
+            Add a desktop-only connection button to the existing title bar. It opens a normal shared UI dialog
+            using the defaults from <code>@/components/ui</code>.
+          </li>
+          <li>
+            The dialog shows a large QR code, the equivalent short copyable URL, the selected interface name,
+            and plain-language guidance that both devices must be on the same trusted Wi-Fi or wired network.
+          </li>
+          <li>
+            When several useful adapters exist, rank private IPv4 addresses ahead of other LAN addresses and
+            let the user switch candidates. Exclude loopback, link-local, internal, and obvious virtual/tunnel
+            adapters by default, with a secondary “Other networks” list so unusual show networks still work.
+          </li>
+          <li>
+            The QR URL is <code>http://&lt;lan-ip&gt;:34987/#connect=&lt;capability&gt;</code>. The fragment is never sent
+            in the HTTP request. A synchronous bootstrap step validates and saves it before React, the router,
+            or the RPC client starts, then calls <code>history.replaceState</code> to leave a clean <code>#/</code> URL.
+          </li>
+          <li>
+            Subsequent visits to that same origin read the saved, versioned connection record. Invalid or
+            revoked credentials show a dedicated reconnect screen instead of an endless loading state.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Security and lifecycle decisions</h2>
+        <table>
+          <thead><tr><th>Concern</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>RPC authorization</td>
+              <td>Use a cryptographically random 256-bit capability in an unguessable WebSocket path, <code>/rpc/&lt;capability&gt;</code>. Unknown paths receive a generic 404 and never reach RPC handlers.</td>
+            </tr>
+            <tr>
+              <td>HTTP disclosure</td>
+              <td>The static app is readable by the LAN, but APIs and show data are not. Keep the secret in the URL fragment during pairing so request lines, access logs, proxies, and referrers do not receive it.</td>
+            </tr>
+            <tr>
+              <td>Restarts</td>
+              <td>Persist the capability in a small backend connection-settings file with restrictive file permissions and atomic replacement. Do not regenerate it at every launch; otherwise “scan once” cannot work.</td>
+            </tr>
+            <tr>
+              <td>Revocation</td>
+              <td>Add “Reset connected devices” to the dialog. Rotation immediately changes the accepted RPC path and QR code; existing sockets are interrupted and saved browser records cease to authenticate.</td>
+            </tr>
+            <tr>
+              <td>Browser storage</td>
+              <td>Store a schema-validated, versioned record in local storage. Never put the capability in application logs, error messages, analytics, DOM text beyond the QR/copy action, or query parameters.</td>
+            </tr>
+            <tr>
+              <td>Network trust</td>
+              <td>Show a concise warning not to enable sharing on guest/public Wi-Fi. Plain HTTP is acceptable only for the explicitly scoped trusted-LAN design; the capability protects authorization but HTTP does not prevent an on-path observer from seeing later WebSocket traffic.</td>
+            </tr>
+            <tr>
+              <td>Address changes</td>
+              <td>Saved pairing survives app restarts while the origin remains reachable. A DHCP address change changes browser origin and requires rescanning; state this honestly. Avoid mDNS in this iteration because support and name conflicts are less predictable on venue networks.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Effect-native backend design</h2>
+        <ol>
+          <li>
+            Introduce a <code>ConnectionSettings</code> Effect service responsible for loading, validating,
+            creating, persisting, and rotating the capability. Its live layer uses Effect <code>FileSystem</code>,
+            <code>Path</code>, scoped resources, typed errors, and a small Node cryptographic-random adapter.
+            Tests receive deterministic in-memory/test layers.
+          </li>
+          <li>
+            Introduce a <code>NetworkAddresses</code> Effect service that snapshots usable interface addresses and
+            returns ranked, labeled connection candidates. Isolate Node's <code>networkInterfaces()</code> behind
+            the service rather than calling it from Electron or React.
+          </li>
+          <li>
+            Refactor <code>makeBackendLayer</code> so a single <code>HttpRouter</code>,
+            <code>NodeHttpServer</code>, and scope own both static files and WebSocket RPC. Use Effect v4's
+            <code>HttpStaticServer</code>/<code>HttpServerResponse.file</code> support, including content types,
+            conditional requests, and cache headers. Do not build a parallel Node request handler.
+          </li>
+          <li>
+            Serve exact assets when present and fall back to <code>index.html</code> only for safe GET/HEAD app
+            routes. Reject traversal and encoded traversal, return real 404s for missing asset-like paths, and
+            set <code>index.html</code> to no-cache while fingerprinted assets may be cached immutably.
+          </li>
+          <li>
+            Replace the caller-supplied <code>rpcPath</code> with the settings service's capability path. Backend
+            options become the stable bind host/port, web-root path, and optional test overrides. Bind to
+            <code>0.0.0.0:34987</code>; Electron still connects through <code>127.0.0.1</code> to avoid adapter
+            dependence.
+          </li>
+          <li>
+            Expose a narrow backend <code>ConnectionManager</code> service to Electron for the current local RPC
+            URL, LAN pairing candidates, and rotation. Electron IPC returns structured, schema-validated data
+            and runs service effects through the already scoped <code>ManagedRuntime</code>.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Frontend and Electron changes</h2>
+        <ul>
+          <li>
+            Extend the preload bridge with typed <code>connectionInfo</code> and <code>resetConnections</code>
+            operations while retaining <code>contextIsolation</code>; no Node primitives enter the renderer.
+          </li>
+          <li>
+            Put connection-record parsing, fragment capture, URL construction, and storage behind one shared
+            browser module. Model decoding and failures with Effect <code>Schema</code>, <code>Option</code>, and
+            typed errors; use Effect's browser key-value-store layer if its v4 API fits the bootstrap boundary.
+          </li>
+          <li>
+            Change <code>resolveRpcWebSocketUrl</code> precedence to: Electron bridge, valid saved browser
+            connection, explicit development override. Remove unauthenticated <code>/rpc</code> same-origin
+            fallback.
+          </li>
+          <li>
+            Add a connection state around the frontend runtime so missing credentials, authentication failure,
+            server unavailable, reconnecting, and connected are distinguishable. The remote web UI gets a
+            simple “Scan the QR code shown in Showtime” page when no saved connection exists.
+          </li>
+          <li>
+            Generate QR SVG locally from a bundled npm library—no remote image endpoint, fonts, script, DNS, or
+            CDN. Keep QR generation in a shared module and render it only in the Electron connection dialog.
+          </li>
+          <li>
+            Keep the existing web build as the single renderer artifact. Desktop packaging already copies
+            <code>apps/web/dist</code>; pass that resolved directory to the backend in production. In development,
+            keep Electron on Vite for hot reload and serve the latest built web artifact on the LAN, with a clear
+            startup error if it is absent rather than silently serving a broken page.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Failure behavior</h2>
+        <ul>
+          <li>A port bind failure prevents desktop startup and reports the actionable port conflict, preserving today's fail-fast behavior.</li>
+          <li>A settings read/write failure is typed and fatal at startup; Showtime never falls back to an ephemeral secret that would break saved devices.</li>
+          <li>No usable LAN address disables the QR with “No local network found”; the local Electron client continues working through loopback.</li>
+          <li>A stale address produces an ordinary unreachable page and is fixed by rescanning after the desktop shows its new address.</li>
+          <li>An invalid/stale capability loads the shell but the WebSocket is rejected; the UI clears no data automatically and asks for a new scan.</li>
+          <li>Transient disconnects continue using Effect Socket retry behavior and the streaming RPCs republish authoritative snapshots after reconnect.</li>
+          <li>Rotation is serialized, atomically persisted, and only reported successful after the server has switched credentials and interrupted old sessions.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Concrete implementation areas</h2>
+        <table>
+          <thead><tr><th>Area</th><th>Expected work</th></tr></thead>
+          <tbody>
+            <tr><td><code>packages/backend</code></td><td>Connection settings, network discovery, static-app router, unified server layer, rotation/session interruption, unit and HTTP/WebSocket integration tests.</td></tr>
+            <tr><td><code>packages/shared</code></td><td>Bridge DTO schemas, storage schema/key, pairing-fragment grammar, and redacted connection types.</td></tr>
+            <tr><td><code>apps/desktop</code></td><td>Backend web-root/bind configuration, Effect-backed IPC handlers, preload bridge, packaging/build validation.</td></tr>
+            <tr><td><code>apps/web</code></td><td>Early pairing bootstrap, saved connection resolver, connection gate/status, desktop QR dialog, offline QR dependency, focused component/platform tests.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <ol>
+          <li>Unit-test settings creation, stable reload, atomic rotation, corrupt-file failure, redaction, and deterministic test layers.</li>
+          <li>Unit-test interface filtering/ranking with loopback, Wi-Fi, Ethernet, VPN, IPv4, IPv6, and no-network fixtures.</li>
+          <li>Integration-test static index/assets, MIME and cache headers, SPA fallback, HEAD, 404 behavior, and traversal rejection.</li>
+          <li>Prove an unauthenticated or wrong-path WebSocket cannot call RPC while the persisted capability can.</li>
+          <li>Prove two LAN-style clients receive streamed updates, reconnect after interruption, and lose access immediately after rotation.</li>
+          <li>Test fragment capture: saved before client creation, removed from history, malformed values rejected, and saved values restored after a simulated restart.</li>
+          <li>Test Electron bridge precedence and ensure capability-bearing values are not included in snapshots/log assertions.</li>
+          <li>Build the web and packaged desktop artifacts, inspect that all assets are bundled, and perform a real-device airplane-mode test on a local access point.</li>
+          <li>Run <code>pnpm ready</code> and fix all type, test, and build fallout.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Explicitly out of scope</h2>
+        <ul>
+          <li>Internet relay, cloud accounts, remote access, telemetry, or any dependency on outside connectivity.</li>
+          <li>Per-user identity/permissions or independent device revocation; rotation revokes all paired browsers together.</li>
+          <li>Automatic TLS certificates. Trusted-LAN HTTP is an intentional first iteration, with its on-path confidentiality limitation disclosed above.</li>
+          <li>mDNS/service discovery, native mobile apps, push notifications, and background browser operation.</li>
+          <li>Persisting offline edits in the browser; the backend remains authoritative.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

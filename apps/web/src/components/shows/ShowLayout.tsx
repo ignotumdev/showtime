@@ -57,6 +57,7 @@ export function ShowLayout() {
             >
               <span className={`${showColorClassName} size-6 shrink-0 rounded-md`} />
               <span className="block truncate">{showName}</span>
+              <Badge variant="secondary">Connected</Badge>
             </Link>
           </SidebarHeader>
           <SidebarContent>

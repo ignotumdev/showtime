@@ -1,8 +1,10 @@
-const defaultRpcPath = "/rpc";
+import { readStoredConnection, storedRpcWebSocketUrl } from "./connection";
 
 export const browserRpcWebSocketUrl = (location: Pick<Location, "protocol" | "host">) => {
+  const connection = readStoredConnection();
+  if (connection) return storedRpcWebSocketUrl(location, connection);
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${location.host}${defaultRpcPath}`;
+  return `${protocol}//${location.host}/rpc/unpaired`;
 };
 
 export const resolveRpcWebSocketUrl = async () => {
