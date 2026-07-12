@@ -7,7 +7,10 @@ export const browserRpcWebSocketUrl = (location: Pick<Location, "protocol" | "ho
 
 export const resolveRpcWebSocketUrl = async () => {
   const bridge = window.showtime;
-  if (bridge) return bridge.rpcWebSocketUrl();
+  if (bridge) {
+    const bridgeUrl = await bridge.rpcWebSocketUrl();
+    if (bridgeUrl) return bridgeUrl;
+  }
   const configuredUrl = import.meta.env.VITE_SHOWTIME_RPC_WEBSOCKET_URL;
   if (configuredUrl) return configuredUrl;
   return browserRpcWebSocketUrl(window.location);

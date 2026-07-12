@@ -19,7 +19,10 @@ export default defineConfig({
   root: webRoot,
   publicDir: path.resolve(desktopRoot, "../../assets"),
   resolve: { alias: { "@": path.resolve(webRoot, "src") } },
-  build: { outDir: path.resolve(webRoot, "dist"), emptyOutDir: true },
+  // The web package owns its distributable in apps/web/dist. Vite still builds
+  // the renderer while running the Electron plugin, so keep that incidental
+  // output local to the desktop package instead of replacing the web build.
+  build: { outDir: path.resolve(desktopRoot, "dist-renderer"), emptyOutDir: true },
   plugins: [
     ...(webConfig.plugins ?? []),
     electron({
