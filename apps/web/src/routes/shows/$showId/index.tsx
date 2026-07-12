@@ -1,6 +1,6 @@
 import * as React from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertCircleIcon, FolderXIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AlertCircleIcon, ArrowLeftIcon, FolderXIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,14 +92,24 @@ function RouteComponent() {
         </EmptyHeader>
         {show && (
           <EmptyContent>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setDialog({ type: "edit", show })}>
-                <PencilIcon />
-                Edit
-              </Button>
-              <Button variant="destructive" onClick={() => setDialog({ type: "delete", show })}>
-                <Trash2Icon />
-                Delete
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="outline" onClick={() => setDialog({ type: "edit", show })}>
+                  <PencilIcon />
+                  Edit
+                </Button>
+                <Button variant="destructive" onClick={() => setDialog({ type: "delete", show })}>
+                  <Trash2Icon />
+                  Delete
+                </Button>
+              </div>
+              <Button
+                nativeButton={false}
+                variant="ghost"
+                className="md:hidden"
+                render={<Link to="/" />}
+              >
+                <ArrowLeftIcon /> Back to all shows
               </Button>
             </div>
           </EmptyContent>

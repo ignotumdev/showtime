@@ -4,21 +4,16 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAtomSet } from "@effect/atom-react";
-import {
-  microphoneAtoms,
-  microphonesRpcReactivityKey,
-  mixAtoms,
-  mixesRpcReactivityKey,
-  showDialogAtom,
-} from "@/client";
+import { showDialogAtom } from "@/client";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
-import { randomShowColor, showColorClassNames } from "./shows/show-color";
-import { useCreateSong } from "@/components/songs/useCreateSong";
+import { showColorClassNames } from "./shows/show-color";
 import { isDesktopHost } from "@/platform";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
+import { ShowPageAction } from "@/components/shows/ShowPageAction";
 
 type TitleBarProps = {
+  className?: string;
   hideName?: boolean;
   isMacOS?: boolean;
   liveStatus?: React.ReactNode;
@@ -32,6 +27,7 @@ type TitleBarProps = {
 };
 
 export function TitleBar({
+  className,
   hideName = false,
   isMacOS = navigator.userAgent.includes("Macintosh"),
   liveStatus,
@@ -45,23 +41,26 @@ export function TitleBar({
   const params = useParams({ strict: false });
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
-  const isMicrophonesRoute = pathname.endsWith("/microphones");
-  const isMixesRoute = pathname.endsWith("/mixes");
-  const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
   const isLiveRoute = pathname.includes("/live");
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
-  const songCreator = useCreateSong((showId ?? "") as ShowId);
   const desktopHost = isDesktopHost();
 
   return (
     <header
+      style={
+        desktopHost
+          ? isMacOS
+            ? { paddingLeft: "5.125rem", paddingRight: "0.75rem" }
+            : { paddingRight: "8.75rem" }
+          : undefined
+      }
       className={cn(
-        "fixed inset-x-0 top-0 z-10 flex h-10 select-none items-center bg-[#0a0a0a] px-3 py-0",
-        desktopHost && "drag-region pr-35",
-        desktopHost && isMacOS && "pr-3 pl-20.5",
+        "fixed inset-x-0 top-0 z-10 flex h-10 min-w-0 select-none items-center bg-[#0a0a0a] px-2 py-0 sm:px-3",
+        desktopHost && "drag-region",
         stack === "below-content" && "z-0",
         stack === "above-content" && "z-30",
+        className,
       )}
     >
       <div className="no-drag-region flex items-center gap-1" aria-label="Window toolbar">
@@ -71,18 +70,18 @@ export function TitleBar({
             onClick={onLiveBack}
             render={showId ? <Link to="/shows/$showId" params={{ showId }} /> : <Link to="/" />}
           >
-            <ArrowLeftIcon /> Back
+            <ArrowLeftIcon /> <span className="hidden sm:inline">Back</span>
           </Button>
         )}
         {isLiveRoute && liveShow && (
-          <span className="flex min-w-0 max-w-72 items-center gap-2">
+          <span className="hidden min-w-0 max-w-72 items-center gap-2 sm:flex">
             <span className={`${showColorClassName} size-4 shrink-0 rounded`} />
             <span className="truncate text-sm font-semibold text-[#fafafa]">{liveShow.name}</span>
           </span>
         )}
       </div>
       {isLiveRoute && liveStatus ? (
-        <div className="pointer-events-none ml-2 flex min-w-0 flex-1 items-center">
+        <div className="pointer-events-none ml-1 flex min-w-0 flex-1 items-center sm:ml-2">
           {liveStatus}
         </div>
       ) : liveShow && !isLiveRoute ? (
@@ -92,69 +91,28 @@ export function TitleBar({
         </div>
       ) : null}
       {!hideName && (
-        <div className="flex min-w-0 items-center gap-2.25">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.25">
           <img className="size-6 shrink-0" src={iconUrl} alt="" />
-          <span className="truncate text-lg leading-none font-bold text-[#fafafa]">Showtime</span>
-          <Badge className="dark" variant="outline">
+          <span className="truncate text-base leading-none font-bold text-[#fafafa] sm:text-lg">
+            Showtime
+          </span>
+          <Badge className="dark hidden sm:inline-flex" variant="outline">
             Alpha
           </Badge>
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
-        {desktopHost && <ConnectionDialog />}
+        {desktopHost && !isLiveRoute && <ConnectionDialog />}
         {isShowsRoute && (
-          <Button size="sm" onClick={() => setDialog({ type: "create" })}>
+          <Button size="sm" aria-label="New show" onClick={() => setDialog({ type: "create" })}>
             <PlusIcon />
-            New show
+            <span className="hidden min-[400px]:inline">New show</span>
           </Button>
         )}
-        {isMicrophonesRoute && showId && <AddMicrophoneButton showId={showId as ShowId} />}
-        {isMixesRoute && showId && <AddMixButton showId={showId as ShowId} />}
-        {isAllSongsRoute && showId && (
-          <Button size="sm" disabled={songCreator.isCreating} onClick={songCreator.createSong}>
-            <PlusIcon /> {songCreator.isCreating ? "Adding..." : "Add song"}
-          </Button>
+        {!isShowsRoute && !isLiveRoute && showId && (
+          <ShowPageAction showId={showId as ShowId} pathname={pathname} />
         )}
       </div>
-      {isAllSongsRoute && songCreator.error && (
-        <span role="alert" className="ml-2 text-xs text-destructive">
-          {songCreator.error}
-        </span>
-      )}
     </header>
-  );
-}
-
-function AddMixButton({ showId }: { readonly showId: ShowId }) {
-  const createMix = useAtomSet(mixAtoms(showId).create);
-  return (
-    <Button
-      size="sm"
-      onClick={() =>
-        createMix({
-          payload: { showId, color: randomShowColor() },
-          reactivityKeys: mixesRpcReactivityKey(showId),
-        })
-      }
-    >
-      <PlusIcon /> Add mix
-    </Button>
-  );
-}
-
-function AddMicrophoneButton({ showId }: { readonly showId: ShowId }) {
-  const createMicrophone = useAtomSet(microphoneAtoms(showId).create);
-  return (
-    <Button
-      size="sm"
-      onClick={() =>
-        createMicrophone({
-          payload: { showId, color: randomShowColor() },
-          reactivityKeys: microphonesRpcReactivityKey(showId),
-        })
-      }
-    >
-      <PlusIcon /> Add microphone
-    </Button>
   );
 }

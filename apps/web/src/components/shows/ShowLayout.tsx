@@ -1,5 +1,12 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { ArrowLeftIcon, ListMusicIcon, Mic2Icon, PlusIcon, SpeakerIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ListMusicIcon,
+  Mic2Icon,
+  PlayIcon,
+  PlusIcon,
+  SpeakerIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -27,14 +34,7 @@ import type { ShowId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
-import { useConnectionSnapshot, type ConnectionStatus } from "@/connection-state";
-
-const connectionLabels: Record<ConnectionStatus, string> = {
-  connecting: "Connecting",
-  connected: "Connected",
-  reconnecting: "Reconnecting",
-  disconnected: "Disconnected",
-};
+import { ShowPageAction } from "./ShowPageAction";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -50,13 +50,11 @@ export function ShowLayout() {
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
   const songCreator = useCreateSong(typedShowId);
-  const connection = useConnectionSnapshot();
-
   return (
     <React.Fragment>
-      <TitleBar hideName={true} stack="above-content" />
-      <SidebarProvider className="relative h-screen overflow-hidden bg-background">
-        <Sidebar collapsible="none" className="relative z-40">
+      <TitleBar hideName stack="above-content" className="hidden md:flex" />
+      <SidebarProvider className="relative h-svh overflow-hidden bg-background">
+        <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
             <Link
               to="/shows/$showId"
@@ -66,7 +64,6 @@ export function ShowLayout() {
             >
               <span className={`${showColorClassName} size-6 shrink-0 rounded-md`} />
               <span className="block truncate">{showName}</span>
-              <Badge variant="secondary">{connectionLabels[connection.status]}</Badge>
             </Link>
           </SidebarHeader>
           <SidebarContent>
@@ -140,11 +137,126 @@ export function ShowLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="z-20 min-w-0 overflow-auto px-4 pt-14 pb-4">
-          <Outlet />
+        <SidebarInset className="z-20 min-w-0 overflow-hidden md:pt-10">
+          <ShowHeader
+            showId={typedShowId}
+            showName={showName}
+            showColorClassName={showColorClassName}
+            pathname={pathname}
+            songCreator={songCreator}
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4">
+            <Outlet />
+          </div>
+          <MobileBottomNavigation showId={showId} />
         </SidebarInset>
       </SidebarProvider>
     </React.Fragment>
+  );
+}
+
+function ShowHeader({
+  showId,
+  showName,
+  showColorClassName,
+  pathname,
+  songCreator,
+}: {
+  readonly showId: ShowId;
+  readonly showName: string;
+  readonly showColorClassName: string;
+  readonly pathname: string;
+  readonly songCreator: ReturnType<typeof useCreateSong>;
+}) {
+  const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
+
+  return (
+    <React.Fragment>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:hidden">
+        <Link
+          to="/shows/$showId"
+          params={{ showId }}
+          className="flex min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          activeOptions={{ exact: true }}
+        >
+          <span className={`${showColorClassName} size-6 shrink-0 rounded-md`} />
+          <span className="truncate font-semibold">{showName}</span>
+        </Link>
+        <div className="ml-auto shrink-0">
+          <ShowPageAction showId={showId} pathname={pathname} />
+        </div>
+      </header>
+      {isAllSongsRoute && songCreator.error && (
+        <p role="alert" className="shrink-0 border-b px-3 py-2 text-xs text-destructive md:hidden">
+          {songCreator.error}
+        </p>
+      )}
+    </React.Fragment>
+  );
+}
+
+function MobileBottomNavigation({ showId }: { readonly showId: string }) {
+  return (
+    <nav
+      aria-label="Show navigation"
+      className="grid shrink-0 grid-cols-5 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+    >
+      <MobileNavigationLink
+        to="/shows/$showId/microphones"
+        showId={showId}
+        label="Mics"
+        icon={Mic2Icon}
+      />
+      <MobileNavigationLink
+        to="/shows/$showId/mixes"
+        showId={showId}
+        label="Mixes"
+        icon={SpeakerIcon}
+      />
+      <Link
+        to="/live/$showId"
+        params={{ showId }}
+        className="flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium text-destructive outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50"
+      >
+        <span className="flex size-9 items-center justify-center rounded-full bg-destructive text-white">
+          <PlayIcon className="size-4 fill-current" />
+        </span>
+        Live
+      </Link>
+      <div className="col-span-2 grid">
+        <MobileNavigationLink
+          to="/shows/$showId/setlist"
+          showId={showId}
+          label="Songs"
+          icon={ListMusicIcon}
+        />
+      </div>
+    </nav>
+  );
+}
+
+function MobileNavigationLink({
+  to,
+  showId,
+  label,
+  icon: Icon,
+}: {
+  readonly to: "/shows/$showId/microphones" | "/shows/$showId/mixes" | "/shows/$showId/setlist";
+  readonly showId: string;
+  readonly label: string;
+  readonly icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <Link
+      to={to}
+      params={{ showId }}
+      activeOptions={to === "/shows/$showId/setlist" ? { includeSearch: false } : undefined}
+      activeProps={{ "data-active": true }}
+      className="flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 data-active:text-foreground"
+    >
+      <Icon className="size-5" />
+      {label}
+    </Link>
   );
 }
 
