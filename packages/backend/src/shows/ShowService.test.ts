@@ -1,6 +1,6 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -66,5 +66,25 @@ describe("ShowService", () => {
     expect(result.afterRename.map((show) => show.name)).toEqual(["Main Set"]);
     expect(result.afterRename.map((show) => show.color)).toEqual(["rose"]);
     expect(result.afterDelete).toEqual([]);
+  });
+
+  it("serves and updates the in-memory document without rereading a damaged file", async () => {
+    const home = await makeTempHome();
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const repository = yield* ShowRepository.ShowRepository;
+        const created = yield* shows.create({ name: "Cached", color: "sky" });
+        const entry = yield* repository.findById(created.id);
+
+        yield* Effect.promise(() => writeFile(entry.path, "not valid json", "utf8"));
+        const fromMemory = yield* shows.list;
+        const edited = yield* shows.edit({ id: created.id, name: "Still Cached", color: "rose" });
+        return { fromMemory, edited };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.fromMemory.map((show) => show.name)).toEqual(["Cached"]);
+    expect(result.edited).toMatchObject({ name: "Still Cached", color: "rose" });
   });
 });

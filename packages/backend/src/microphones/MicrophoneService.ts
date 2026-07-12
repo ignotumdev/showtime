@@ -9,7 +9,6 @@ import {
   type ShowId,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
-import { ShowFile } from "../shows/ShowFile.js";
 import { ShowRepository } from "../shows/ShowRepository.js";
 
 interface MicrophoneServiceShape {
@@ -40,7 +39,6 @@ const toRpcError = (message: string) => (cause: unknown) => new RpcError({ messa
 const make = Effect.fnUntraced(function* () {
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
-  const showFile = yield* ShowFile;
 
   const list: MicrophoneServiceShape["list"] = Effect.fnUntraced(function* (showId) {
     return (yield* repository.findById(showId)).document.microphones.filter(
@@ -49,11 +47,10 @@ const make = Effect.fnUntraced(function* () {
   });
 
   const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
-    const found = yield* repository.findById(showId);
     const id = yield* ids.makeMicrophoneId;
     const now = yield* DateTime.now;
-    const updated = yield* showFile
-      .update(found.path, (document) => {
+    const { document: updated } = yield* repository
+      .update(showId, (document) => {
         const number = nextMicrophoneNumber(
           document.microphones
             .filter((microphone) => microphone.deletedAt === undefined)
@@ -88,8 +85,8 @@ const make = Effect.fnUntraced(function* () {
       updatedAt: now,
       ...(trimmedName ? { name: trimmedName } : {}),
     };
-    yield* showFile
-      .update(found.path, (document) => ({
+    yield* repository
+      .update(params.showId, (document) => ({
         ...document,
         microphones: document.microphones.map((mic) => (mic.id === params.id ? microphone : mic)),
       }))
@@ -107,8 +104,8 @@ const make = Effect.fnUntraced(function* () {
       return yield* Effect.fail(new RpcError({ message: "Microphone not found." }));
     }
     const now = yield* DateTime.now;
-    yield* showFile
-      .update(found.path, (document) => ({
+    yield* repository
+      .update(params.showId, (document) => ({
         ...document,
         microphones: document.microphones.map((microphone) =>
           microphone.id === params.id
