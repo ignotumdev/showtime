@@ -8,7 +8,7 @@ import {
   type SongId,
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
-import { songsRpcReactivityKey } from "../rpc/Reactivity.js";
+import { latestSnapshot } from "../rpc/LatestSnapshot.js";
 
 export type SongListItem = Song & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
@@ -16,7 +16,7 @@ const makeTemporarySongId = (): SongId => makeTemporaryId(songIdPrefix) as SongI
 
 export const makeSongAtoms = (
   RpcClient: ShowtimeRpcClient,
-  options?: { readonly focusSignal?: Atom.Atom<unknown> },
+  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
 ) => {
   const createSongMutation = RpcClient.mutation("songs.create");
   const deleteSongMutation = RpcClient.mutation("songs.delete");
@@ -24,22 +24,7 @@ export const makeSongAtoms = (
   const editSongMutation = RpcClient.mutation("songs.edit");
 
   const songAtoms = Atom.family((showId: ShowId) => {
-    const query = RpcClient.query(
-      "songs.list",
-      { showId },
-      {
-        reactivityKeys: songsRpcReactivityKey(showId),
-        serializationKey: showId,
-        timeToLive: "5 minutes",
-      },
-    ).pipe(
-      Atom.swr({
-        staleTime: 10_000,
-        revalidateOnMount: true,
-        revalidateOnFocus: true,
-        focusSignal: options?.focusSignal,
-      }),
-    );
+    const query = RpcClient.query("songs.list", { showId }).pipe(latestSnapshot);
     const songs = query.pipe(Atom.optimistic);
     const create = songs.pipe(
       Atom.optimisticFn({

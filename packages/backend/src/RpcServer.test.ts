@@ -1,5 +1,5 @@
 import { NodeSocket } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Deferred, Effect, Layer, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { createServer } from "node:net";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -53,19 +53,30 @@ describe("Showtime WebSocket RPC", () => {
       const result = await Effect.runPromise(
         Effect.gen(function* () {
           const client = yield* RpcClient.make(ShowtimeRpcs);
-          const before = yield* client["shows.list"]();
-          const created = yield* client["shows.create"]({
-            name: ShowName.make("WebSocket Soundcheck"),
-            color: "blue",
+          const firstSnapshot = yield* Deferred.make<void>();
+          const snapshotsEffect = client["shows.list"]().pipe(
+            Stream.tap(() => Deferred.succeed(firstSnapshot, void 0)),
+            Stream.take(2),
+            Stream.runCollect,
+          );
+          const createEffect = Deferred.await(firstSnapshot).pipe(
+            Effect.andThen(
+              client["shows.create"]({
+                name: ShowName.make("WebSocket Soundcheck"),
+                color: "blue",
+              }),
+            ),
+          );
+          const [snapshots, created] = yield* Effect.all([snapshotsEffect, createEffect], {
+            concurrency: "unbounded",
           });
-          const after = yield* client["shows.list"]();
-          return { before, created, after };
+          return { snapshots: Array.from(snapshots), created };
         }).pipe(Effect.scoped, Effect.provide(clientProtocol)),
       );
 
-      expect(result.before).toEqual([]);
+      expect(result.snapshots[0]).toEqual([]);
       expect(result.created.name).toBe("WebSocket Soundcheck");
-      expect(result.after.map((show) => show.id)).toEqual([result.created.id]);
+      expect(result.snapshots[1]?.map((show) => show.id)).toEqual([result.created.id]);
     } finally {
       await runtime.dispose();
     }

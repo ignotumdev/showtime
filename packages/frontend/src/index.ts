@@ -27,6 +27,7 @@ export * from "./microphones/MicrophoneAtoms.js";
 export * from "./mixes/MixAtoms.js";
 export * from "./react/AsyncResult.js";
 export * from "./rpc/errors.js";
+export * from "./rpc/LatestSnapshot.js";
 export * from "./rpc/Reactivity.js";
 export * from "./rpc/RpcClient.js";
 export * from "./shows/ShowAtoms.js";
