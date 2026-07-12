@@ -32,6 +32,37 @@ const findAvailablePort = () =>
   });
 
 describe("Showtime WebSocket RPC", () => {
+  it("returns a desktop RPC URL reachable through the configured bind address", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-rpc-host-home-"));
+    tempHomes.add(homeDirectory);
+    const port = await findAvailablePort();
+    const runtime = makeBackendRuntime({ host: "127.0.0.2", port, homeDirectory });
+
+    await runtime.runPromise(Effect.void);
+    try {
+      const rpcWebSocketUrl = await runtime.runPromise(
+        Effect.flatMap(ConnectionManager, (connections) => connections.rpcWebSocketUrl),
+      );
+      expect(rpcWebSocketUrl).toMatch(
+        new RegExp(`^ws://127\\.0\\.0\\.2:${port}/rpc/desktop/[A-Za-z0-9_-]{43}$`),
+      );
+      const clientProtocol = RpcClient.layerProtocolSocket().pipe(
+        Layer.provide(NodeSocket.layerWebSocket(rpcWebSocketUrl)),
+        Layer.provide(RpcSerialization.layerJson),
+      );
+      await expect(
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const client = yield* RpcClient.make(ShowtimeRpcs);
+            return yield* client["shows.list"]().pipe(Stream.take(1), Stream.runCollect);
+          }).pipe(Effect.scoped, Effect.provide(clientProtocol)),
+        ),
+      ).resolves.toBeDefined();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("serves the bundled web app without exposing an unauthenticated RPC route", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-http-home-"));
     tempHomes.add(homeDirectory);
@@ -255,7 +286,7 @@ describe("Showtime WebSocket RPC", () => {
     await writeFile(
       path.join(showtimeDirectory, "connections.json"),
       JSON.stringify({
-        version: 2,
+        version: 1,
         clients: [],
         invitations: [
           {

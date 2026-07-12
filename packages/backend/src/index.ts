@@ -34,6 +34,12 @@ export interface BackendOptions {
   readonly homeDirectory?: string;
 }
 
+const rpcWebSocketHost = (host: string) => {
+  if (host === "0.0.0.0") return "127.0.0.1";
+  if (host === "::") return "[::1]";
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+};
+
 export class ConnectionManager extends Context.Service<
   ConnectionManager,
   {
@@ -81,11 +87,15 @@ const makeRpcProtocol = (desktopCapability: string) =>
           const params = yield* HttpRouter.params;
           if (params.clientId === "desktop" && params.capability === desktopCapability)
             return yield* httpEffect;
-          const enabled = (yield* settings.get).connectionsEnabled;
-          if (!enabled || !params.clientId || !params.capability) return yield* notFound;
-          return (yield* connections.authorize(params.clientId, params.capability))
-            ? yield* connections.withSession(params.clientId, httpEffect)
-            : yield* notFound;
+          if (!params.clientId || !params.capability) return yield* notFound;
+          return (
+            (yield* connections.withAuthorizedSession(
+              params.clientId,
+              params.capability,
+              settings.get.pipe(Effect.map((value) => value.connectionsEnabled)),
+              httpEffect,
+            )) ?? (yield* notFound)
+          );
         }),
       );
       yield* router.add(
@@ -192,7 +202,7 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
       );
       return ConnectionManager.of({
         rpcWebSocketUrl: Effect.succeed(
-          `ws://127.0.0.1:${options.port}/rpc/desktop/${desktopCapability}`,
+          `ws://${rpcWebSocketHost(options.host)}:${options.port}/rpc/desktop/${desktopCapability}`,
         ),
         connectionsState: state,
         createInvitation: (name) => connections.createInvitation(name).pipe(Effect.andThen(state)),

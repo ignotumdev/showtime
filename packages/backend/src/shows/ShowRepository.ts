@@ -33,9 +33,20 @@ const make = Effect.fnUntraced(function* () {
   const entries = yield* discovery.discover.pipe(
     Effect.mapError(toRpcError("Could not discover shows.")),
   );
-  const state = yield* Ref.make(
-    new Map(entries.map((entry) => [entry.document.config.id, entry] as const)),
-  );
+  const initialEntries = new Map<ShowId, ShowDocumentEntry>();
+  for (const entry of entries) {
+    const id = entry.document.config.id;
+    const existing = initialEntries.get(id);
+    if (existing) {
+      return yield* Effect.fail(
+        new RpcError({
+          message: `Duplicate show ID ${id} found in ${existing.path} and ${entry.path}.`,
+        }),
+      );
+    }
+    initialEntries.set(id, entry);
+  }
+  const state = yield* Ref.make(initialEntries);
   const locks = yield* PartitionedSemaphore.make<ShowId>({ permits: 1 });
 
   const list: ShowRepositoryShape["list"] = Ref.get(state).pipe(
@@ -65,7 +76,7 @@ const make = Effect.fnUntraced(function* () {
       const now = yield* DateTime.now;
       const refreshed: ShowFileDocument = {
         ...next,
-        config: { ...next.config, updatedAt: now },
+        config: { ...next.config, id, updatedAt: now },
       };
       yield* showFile
         .write(current.path, refreshed)

@@ -10,10 +10,22 @@ export type PairingResult =
   | { readonly status: "paired" }
   | { readonly status: "failed"; readonly message: string };
 
+type ReadableStorage = Pick<Storage, "getItem">;
+type WritableStorage = Pick<Storage, "setItem" | "removeItem">;
+
+const browserLocalStorage = (): Storage | undefined => {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+};
+
 export const readStoredConnection = (
-  storage: Pick<Storage, "getItem"> = window.localStorage,
+  storage: ReadableStorage | undefined = browserLocalStorage(),
 ): ShowtimeStoredConnection | undefined => {
   try {
+    if (!storage) return undefined;
     const raw = storage.getItem(showtimeConnectionStorageKey);
     if (raw === null) return undefined;
     const parsed: unknown = JSON.parse(raw);
@@ -39,50 +51,109 @@ export const readStoredConnection = (
 
 export const capturePairingFragment = async (
   location: Pick<Location, "hash" | "pathname" | "search"> = window.location,
-  storage: Pick<Storage, "setItem"> = window.localStorage,
+  storage: WritableStorage | undefined = browserLocalStorage(),
   history: Pick<History, "replaceState"> = window.history,
   request: typeof fetch = fetch,
 ): Promise<PairingResult> => {
   if (!location.hash.startsWith(fragmentPrefix)) return { status: "none" };
   const token = location.hash.slice(fragmentPrefix.length);
-  history.replaceState(null, "", `${location.pathname}${location.search}#/`);
+  const removePairingFragment = () =>
+    history.replaceState(null, "", `${location.pathname}${location.search}#/`);
   if (!pairingTokenPattern.test(token)) {
+    removePairingFragment();
     return { status: "failed", message: "This connection link is invalid." };
   }
+
+  if (!storage) {
+    return {
+      status: "failed",
+      message:
+        "This browser cannot save the connection. Enable site storage and try the link again.",
+    };
+  }
+
+  // Invitations are single-use. Reserve enough storage for the fixed-size
+  // credentials before asking the server to consume one.
+  const probeKey = `${showtimeConnectionStorageKey}.probe`;
   try {
-    const response = await request(`/pair/${token}`, { method: "POST" });
-    if (!response.ok) {
-      return {
-        status: "failed",
-        message:
-          response.status === 410
-            ? "This connection link has expired or has already been used. Ask the engineer for a new link."
-            : "Showtime could not complete the connection. Ask the engineer to check connections.",
-      };
-    }
-    const parsed: unknown = await response.json();
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("version" in parsed) ||
-      parsed.version !== 1 ||
-      !("clientId" in parsed) ||
-      typeof parsed.clientId !== "string" ||
-      !clientIdPattern.test(parsed.clientId) ||
-      !("capability" in parsed) ||
-      typeof parsed.capability !== "string" ||
-      !capabilityPattern.test(parsed.capability)
-    ) {
-      return { status: "failed", message: "Showtime returned invalid connection details." };
-    }
-    storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
-    return { status: "paired" };
+    storage.setItem(
+      probeKey,
+      JSON.stringify({ version: 1, clientId: "c".repeat(21), capability: "c".repeat(43) }),
+    );
   } catch {
+    return {
+      status: "failed",
+      message:
+        "This browser cannot save the connection. Free up site storage and try the link again.",
+    };
+  }
+
+  const releaseReservation = () => {
+    try {
+      storage.removeItem(probeKey);
+    } catch {
+      // A later operation reports the actionable failure.
+    }
+  };
+
+  let response: Response;
+  try {
+    response = await request(`/pair/${token}`, { method: "POST" });
+  } catch {
+    releaseReservation();
     return {
       status: "failed",
       message: "This device could not reach Showtime. Check the network and try again.",
     };
   }
+  if (!response.ok) {
+    releaseReservation();
+    if (response.status === 410) removePairingFragment();
+    return {
+      status: "failed",
+      message:
+        response.status === 410
+          ? "This connection link has expired or has already been used. Ask the engineer for a new link."
+          : "Showtime could not complete the connection. Ask the engineer to check connections.",
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    releaseReservation();
+    removePairingFragment();
+    return { status: "failed", message: "Showtime returned invalid connection details." };
+  }
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("version" in parsed) ||
+    parsed.version !== 1 ||
+    !("clientId" in parsed) ||
+    typeof parsed.clientId !== "string" ||
+    !clientIdPattern.test(parsed.clientId) ||
+    !("capability" in parsed) ||
+    typeof parsed.capability !== "string" ||
+    !capabilityPattern.test(parsed.capability)
+  ) {
+    releaseReservation();
+    removePairingFragment();
+    return { status: "failed", message: "Showtime returned invalid connection details." };
+  }
+
+  releaseReservation();
+  try {
+    storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
+  } catch {
+    return {
+      status: "failed",
+      message: "This browser could not save the connection. Free up site storage and try again.",
+    };
+  }
+  removePairingFragment();
+  return { status: "paired" };
 };
 
 export const storedRpcWebSocketUrl = (
@@ -96,7 +167,7 @@ export const storedRpcWebSocketUrl = (
 export const hasBrowserConnection = () => readStoredConnection() !== undefined;
 
 export const forgetBrowserConnection = (
-  storage: Pick<Storage, "removeItem"> = window.localStorage,
+  storage: Pick<Storage, "removeItem"> | undefined = browserLocalStorage(),
 ) => {
-  storage.removeItem(showtimeConnectionStorageKey);
+  storage?.removeItem(showtimeConnectionStorageKey);
 };

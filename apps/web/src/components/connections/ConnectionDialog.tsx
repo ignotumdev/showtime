@@ -49,25 +49,40 @@ export function ConnectionDialog() {
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [pairingClient, setPairingClient] = React.useState<ShowtimePendingClient>();
+  const [loadError, setLoadError] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [loading, setLoading] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
+  const refreshGeneration = React.useRef(0);
+  const refreshInFlight = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
-    const value = await window.showtime!.connectionsState();
-    setState(value);
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    const generation = refreshGeneration.current;
+    try {
+      const value = await window.showtime!.connectionsState();
+      if (generation !== refreshGeneration.current) return;
+      setState(value);
+      setLoadError(undefined);
+    } catch {
+      if (generation === refreshGeneration.current)
+        setLoadError("Showtime could not load connections.");
+    } finally {
+      refreshInFlight.current = false;
+    }
   }, []);
 
   React.useEffect(() => {
     if (!open) return;
     let active = true;
-    const update = () =>
-      void refresh().catch(() => active && setError("Showtime could not load connections."));
+    const update = () => void refresh();
     update();
     const poll = window.setInterval(update, 1_000);
     const clock = window.setInterval(() => active && setNow(Date.now()), 1_000);
     return () => {
       active = false;
+      refreshGeneration.current += 1;
       window.clearInterval(poll);
       window.clearInterval(clock);
     };
@@ -186,15 +201,16 @@ export function ConnectionDialog() {
           {!loading && state.clients.length === 0 && (
             <p className="text-sm text-muted-foreground">No clients have access yet.</p>
           )}
-          {error && (
+          {(error ?? loadError) && (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {error ?? loadError}
             </p>
           )}
         </DialogContent>
       </Dialog>
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setState} />
       <PairClientDialog
+        key={pairingClient?.invitationId ?? "closed"}
         client={pairingClient}
         onOpenChange={(next) => !next && setPairingClient(undefined)}
       />
@@ -213,9 +229,11 @@ function CreateClientDialog({
 }) {
   const [name, setName] = React.useState("");
   const [creating, setCreating] = React.useState(false);
+  const creatingRef = React.useRef(false);
   const [error, setError] = React.useState<string>();
   const create = async () => {
-    if (!name.trim()) return;
+    if (creatingRef.current || !name.trim()) return;
+    creatingRef.current = true;
     setCreating(true);
     setError(undefined);
     try {
@@ -225,6 +243,7 @@ function CreateClientDialog({
     } catch {
       setError("Showtime could not add this client.");
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
@@ -241,7 +260,7 @@ function CreateClientDialog({
           maxLength={80}
           placeholder="For example, Alex’s iPad"
           onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => event.key === "Enter" && void create()}
+          onKeyDown={(event) => event.key === "Enter" && !creating && void create()}
         />
         <Button type="button" disabled={creating || !name.trim()} onClick={create}>
           {creating ? "Creating…" : "Create client"}
@@ -274,6 +293,9 @@ function PairClientDialog({
     if (!client) return;
     let active = true;
     setCandidates([]);
+    setSelectedUrl("");
+    setQrCode(undefined);
+    setCopied(false);
     setError(undefined);
     void window.showtime!.pairingInfo(client.invitationId).then(
       (info) => {

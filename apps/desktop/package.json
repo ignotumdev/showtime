@@ -8,7 +8,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vp dev --config electron.vite.config.ts",
+    "dev": "vp run web#build && vp dev --config electron.vite.config.ts",
     "build": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder"
   },
   "dependencies": {

@@ -9,6 +9,7 @@ const pairingToken = "p".repeat(43);
 describe("browser connection persistence", () => {
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
     const setItem = vi.fn();
+    const removeItem = vi.fn();
     const replaceState = vi.fn();
     const request = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ version: 1, clientId, capability }), {
@@ -19,7 +20,7 @@ describe("browser connection persistence", () => {
     await expect(
       capturePairingFragment(
         { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
-        { setItem },
+        { setItem, removeItem },
         { replaceState },
         request,
       ),
@@ -37,11 +38,46 @@ describe("browser connection persistence", () => {
     await expect(
       capturePairingFragment(
         { hash: "#pair=short", pathname: "/", search: "" },
-        { setItem },
+        { setItem, removeItem: vi.fn() },
         { replaceState: vi.fn() },
       ),
     ).resolves.toMatchObject({ status: "failed" });
     expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("does not consume an invitation when credentials cannot be persisted", async () => {
+    const request = vi.fn();
+    const replaceState = vi.fn();
+    await expect(
+      capturePairingFragment(
+        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        {
+          setItem: () => {
+            throw new DOMException("Storage full", "QuotaExceededError");
+          },
+          removeItem: vi.fn(),
+        },
+        { replaceState },
+        request,
+      ),
+    ).resolves.toMatchObject({ status: "failed", message: expect.stringContaining("storage") });
+    expect(request).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it("retains a valid pairing fragment after a transient network failure", async () => {
+    const removeItem = vi.fn();
+    const replaceState = vi.fn();
+    await expect(
+      capturePairingFragment(
+        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        { setItem: vi.fn(), removeItem },
+        { replaceState },
+        vi.fn().mockRejectedValue(new TypeError("Network error")),
+      ),
+    ).resolves.toMatchObject({ status: "failed" });
+    expect(removeItem).toHaveBeenCalledWith(`${showtimeConnectionStorageKey}.probe`);
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("restores a validated record and creates its authenticated socket URL", () => {

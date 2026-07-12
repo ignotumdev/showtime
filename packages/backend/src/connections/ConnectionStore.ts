@@ -21,7 +21,7 @@ const Invitation = Schema.Struct({
   expiresAt: Schema.String,
 });
 const ConnectionsFile = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(1),
   clients: Schema.Array(Client),
   invitations: Schema.Array(Invitation),
 });
@@ -55,11 +55,12 @@ export class ConnectionStore extends Context.Service<
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
     readonly disconnectAll: Effect.Effect<void>;
-    readonly authorize: (clientId: string, capability: string) => Effect.Effect<boolean>;
-    readonly withSession: <A, E, R>(
+    readonly withAuthorizedSession: <A, E, R, E2, R2>(
       clientId: string,
+      capability: string,
+      isEnabled: Effect.Effect<boolean, E2, R2>,
       effect: Effect.Effect<A, E, R>,
-    ) => Effect.Effect<A, E, R>;
+    ) => Effect.Effect<A | undefined, E | E2, R | R2>;
   }
 >()("@showtime/backend/connections/ConnectionStore") {}
 
@@ -71,7 +72,7 @@ const make = Effect.gen(function* () {
   const filePath = path.join(directory, "connections.json");
   const initial = yield* readJson(fs, filePath, ConnectionsFile).pipe(
     Effect.catchIf(isNotFound, () =>
-      Effect.succeed({ version: 2 as const, clients: [], invitations: [] }),
+      Effect.succeed({ version: 1 as const, clients: [], invitations: [] }),
     ),
     Effect.orDie,
   );
@@ -150,7 +151,7 @@ const make = Effect.gen(function* () {
           createdAt: new Date(now).toISOString(),
         };
         yield* persist({
-          version: 2,
+          version: 1,
           clients: [...current.clients, client],
           invitations: current.invitations.filter(
             (item) => item.invitationId !== invitation.invitationId,
@@ -170,7 +171,7 @@ const make = Effect.gen(function* () {
         const client = current.clients.find((item) => item.clientId === id);
         const invitation = current.invitations.find((item) => item.invitationId === id);
         yield* persist({
-          version: 2,
+          version: 1,
           clients: current.clients.filter((item) => item.clientId !== id),
           invitations: current.invitations.filter((item) => item.invitationId !== id),
         });
@@ -187,14 +188,39 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const withSession = <A, E, R>(clientId: string, effect: Effect.Effect<A, E, R>) =>
+  const disconnect = (signals: Iterable<Deferred.Deferred<void>>) =>
+    Effect.forEach(signals, (signal) => Deferred.succeed(signal, undefined), {
+      discard: true,
+    });
+
+  const withAuthorizedSession = <A, E, R, E2, R2>(
+    clientId: string,
+    capability: string,
+    isEnabled: Effect.Effect<boolean, E2, R2>,
+    effect: Effect.Effect<A, E, R>,
+  ) =>
     Effect.gen(function* () {
       const signal = yield* Deferred.make<void>();
-      yield* Ref.update(sessions, (current) => {
-        const next = new Map(current);
-        next.set(clientId, new Set([...(current.get(clientId) ?? []), signal]));
-        return next;
-      });
+      const admitted = yield* lock.withPermits(1)(
+        Effect.gen(function* () {
+          if (!(yield* isEnabled)) return false;
+          const current = yield* Ref.get(state);
+          if (
+            !current.clients.some(
+              (client) => client.clientId === clientId && client.capability === capability,
+            )
+          ) {
+            return false;
+          }
+          yield* Ref.update(sessions, (currentSessions) => {
+            const next = new Map(currentSessions);
+            next.set(clientId, new Set([...(currentSessions.get(clientId) ?? []), signal]));
+            return next;
+          });
+          return true;
+        }),
+      );
+      if (!admitted) return undefined;
       yield* Effect.logInfo("Client connected").pipe(Effect.annotateLogs({ clientId }));
       return yield* Effect.raceFirst(
         effect,
@@ -225,25 +251,16 @@ const make = Effect.gen(function* () {
     pairingInvitation,
     consumeInvitation,
     remove,
-    disconnectAll: Ref.get(sessions).pipe(
-      Effect.flatMap((current) =>
-        Effect.forEach(
-          Array.from(current.values()).flatMap((signals) => Array.from(signals)),
-          (signal) => Deferred.succeed(signal, undefined),
-          { discard: true },
-        ),
-      ),
-      Effect.andThen(Effect.logInfo("Disconnected all remote clients")),
-    ),
-    authorize: (clientId, capability) =>
-      Ref.get(state).pipe(
-        Effect.map((file) =>
-          file.clients.some(
-            (client) => client.clientId === clientId && client.capability === capability,
+    disconnectAll: lock
+      .withPermits(1)(
+        Ref.get(sessions).pipe(
+          Effect.flatMap((current) =>
+            disconnect(Array.from(current.values()).flatMap((signals) => Array.from(signals))),
           ),
         ),
-      ),
-    withSession,
+      )
+      .pipe(Effect.andThen(Effect.logInfo("Disconnected all remote clients"))),
+    withAuthorizedSession,
   });
 });
 

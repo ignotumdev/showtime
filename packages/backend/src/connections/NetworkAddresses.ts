@@ -27,9 +27,7 @@ export const discoverCandidates = (
       (addresses ?? [])
         .filter(
           (address) =>
-            address.family === "IPv4" &&
-            !address.internal &&
-            !address.address.startsWith("169.254."),
+            address.family === "IPv4" && !address.internal && isPrivateIpv4(address.address),
         )
         .map((address) => ({
           address: address.address,
@@ -37,10 +35,7 @@ export const discoverCandidates = (
           url: `http://${address.address}:${port}/#pair=${pairingToken}`,
         })),
     )
-    .sort((left, right) => {
-      const privacy = Number(isPrivateIpv4(right.address)) - Number(isPrivateIpv4(left.address));
-      return privacy || left.interfaceName.localeCompare(right.interfaceName);
-    });
+    .sort((left, right) => left.interfaceName.localeCompare(right.interfaceName));
 
 export const layer = Layer.succeed(
   NetworkAddresses,
