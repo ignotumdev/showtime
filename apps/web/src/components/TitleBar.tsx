@@ -15,6 +15,7 @@ import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { randomShowColor, showColorClassNames } from "./shows/show-color";
 import { useCreateSong } from "@/components/songs/useCreateSong";
+import { isDesktopHost } from "@/platform";
 
 type TitleBarProps = {
   hideName?: boolean;
@@ -50,12 +51,14 @@ export function TitleBar({
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
   const songCreator = useCreateSong((showId ?? "") as ShowId);
+  const desktopHost = isDesktopHost();
 
   return (
     <header
       className={cn(
-        "drag-region fixed inset-x-0 top-0 z-10 flex h-10 select-none items-center bg-[#0a0a0a] py-0 pr-35 pl-3",
-        isMacOS && "pr-3 pl-20.5",
+        "fixed inset-x-0 top-0 z-10 flex h-10 select-none items-center bg-[#0a0a0a] px-3 py-0",
+        desktopHost && "drag-region pr-35",
+        desktopHost && isMacOS && "pr-3 pl-20.5",
         stack === "below-content" && "z-0",
         stack === "above-content" && "z-30",
       )}

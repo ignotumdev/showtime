@@ -29,6 +29,7 @@ dist-ssr
 
 # Electron
 dist-electron
+dist-renderer
 release
 
 # AI agent worktrees
