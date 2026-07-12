@@ -14,8 +14,8 @@ function RouteComponent() {
   return (
     <React.Fragment>
       <TitleBar />
-      <div className="min-h-screen px-3 py-10">
-        <main className="mx-auto flex h-[calc(100vh-5rem)] min-h-0 w-full max-w-xl items-center">
+      <div className="h-svh bg-background px-3 pt-10 sm:px-4">
+        <main className="mx-auto flex h-full min-h-0 w-full max-w-xl items-center py-3 sm:py-8">
           <ShowList />
           <ShowFormDialog />
           <ShowDeleteDialog />

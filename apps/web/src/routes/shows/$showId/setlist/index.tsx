@@ -2,7 +2,13 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Exit } from "effect";
-import { AlertCircleIcon, GripVerticalIcon, ListMusicIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  GripVerticalIcon,
+  ListMusicIcon,
+} from "lucide-react";
 import type { ShowId, SongId } from "@showtime/contracts";
 import {
   Empty,
@@ -169,7 +175,7 @@ function RouteComponent() {
                     move(song.id, index + 1);
                   }
                 }}
-                className="ml-2 rounded-md p-1 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="ml-2 hidden rounded-md p-1 text-muted-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 md:block"
               >
                 <GripVerticalIcon className="size-5" />
               </button>
@@ -188,6 +194,32 @@ function RouteComponent() {
                   </span>
                 </span>
               </Link>
+              <div className="mr-2 flex shrink-0 flex-col md:hidden">
+                <button
+                  type="button"
+                  disabled={
+                    index === 0 || isReordering || ("pending" in song && song.pending === true)
+                  }
+                  aria-label={`Move ${song.name} up`}
+                  onClick={() => move(song.id, index - 1)}
+                  className="rounded-md p-1.5 text-muted-foreground outline-none disabled:opacity-30 focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <ChevronUpIcon className="size-5" />
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    index === songs.length - 1 ||
+                    isReordering ||
+                    ("pending" in song && song.pending === true)
+                  }
+                  aria-label={`Move ${song.name} down`}
+                  onClick={() => move(song.id, index + 1)}
+                  className="rounded-md p-1.5 text-muted-foreground outline-none disabled:opacity-30 focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <ChevronDownIcon className="size-5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
