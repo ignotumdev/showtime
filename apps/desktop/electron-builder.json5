@@ -7,6 +7,12 @@
   directories: {
     output: "release/${version}",
   },
+  toolsets: {
+    // The legacy winCodeSign archive includes macOS symlinks and cannot be
+    // extracted by an unprivileged Windows process. The current toolset uses
+    // platform-specific archives, so local and CI builds do not require admin.
+    winCodeSign: "1.1.0",
+  },
   files: ["dist-electron"],
   extraResources: [
     {
