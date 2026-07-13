@@ -161,7 +161,7 @@ function ConnectionRecovery({
       active = false;
       window.clearInterval(interval);
     };
-  }, [attempt, pairedBrowser, status]);
+  }, [attempt, pairedBrowser, status, browserConnectionIdentity]);
 
   return null;
 }
