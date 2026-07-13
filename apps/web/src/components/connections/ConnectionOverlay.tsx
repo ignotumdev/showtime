@@ -9,13 +9,17 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { forgetBrowserConnection, hasBrowserConnection } from "@/connection";
-import type { ConnectionStatus } from "@/connection-state";
+import * as React from "react";
+import { forgetBrowserConnection } from "@/connection";
+import { connectionState, type ConnectionStatus } from "@/connection-state";
 import { isDesktopHost } from "@/platform";
+import { useHasBrowserConnection } from "@/browser-connection-state";
 
 export function ConnectionOverlay({ status }: { readonly status: ConnectionStatus }) {
   const desktop = isDesktopHost();
-  const pairedBrowser = !desktop && hasBrowserConnection();
+  const hasBrowserConnection = useHasBrowserConnection();
+  const pairedBrowser = !desktop && hasBrowserConnection;
+  const [forgetError, setForgetError] = React.useState<string>();
 
   if (status === "connecting") {
     return (
@@ -37,6 +41,36 @@ export function ConnectionOverlay({ status }: { readonly status: ConnectionStatu
     );
   }
 
+  if (status === "disabled") {
+    return (
+      <ConnectionEmpty
+        icon={<WifiOffIcon />}
+        title="Connections are disabled"
+        description="Remote connections are turned off on the show computer. Showtime will reconnect automatically when they are enabled."
+      >
+        <RecoveryActions pairedBrowser={pairedBrowser} onForgetError={setForgetError} />
+        {forgetError && <p className="text-sm text-destructive">{forgetError}</p>}
+      </ConnectionEmpty>
+    );
+  }
+
+  if (status === "revoked") {
+    return (
+      <ConnectionEmpty
+        icon={<WifiOffIcon />}
+        title="This device no longer has access"
+        description="Forget this connection, then ask the engineer for a new connection link."
+      >
+        <RecoveryActions
+          pairedBrowser={pairedBrowser}
+          onForgetError={setForgetError}
+          retry={false}
+        />
+        {forgetError && <p className="text-sm text-destructive">{forgetError}</p>}
+      </ConnectionEmpty>
+    );
+  }
+
   return (
     <ConnectionEmpty
       icon={desktop ? <CableIcon /> : <WifiOffIcon />}
@@ -47,22 +81,41 @@ export function ConnectionOverlay({ status }: { readonly status: ConnectionStatu
           : "The show computer may be offline, connections may be disabled, or this device may have been removed."
       }
     >
-      <Button type="button" variant="outline" onClick={() => window.location.reload()}>
-        <RefreshCwIcon /> Retry now
-      </Button>
+      <RecoveryActions pairedBrowser={pairedBrowser} onForgetError={setForgetError} />
+      {forgetError && <p className="text-sm text-destructive">{forgetError}</p>}
+    </ConnectionEmpty>
+  );
+}
+
+function RecoveryActions({
+  pairedBrowser,
+  onForgetError,
+  retry = true,
+}: {
+  readonly pairedBrowser: boolean;
+  readonly onForgetError: (message: string | undefined) => void;
+  readonly retry?: boolean;
+}) {
+  return (
+    <>
+      {retry && (
+        <Button type="button" variant="outline" onClick={() => connectionState.retryNow()}>
+          <RefreshCwIcon /> Retry now
+        </Button>
+      )}
       {pairedBrowser && (
         <Button
           type="button"
           variant="ghost"
           onClick={() => {
-            forgetBrowserConnection();
-            window.location.reload();
+            const result = forgetBrowserConnection();
+            onForgetError(result.status === "failed" ? result.message : undefined);
           }}
         >
           Forget this connection
         </Button>
       )}
-    </ConnectionEmpty>
+    </>
   );
 }
 

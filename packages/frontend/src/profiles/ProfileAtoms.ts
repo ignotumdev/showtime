@@ -9,14 +9,15 @@ import {
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";
+import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export type ProfileListItem = Profile & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 
 const makeTemporaryProfileId = (): ProfileId => makeTemporaryId(profileIdPrefix) as ProfileId;
 
-export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient) => {
-  const query = RpcClient.query("profiles.list", undefined).pipe(latestSnapshot);
+export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
+  const query = latestSnapshot(RpcClient.query("profiles.list", undefined), options);
   const state = query.pipe(Atom.optimistic);
   const createMutation = RpcClient.mutation("profiles.create");
   const editMutation = RpcClient.mutation("profiles.edit");

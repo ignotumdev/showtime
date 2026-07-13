@@ -9,22 +9,20 @@ import {
 } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";
+import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export type SongListItem = Song & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 const makeTemporarySongId = (): SongId => makeTemporaryId(songIdPrefix) as SongId;
 
-export const makeSongAtoms = (
-  RpcClient: ShowtimeRpcClient,
-  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
-) => {
+export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
   const createSongMutation = RpcClient.mutation("songs.create");
   const deleteSongMutation = RpcClient.mutation("songs.delete");
   const reorderSongsMutation = RpcClient.mutation("songs.reorder");
   const editSongMutation = RpcClient.mutation("songs.edit");
 
   const songAtoms = Atom.family((showId: ShowId) => {
-    const query = RpcClient.query("songs.list", { showId }).pipe(latestSnapshot);
+    const query = latestSnapshot(RpcClient.query("songs.list", { showId }), options);
     const songs = query.pipe(Atom.optimistic);
     const create = songs.pipe(
       Atom.optimisticFn({

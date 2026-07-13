@@ -219,7 +219,9 @@ describe("Showtime WebSocket RPC", () => {
       ).toBe(410);
 
       const rpcUrl = `http://127.0.0.1:${port}/rpc/${connection.clientId}/${connection.capability}`;
+      const statusUrl = `http://127.0.0.1:${port}/connection-status/${connection.clientId}/${connection.capability}`;
       expect((await fetch(rpcUrl)).status).not.toBe(404);
+      expect(await (await fetch(statusUrl)).json()).toEqual({ status: "available" });
 
       const socket = new WebSocket(rpcUrl.replace("http:", "ws:"));
       await new Promise<void>((resolve, reject) => {
@@ -246,6 +248,7 @@ describe("Showtime WebSocket RPC", () => {
         ),
       );
       await disabledClose;
+      expect(await (await fetch(statusUrl)).json()).toEqual({ status: "disabled" });
       expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(404);
       const settings = JSON.parse(
         await readFile(path.join(homeDirectory, ".showtime", "settings.json"), "utf8"),
@@ -272,6 +275,56 @@ describe("Showtime WebSocket RPC", () => {
       );
       await revokedClose;
       expect((await fetch(rpcUrl)).status).toBe(404);
+      const revokedStatus = await fetch(statusUrl);
+      expect(revokedStatus.status).toBe(401);
+      expect(await revokedStatus.json()).toEqual({ status: "revoked" });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("accepts persisted browser credentials after a complete backend restart", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-restart-home-"));
+    tempHomes.add(homeDirectory);
+    const port = await findAvailablePort();
+    let runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+
+    await runtime.runPromise(Effect.void);
+    try {
+      const pending = await runtime.runPromise(
+        Effect.flatMap(ConnectionManager, (connections) =>
+          connections.createInvitation("Restarted iPad"),
+        ),
+      );
+      const invitation = pending.clients[0];
+      expect(invitation?.kind).toBe("pending");
+      const persisted = JSON.parse(
+        await readFile(path.join(homeDirectory, ".showtime", "connections.json"), "utf8"),
+      ) as { invitations: Array<{ token: string }> };
+      const pairing = await fetch(
+        `http://127.0.0.1:${port}/pair/${persisted.invitations[0]!.token}`,
+        { method: "POST" },
+      );
+      const credentials = (await pairing.json()) as { clientId: string; capability: string };
+      const statusUrl = `http://127.0.0.1:${port}/connection-status/${credentials.clientId}/${credentials.capability}`;
+      const rpcUrl = `ws://127.0.0.1:${port}/rpc/${credentials.clientId}/${credentials.capability}`;
+
+      await runtime.dispose();
+      runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+      await runtime.runPromise(Effect.void);
+      expect(await (await fetch(statusUrl)).json()).toEqual({ status: "available" });
+      const socket = new WebSocket(rpcUrl);
+      await new Promise<void>((resolve, reject) => {
+        socket.addEventListener("open", () => resolve(), { once: true });
+        socket.addEventListener(
+          "error",
+          () => reject(new Error("WebSocket failed after restart")),
+          {
+            once: true,
+          },
+        );
+      });
+      socket.close();
     } finally {
       await runtime.dispose();
     }

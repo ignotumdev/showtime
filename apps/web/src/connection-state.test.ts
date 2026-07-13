@@ -4,33 +4,70 @@ import { makeConnectionState } from "./connection-state";
 afterEach(() => vi.useRealTimers());
 
 describe("connection state", () => {
-  it("moves from connecting to disconnected after the retry grace period", () => {
-    vi.useFakeTimers();
-    const state = makeConnectionState(1_000);
+  it("tracks transport readiness separately from initial synchronization", () => {
+    const state = makeConnectionState();
 
-    state.disconnected();
-    vi.advanceTimersByTime(500);
-    state.disconnected();
-    expect(state.getSnapshot()).toEqual({ status: "connecting", generation: 0 });
-    vi.advanceTimersByTime(500);
-    expect(state.getSnapshot()).toEqual({ status: "disconnected", generation: 1 });
+    state.transportConnected(0);
+    expect(state.getSnapshot().status).toBe("connecting");
+    state.synchronized(0);
+    expect(state.getSnapshot().status).toBe("connected");
   });
 
-  it("uses reconnecting after a live session and starts a fresh generation for retry", () => {
+  it("refreshes subscriptions when Effect reopens an established transport", () => {
+    const state = makeConnectionState();
+    state.transportConnected(0);
+    state.synchronized(0);
+    state.transportDisconnected(0);
+    expect(state.getSnapshot()).toMatchObject({
+      status: "reconnecting",
+      subscriptionGeneration: 0,
+    });
+
+    state.transportConnected(0);
+    expect(state.getSnapshot()).toMatchObject({
+      status: "reconnecting",
+      subscriptionGeneration: 1,
+    });
+    state.synchronized(0);
+    expect(state.getSnapshot().status).toBe("connected");
+  });
+
+  it("marks a prolonged failure unavailable without stopping automatic retries", () => {
     vi.useFakeTimers();
     const state = makeConnectionState(1_000);
-    const listener = vi.fn();
-    state.subscribe(listener);
 
-    state.connected();
-    expect(state.getSnapshot()).toEqual({ status: "connected", generation: 0 });
-    state.disconnected();
-    expect(state.getSnapshot()).toEqual({ status: "reconnecting", generation: 0 });
+    state.transportDisconnected(0);
     vi.advanceTimersByTime(1_000);
-    expect(state.getSnapshot()).toEqual({ status: "disconnected", generation: 1 });
-    state.connected();
+    expect(state.getSnapshot().status).toBe("disconnected");
+    state.transportConnected(0);
+    expect(state.getSnapshot().status).toBe("connecting");
+  });
 
-    expect(state.getSnapshot()).toEqual({ status: "connected", generation: 1 });
-    expect(listener).toHaveBeenCalledTimes(4);
+  it("starts a fresh attempt immediately and ignores stale runtime callbacks", () => {
+    const state = makeConnectionState();
+    state.transportConnected(0);
+    state.synchronized(0);
+
+    state.retryNow();
+    expect(state.getSnapshot()).toMatchObject({ status: "reconnecting", attempt: 1 });
+    state.transportDisconnected(0);
+    state.transportConnected(0);
+    state.synchronized(0);
+    expect(state.getSnapshot()).toMatchObject({ status: "reconnecting", attempt: 1 });
+
+    state.transportConnected(1);
+    state.synchronized(1);
+    expect(state.getSnapshot()).toMatchObject({ status: "connected", attempt: 1 });
+  });
+
+  it("classifies disabled and revoked credentials for the current attempt", () => {
+    const state = makeConnectionState();
+    state.classified(0, "disabled");
+    expect(state.getSnapshot().status).toBe("disabled");
+    state.classified(0, "revoked");
+    expect(state.getSnapshot().status).toBe("revoked");
+    state.retryNow();
+    state.classified(0, "revoked");
+    expect(state.getSnapshot()).toMatchObject({ status: "connecting", attempt: 1 });
   });
 });
