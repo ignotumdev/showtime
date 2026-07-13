@@ -38,7 +38,7 @@ export function LiveSongNavigation({
   return (
     <nav
       aria-label="Setlist navigation"
-      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 gap-2 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:pointer-events-none sm:inset-0 sm:block sm:border-0 sm:bg-transparent sm:p-0"
+      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 gap-2 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:pointer-events-none sm:inset-0 sm:block sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"
     >
       <div className="min-w-0 sm:pointer-events-auto sm:fixed sm:top-1/2 sm:left-4 sm:-translate-y-1/2">
         <Button
