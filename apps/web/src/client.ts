@@ -30,6 +30,7 @@ export const {
   showMutationOptions,
   showsAtom,
   songAtoms,
+  profileAtoms,
 } = frontend;
 
 export * from "@showtime/frontend";

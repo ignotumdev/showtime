@@ -5,3 +5,4 @@ export * from "./mix.js";
 export * from "./song.js";
 export * from "./rpc.js";
 export * from "./sync.js";
+export * from "./profile.js";

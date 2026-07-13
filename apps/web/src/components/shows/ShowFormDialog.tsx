@@ -1,6 +1,6 @@
 import * as React from "react";
-import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
-import { colors, type Color, type ShowName } from "@showtime/contracts";
+import { ChevronsUpDownIcon, PlusIcon } from "lucide-react";
+import { type Color, type ShowName } from "@showtime/contracts";
 import { Exit } from "effect";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,13 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAtom, useAtomSet } from "@effect/atom-react";
 import { createShowAtom, editShowAtom, showDialogAtom, showMutationOptions } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
 import { randomShowColor, showColorClassNames } from "./show-color";
 import { Input } from "../ui/input";
+import { ColorPickerPopover } from "@/components/ColorPickerPopover";
 
 export function ShowFormDialog() {
   const [dialog, setDialog] = useAtom(showDialogAtom);
@@ -116,32 +116,15 @@ export function ShowFormDialog() {
           </label>
           <div className="grid gap-2">
             <span className="text-sm font-medium">Color</span>
-            <Popover>
-              <PopoverTrigger render={<Button type="button" variant="outline" />}>
-                <div className={cn(showColorClassNames[color], "size-4 rounded")} />
-                <span className="capitalize">{color}</span>
-                <ChevronsUpDownIcon className="ml-auto" />
-              </PopoverTrigger>
-              <PopoverContent align="start">
-                <div className="grid grid-cols-6 gap-2">
-                  {colors.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className="relative flex size-8 items-center justify-center rounded-md outline-none ring-ring/50 hover:bg-accent focus-visible:ring-3"
-                      aria-label={option}
-                      aria-pressed={option === color}
-                      onClick={() => setColor(option)}
-                    >
-                      <span className={cn(showColorClassNames[option], "size-5 rounded-md")} />
-                      {option === color && (
-                        <CheckIcon className="absolute size-3 text-white drop-shadow" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+            <ColorPickerPopover
+              color={color}
+              onColorChange={setColor}
+              trigger={<Button type="button" variant="outline" />}
+            >
+              <div className={cn(showColorClassNames[color], "size-4 rounded")} />
+              <span className="capitalize">{color}</span>
+              <ChevronsUpDownIcon className="ml-auto" />
+            </ColorPickerPopover>
           </div>
           {submitError && (
             <p role="alert" className="text-sm text-destructive">
