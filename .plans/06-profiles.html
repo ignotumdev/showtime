@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime Profiles Plan</title>
+    <style>
+      :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+      body { max-width: 940px; margin: 0 auto; padding: 48px 24px 96px; }
+      h1, h2 { line-height: 1.15; } h2 { margin-top: 2rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .lede { font-size: 1.15rem; opacity: .82; }
+      .callout { border-inline-start: 4px solid currentColor; padding: .25rem 1rem; }
+      li + li { margin-top: .45rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid color-mix(in srgb, currentColor 24%, transparent); padding: .65rem; text-align: left; vertical-align: top; }
+      th { background: color-mix(in srgb, currentColor 7%, transparent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Profiles</h1>
+      <p class="lede">Add show-independent engineer profiles with shared management and a local selection on every client.</p>
+
+      <section>
+        <h2>Outcome and behavior</h2>
+        <ul>
+          <li>Persist profiles centrally in <code>~/.showtime/profiles.json</code>. Each profile has an id, name, color, created timestamp, and updated timestamp.</li>
+          <li>Create one profile named “Default” with sky color and a normal generated profile id when no profile file exists.</li>
+          <li>Persist the centrally configured default profile id with the profiles. Setting a different default updates only that shared fallback.</li>
+          <li>Store each browser/client’s selected profile id in versioned local storage. If it is missing, malformed, or points to a deleted profile, resolve to the shared default and repair local storage.</li>
+          <li>Profiles are visual only in this iteration; no show, connection, permissions, or data mutation is attributed to them.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>UI composition</h2>
+        <table>
+          <thead><tr><th>Location</th><th>Presentation</th></tr></thead>
+          <tbody>
+            <tr><td>Desktop show layout</td><td>A profile select directly below the Live button in the sidebar footer, grouped with an adjacent edit button.</td></tr>
+            <tr><td>Mobile show layout</td><td>The same compact selector/edit button appears in the show overview/settings route so management remains reachable without crowding live controls.</td></tr>
+            <tr><td>Index route</td><td>A fixed bottom-right selector/edit group, clear of the show list and mutation status.</td></tr>
+          </tbody>
+        </table>
+        <p>The select renders the profile color as a round dot and the name as text. The adjacent settings icon opens one management dialog built from default shared UI components.</p>
+      </section>
+
+      <section>
+        <h2>Management dialog</h2>
+        <ol>
+          <li>List profiles as compact item rows with a color-dot popover and name in one input group, followed by default and delete actions.</li>
+          <li>Auto-save a changed name on blur and save color choices immediately, serializing overlapping edits per row.</li>
+          <li>Prevent only the current shared default from being deleted. Once another profile is made default, the original “Default” profile can be deleted like any other.</li>
+          <li>Add profiles with a sensible generated name and sky color, then allow immediate editing.</li>
+          <li>Keep error and pending states visible and predictable; refresh authoritative profile state after every mutation.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Effect-native implementation</h2>
+        <ul>
+          <li>Add contract schemas and RPCs for list, create, edit, delete, and set-default operations.</li>
+          <li>Add a <code>ProfileService</code> using Effect FileSystem, Path, Clock, Ref, Schema, Semaphore, and atomic JSON persistence. Expose updates through the existing SyncEngine snapshot model.</li>
+          <li>Add frontend profile atoms beside shows/mixes/microphones/songs so reconnects and mutations share existing retry and invalidation behavior.</li>
+          <li>Put selection parsing and local-storage synchronization in one profile module and expose it through a small React hook/provider.</li>
+          <li>Add the shadcn/base button-group component once and reuse one <code>ProfileSwitcher</code> across every responsive placement.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Correctness and verification</h2>
+        <ul>
+          <li>Unit-test first-run default creation with a normal id, timestamp updates, validation, current-default deletion protection, default switching, deletion fallback, and persistence reload.</li>
+          <li>Test local selection decode, repair, cross-tab storage updates, and deleted-profile fallback.</li>
+          <li>Run repository checks, tests, and builds.</li>
+          <li>Launch the app and use Windows computer control to validate index placement, desktop sidebar placement, mobile show access, selection persistence after reload, auto-saving edits, adding, setting default, and current-default deletion protection.</li>
+        </ul>
+      </section>
+
+      <div class="callout"><p>Breaking schema changes require no migration for this prerelease implementation; corrupt or structurally invalid profile files should fail loudly rather than silently discard operator data.</p></div>
+    </main>
+  </body>
+</html>

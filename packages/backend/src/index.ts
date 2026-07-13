@@ -20,12 +20,14 @@ import * as ShowService from "./shows/ShowService.js";
 import * as SongService from "./songs/SongService.js";
 import * as SyncEngine from "./sync/SyncEngine.js";
 import * as Settings from "./settings/Settings.js";
+import * as ProfileService from "./profiles/ProfileService.js";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
 );
 
 const ShowRepositoryLive = ShowRepository.layer.pipe(Layer.provideMerge(ShowBackendLive));
+const ProfileLive = ProfileService.layer.pipe(Layer.provideMerge(Ids.layer));
 
 export interface BackendOptions {
   readonly host: string;
@@ -59,7 +61,7 @@ export class ConnectionManager extends Context.Service<
 >()("@showtime/backend/ConnectionManager") {}
 
 const makeBackendServices = (options: BackendOptions) =>
-  Layer.mergeAll(Ids.layer, ShowRepositoryLive).pipe(
+  Layer.mergeAll(Ids.layer, ShowRepositoryLive, ProfileLive).pipe(
     Layer.provide(
       Layer.mergeAll(
         NodeFileSystem.layer,

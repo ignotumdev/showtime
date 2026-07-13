@@ -5,6 +5,7 @@ import { ShowList } from "@/components/shows/ShowList";
 import React from "react";
 import { TitleBar } from "@/components/TitleBar";
 import { ShowMutationStatus } from "@/components/shows/ShowMutationStatus";
+import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -20,6 +21,9 @@ function RouteComponent() {
           <ShowFormDialog />
           <ShowDeleteDialog />
         </main>
+      </div>
+      <div className="fixed right-4 bottom-4 z-40">
+        <ProfileSwitcher />
       </div>
       <ShowMutationStatus />
     </React.Fragment>
