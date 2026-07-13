@@ -160,6 +160,28 @@ describe("browser connection persistence", () => {
     ).resolves.toBe(expected);
     expect(request).toHaveBeenCalledWith(`/connection-status/${clientId}/${capability}`, {
       cache: "no-store",
+      signal: expect.any(AbortSignal),
     });
+  });
+
+  it("bounds stalled connection probes so recovery can continue", async () => {
+    vi.useFakeTimers();
+    try {
+      const request = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        return new Promise<Response>(() => undefined);
+      });
+      const result = probeStoredConnection(
+        { version: 1, clientId, capability },
+        request as typeof fetch,
+        1_000,
+      );
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(result).resolves.toBe("unreachable");
+      expect(request).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

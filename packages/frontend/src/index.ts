@@ -1,13 +1,11 @@
-import type { Atom } from "effect/unstable/reactivity";
 import { makeMicrophoneAtoms } from "./microphones/MicrophoneAtoms.js";
 import { makeMixAtoms } from "./mixes/MixAtoms.js";
 import { makeRpcClient, type RpcClientOptions } from "./rpc/RpcClient.js";
 import { makeShowAtoms } from "./shows/ShowAtoms.js";
 import { makeSongAtoms } from "./songs/SongAtoms.js";
+import type { StreamingRpcOptions } from "./rpc/StreamingRpcOptions.js";
 
-export interface ShowtimeFrontendOptions extends RpcClientOptions {
-  readonly refreshSignals?: ReadonlyArray<Atom.Atom<unknown>>;
-}
+export interface ShowtimeFrontendOptions extends RpcClientOptions, StreamingRpcOptions {}
 
 export const makeShowtimeFrontend = (options: ShowtimeFrontendOptions) => {
   const RpcClient = makeRpcClient(options);

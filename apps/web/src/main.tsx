@@ -12,7 +12,7 @@ import { isDesktopHost } from "./platform";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { showsAtom } from "./client";
-import { useHasBrowserConnection } from "./browser-connection-state";
+import { useBrowserConnectionIdentity } from "./browser-connection-state";
 
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");
@@ -40,7 +40,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 
 function SynchronizedApp() {
   const connection = useConnectionSnapshot();
-  const pairedBrowser = useHasBrowserConnection();
+  const browserConnectionIdentity = useBrowserConnectionIdentity();
+  const pairedBrowser = browserConnectionIdentity !== undefined;
   const expectsConnection =
     isDesktopHost() || pairedBrowser || Boolean(import.meta.env.VITE_SHOWTIME_RPC_WEBSOCKET_URL);
   const revoked = expectsConnection && connection.status === "revoked";
@@ -53,6 +54,7 @@ function SynchronizedApp() {
             status={connection.status}
             attempt={connection.attempt}
             pairedBrowser={pairedBrowser}
+            browserConnectionIdentity={browserConnectionIdentity}
           />
         )}
         {!revoked && (
@@ -84,11 +86,27 @@ function ConnectionRecovery({
   status,
   attempt,
   pairedBrowser,
+  browserConnectionIdentity,
 }: {
   readonly status: ConnectionStatus;
   readonly attempt: number;
   readonly pairedBrowser: boolean;
+  readonly browserConnectionIdentity: string | undefined;
 }) {
+  const previousBrowserConnectionIdentity = React.useRef(browserConnectionIdentity);
+
+  React.useEffect(() => {
+    const changed = previousBrowserConnectionIdentity.current !== browserConnectionIdentity;
+    previousBrowserConnectionIdentity.current = browserConnectionIdentity;
+    if (
+      changed &&
+      browserConnectionIdentity !== undefined &&
+      connectionState.getSnapshot().status === "revoked"
+    ) {
+      connectionState.retryNow();
+    }
+  }, [browserConnectionIdentity]);
+
   React.useEffect(() => {
     let hiddenAt: number | undefined = document.hidden ? Date.now() : undefined;
     const onVisibilityChange = () => {

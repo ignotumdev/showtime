@@ -1,6 +1,6 @@
 import * as React from "react";
 import { showtimeConnectionStorageKey } from "@showtime/shared";
-import { connectionStorageChangedEvent, hasBrowserConnection } from "./connection";
+import { connectionStorageChangedEvent, readStoredConnection } from "./connection";
 
 const subscribe = (listener: () => void) => {
   const onStorage = (event: StorageEvent) => {
@@ -14,5 +14,12 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-export const useHasBrowserConnection = () =>
-  React.useSyncExternalStore(subscribe, hasBrowserConnection, () => false);
+const browserConnectionIdentity = () => {
+  const connection = readStoredConnection();
+  return connection === undefined ? undefined : `${connection.clientId}:${connection.capability}`;
+};
+
+export const useBrowserConnectionIdentity = () =>
+  React.useSyncExternalStore(subscribe, browserConnectionIdentity, () => undefined);
+
+export const useHasBrowserConnection = () => useBrowserConnectionIdentity() !== undefined;

@@ -207,17 +207,30 @@ export const forgetBrowserConnection = (
 export const probeStoredConnection = async (
   connection: ShowtimeStoredConnection,
   request: typeof fetch = fetch,
+  timeoutMs = 5_000,
 ): Promise<ConnectionProbeResult> => {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await request(
-      `/connection-status/${connection.clientId}/${connection.capability}`,
-      { cache: "no-store" },
-    );
+    const response = await Promise.race([
+      request(`/connection-status/${connection.clientId}/${connection.capability}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new DOMException("Connection probe timed out", "TimeoutError"));
+        }, timeoutMs);
+      }),
+    ]);
     if (response.status === 200) return "available";
     if (response.status === 503) return "disabled";
     if (response.status === 401) return "revoked";
     return "unreachable";
   } catch {
     return "unreachable";
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 };
