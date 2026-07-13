@@ -7,6 +7,11 @@ import { ShowtimeRpcs } from "@showtime/contracts";
 export interface RpcClientOptions {
   readonly webSocketUrl: string | Effect.Effect<string>;
   readonly webSocketConstructor?: Layer.Layer<Socket.WebSocketConstructor>;
+  readonly connectionLifecycle?: {
+    readonly attemptSignal: Atom.Atom<number>;
+    readonly onConnect: (attempt: number) => void;
+    readonly onDisconnect: (attempt: number) => void;
+  };
 }
 
 /**
@@ -31,13 +36,29 @@ const latestChunkRuntime = Object.assign(
 );
 
 export const makeRpcClient = (options: RpcClientOptions) => {
-  const socket = Socket.layerWebSocket(options.webSocketUrl).pipe(
-    Layer.provide(options.webSocketConstructor ?? Socket.layerWebSocketConstructorGlobal),
-  );
-  const protocol = EffectRpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
-    Layer.provide(socket),
-    Layer.provide(RpcSerialization.layerJson),
-  );
+  const lifecycle = options.connectionLifecycle;
+  const makeProtocol = (attempt: number) => {
+    const socket = Socket.layerWebSocket(options.webSocketUrl).pipe(
+      Layer.provide(options.webSocketConstructor ?? Socket.layerWebSocketConstructorGlobal),
+    );
+    const protocol = EffectRpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
+      Layer.provide(socket),
+      Layer.provide(RpcSerialization.layerJson),
+    );
+    if (!lifecycle) return protocol;
+    return protocol.pipe(
+      Layer.provide(
+        Layer.succeed(EffectRpcClient.ConnectionHooks)({
+          onConnect: Effect.sync(() => lifecycle.onConnect(attempt)),
+          onDisconnect: Effect.sync(() => lifecycle.onDisconnect(attempt)),
+        }),
+      ),
+    );
+  };
+
+  const protocol = lifecycle
+    ? (get: Atom.AtomContext) => makeProtocol(get(lifecycle.attemptSignal))
+    : makeProtocol(0);
 
   return AtomRpc.Service()("@showtime/frontend/RpcClient", {
     group: ShowtimeRpcs,

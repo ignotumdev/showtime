@@ -13,6 +13,14 @@ export type PairingResult =
 type ReadableStorage = Pick<Storage, "getItem">;
 type WritableStorage = Pick<Storage, "setItem" | "removeItem">;
 
+export type ForgetConnectionResult =
+  | { readonly status: "forgotten" }
+  | { readonly status: "failed"; readonly message: string };
+
+export type ConnectionProbeResult = "available" | "disabled" | "revoked" | "unreachable";
+
+export const connectionStorageChangedEvent = "showtime:connection-storage-changed";
+
 const browserLocalStorage = (): Storage | undefined => {
   try {
     return window.localStorage;
@@ -169,7 +177,60 @@ export const storedRpcWebSocketUrl = (
 export const hasBrowserConnection = () => readStoredConnection() !== undefined;
 
 export const forgetBrowserConnection = (
-  storage: Pick<Storage, "removeItem"> | undefined = browserLocalStorage(),
-) => {
-  storage?.removeItem(showtimeConnectionStorageKey);
+  storage: Pick<Storage, "getItem" | "removeItem"> | undefined = browserLocalStorage(),
+): ForgetConnectionResult => {
+  if (!storage) {
+    return {
+      status: "failed",
+      message: "This browser cannot access the saved connection.",
+    };
+  }
+  try {
+    storage.removeItem(showtimeConnectionStorageKey);
+    if (storage.getItem(showtimeConnectionStorageKey) !== null) {
+      return {
+        status: "failed",
+        message: "This browser did not remove the saved connection. Check site storage settings.",
+      };
+    }
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event(connectionStorageChangedEvent));
+    return { status: "forgotten" };
+  } catch {
+    return {
+      status: "failed",
+      message: "This browser could not remove the saved connection. Check site storage settings.",
+    };
+  }
+};
+
+export const probeStoredConnection = async (
+  connection: ShowtimeStoredConnection,
+  request: typeof fetch = fetch,
+  timeoutMs = 5_000,
+): Promise<ConnectionProbeResult> => {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const response = await Promise.race([
+      request(`/connection-status/${connection.clientId}/${connection.capability}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new DOMException("Connection probe timed out", "TimeoutError"));
+        }, timeoutMs);
+      }),
+    ]);
+    if (response.status === 200) return "available";
+    if (response.status === 503) return "disabled";
+    if (response.status === 401) return "revoked";
+    return "unreachable";
+  } catch {
+    return "unreachable";
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 };

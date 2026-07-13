@@ -11,6 +11,7 @@ import {
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { showsRpcReactivityKey } from "../rpc/Reactivity.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";
+import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export type ShowDialogState =
   | { readonly type: "closed" }
@@ -31,13 +32,10 @@ const optimisticShowName = (name: string): ShowSummary["name"] => name as ShowSu
 
 const optimisticShowColor = (color: Color): ShowSummary["color"] => color;
 
-export const makeShowAtoms = (
-  RpcClient: ShowtimeRpcClient,
-  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
-) => {
+export const makeShowAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
   const showDialogAtom = Atom.make<ShowDialogState>({ type: "closed" });
 
-  const showsQueryAtom = RpcClient.query("shows.list", undefined).pipe(latestSnapshot);
+  const showsQueryAtom = latestSnapshot(RpcClient.query("shows.list", undefined), options);
 
   const showsAtom = showsQueryAtom.pipe(Atom.optimistic);
 
