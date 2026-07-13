@@ -35,6 +35,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
+import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -131,6 +132,7 @@ export function ShowLayout() {
             >
               LIVE
             </Button>
+            <ProfileSwitcher className="w-full [&>*:first-child]:flex-1" />
             <Button variant="ghost" render={<Link to="/" />}>
               <ArrowLeftIcon /> Back to all shows
             </Button>

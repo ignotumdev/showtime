@@ -11,6 +11,7 @@ import {
   SongName,
 } from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
+import { Profile, ProfileId, ProfileName, ProfilesState } from "./profile.js";
 
 export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
   message: Schema.String,
@@ -31,6 +32,31 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
   }),
   Rpc.make("shows.delete", {
     payload: { id: ShowId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
+  Rpc.make("profiles.list", {
+    success: ProfilesState,
+    error: RpcError,
+    stream: true,
+  }),
+  Rpc.make("profiles.create", {
+    payload: { name: ProfileName, color: Color },
+    success: Profile,
+    error: RpcError,
+  }),
+  Rpc.make("profiles.edit", {
+    payload: { id: ProfileId, name: ProfileName, color: Color },
+    success: Profile,
+    error: RpcError,
+  }),
+  Rpc.make("profiles.delete", {
+    payload: { id: ProfileId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
+  Rpc.make("profiles.setDefault", {
+    payload: { id: ProfileId },
     success: Schema.Void,
     error: RpcError,
   }),

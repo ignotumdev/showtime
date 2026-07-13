@@ -6,12 +6,14 @@ import {
   showsSyncKey,
   ShowtimeRpcs,
   songsSyncKey,
+  profilesSyncKey,
 } from "@showtime/contracts";
 import { MicrophoneService } from "../microphones/MicrophoneService.js";
 import { MixService } from "../mixes/MixService.js";
 import { ShowService } from "../shows/ShowService.js";
 import { SongService } from "../songs/SongService.js";
 import { SyncEngine } from "../sync/SyncEngine.js";
+import { ProfileService } from "../profiles/ProfileService.js";
 
 const handlers = ShowtimeRpcs.toLayer(
   Effect.gen(function* () {
@@ -20,6 +22,7 @@ const handlers = ShowtimeRpcs.toLayer(
     const mixes = yield* MixService;
     const songs = yield* SongService;
     const sync = yield* SyncEngine;
+    const profiles = yield* ProfileService;
     return ShowtimeRpcs.of({
       "shows.list": () => sync.query(showsSyncKey, shows.list),
       "shows.create": ({ name, color }) =>
@@ -31,6 +34,13 @@ const handlers = ShowtimeRpcs.toLayer(
           [...showsSyncKey, ...microphonesSyncKey(id), ...mixesSyncKey(id), ...songsSyncKey(id)],
           shows.delete(id),
         ),
+      "profiles.list": () => sync.query(profilesSyncKey, profiles.list),
+      "profiles.create": ({ name, color }) =>
+        sync.mutation(profilesSyncKey, profiles.create({ name, color })),
+      "profiles.edit": ({ id, name, color }) =>
+        sync.mutation(profilesSyncKey, profiles.edit({ id, name, color })),
+      "profiles.delete": ({ id }) => sync.mutation(profilesSyncKey, profiles.delete(id)),
+      "profiles.setDefault": ({ id }) => sync.mutation(profilesSyncKey, profiles.setDefault(id)),
       "microphones.list": ({ showId }) =>
         sync.query(microphonesSyncKey(showId), microphones.list(showId)),
       "microphones.create": ({ showId, color }) =>
