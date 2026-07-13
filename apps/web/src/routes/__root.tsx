@@ -1,16 +1,17 @@
 import * as React from "react";
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { isDesktopHost } from "@/platform";
-import { hasBrowserConnection } from "@/connection";
+import { useHasBrowserConnection } from "@/browser-connection-state";
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
 
 function RootComponent() {
+  const hasBrowserConnection = useHasBrowserConnection();
   if (
     !isDesktopHost() &&
-    !hasBrowserConnection() &&
+    !hasBrowserConnection &&
     !import.meta.env.VITE_SHOWTIME_RPC_WEBSOCKET_URL
   ) {
     return (

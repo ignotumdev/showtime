@@ -6,12 +6,12 @@ import { makeShowAtoms } from "./shows/ShowAtoms.js";
 import { makeSongAtoms } from "./songs/SongAtoms.js";
 
 export interface ShowtimeFrontendOptions extends RpcClientOptions {
-  readonly focusSignal?: Atom.Atom<unknown>;
+  readonly refreshSignals?: ReadonlyArray<Atom.Atom<unknown>>;
 }
 
 export const makeShowtimeFrontend = (options: ShowtimeFrontendOptions) => {
   const RpcClient = makeRpcClient(options);
-  const atomOptions = { focusSignal: options.focusSignal };
+  const atomOptions = { refreshSignals: options.refreshSignals };
 
   return {
     RpcClient,
@@ -30,5 +30,6 @@ export * from "./rpc/errors.js";
 export * from "./rpc/LatestSnapshot.js";
 export * from "./rpc/Reactivity.js";
 export * from "./rpc/RpcClient.js";
+export * from "./rpc/StreamingRpcOptions.js";
 export * from "./shows/ShowAtoms.js";
 export * from "./songs/SongAtoms.js";

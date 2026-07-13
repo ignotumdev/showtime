@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { showtimeConnectionStorageKey } from "@showtime/shared";
-import { capturePairingFragment, readStoredConnection, storedRpcWebSocketUrl } from "./connection";
+import {
+  capturePairingFragment,
+  forgetBrowserConnection,
+  probeStoredConnection,
+  readStoredConnection,
+  storedRpcWebSocketUrl,
+} from "./connection";
 
 const capability = "a".repeat(43);
 const clientId = "Abcdefghijklmnopqrstu";
@@ -118,5 +124,42 @@ describe("browser connection persistence", () => {
     expect(
       storedRpcWebSocketUrl({ protocol: "http:", host: "192.168.1.2:34987" }, connection!),
     ).toBe(`ws://192.168.1.2:34987/rpc/${clientId}/${capability}`);
+  });
+
+  it("verifies that forgetting removed the credentials", () => {
+    let stored: string | null = "credentials";
+    expect(
+      forgetBrowserConnection({
+        getItem: () => stored,
+        removeItem: () => {
+          stored = null;
+        },
+      }),
+    ).toEqual({ status: "forgotten" });
+  });
+
+  it("reports storage failures instead of preventing the recovery action", () => {
+    expect(
+      forgetBrowserConnection({
+        getItem: () => "credentials",
+        removeItem: () => {
+          throw new DOMException("Blocked", "SecurityError");
+        },
+      }),
+    ).toMatchObject({ status: "failed", message: expect.stringContaining("could not remove") });
+  });
+
+  it.each([
+    [200, "available"],
+    [503, "disabled"],
+    [401, "revoked"],
+  ] as const)("maps connection probe status %s to %s", async (status, expected) => {
+    const request = vi.fn().mockResolvedValue(new Response(null, { status }));
+    await expect(
+      probeStoredConnection({ version: 1, clientId, capability }, request),
+    ).resolves.toBe(expected);
+    expect(request).toHaveBeenCalledWith(`/connection-status/${clientId}/${capability}`, {
+      cache: "no-store",
+    });
   });
 });

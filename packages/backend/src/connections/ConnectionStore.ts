@@ -55,6 +55,10 @@ export class ConnectionStore extends Context.Service<
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
     readonly disconnectAll: Effect.Effect<void>;
+    readonly credentialsStatus: (
+      clientId: string,
+      capability: string,
+    ) => Effect.Effect<"authorized" | "revoked">;
     readonly withAuthorizedSession: <A, E, R, E2, R2>(
       clientId: string,
       capability: string,
@@ -258,6 +262,18 @@ const make = Effect.gen(function* () {
         ),
       )
       .pipe(Effect.andThen(Effect.logInfo("Disconnected all remote clients"))),
+    credentialsStatus: (clientId, capability) =>
+      lock.withPermits(1)(
+        Ref.get(state).pipe(
+          Effect.map((current) =>
+            current.clients.some(
+              (client) => client.clientId === clientId && client.capability === capability,
+            )
+              ? "authorized"
+              : "revoked",
+          ),
+        ),
+      ),
     withAuthorizedSession,
   });
 });

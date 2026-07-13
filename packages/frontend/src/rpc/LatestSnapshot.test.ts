@@ -28,4 +28,33 @@ describe("latestSnapshot", () => {
     unmount();
     registry.dispose();
   });
+
+  it("recreates the pull source when a recovery signal changes", async () => {
+    type Pull = Atom.PullResult<ReadonlyArray<number>, never>;
+    const initial: Pull = AsyncResult.success({
+      done: false,
+      items: [[1] as ReadonlyArray<number>],
+    });
+    const result = Atom.make(initial);
+    const recovery = Atom.make(0);
+    let reads = 0;
+    const source = Atom.writable<Pull, void>(
+      (get) => {
+        reads += 1;
+        return get(result);
+      },
+      () => undefined,
+    );
+    const latest = latestSnapshot(source, { refreshSignals: [recovery] });
+    const registry = AtomRegistry.make();
+    const unmount = registry.mount(latest);
+    const initialReads = reads;
+
+    registry.set(recovery, 1);
+    await Effect.runPromise(Effect.yieldNow);
+
+    expect(reads).toBeGreaterThan(initialReads);
+    unmount();
+    registry.dispose();
+  });
 });

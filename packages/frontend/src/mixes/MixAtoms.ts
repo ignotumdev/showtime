@@ -11,21 +11,19 @@ import {
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { applyOptimisticNamedItemEdit } from "../internal/optimistic.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";
+import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export type MixListItem = Mix & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 const makeTemporaryMixId = (): MixId => makeTemporaryId(mixIdPrefix) as MixId;
 
-export const makeMixAtoms = (
-  RpcClient: ShowtimeRpcClient,
-  _options?: { readonly focusSignal?: Atom.Atom<unknown> },
-) => {
+export const makeMixAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
   const createMixMutation = RpcClient.mutation("mixes.create");
   const deleteMixMutation = RpcClient.mutation("mixes.delete");
   const editMixMutation = RpcClient.mutation("mixes.edit");
 
   const mixAtoms = Atom.family((showId: ShowId) => {
-    const query = RpcClient.query("mixes.list", { showId }).pipe(latestSnapshot);
+    const query = latestSnapshot(RpcClient.query("mixes.list", { showId }), options);
     const mixes = query.pipe(Atom.optimistic);
     const create = mixes.pipe(
       Atom.optimisticFn({

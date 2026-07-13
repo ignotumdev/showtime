@@ -113,6 +113,25 @@ const makeRpcProtocol = (desktopCapability: string) =>
               );
         }),
       );
+      yield* router.add(
+        "GET",
+        "/connection-status/:clientId/:capability",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          if (!params.clientId || !params.capability) return yield* notFound;
+          const credentialStatus = yield* connections.credentialsStatus(
+            params.clientId,
+            params.capability,
+          );
+          if (credentialStatus === "revoked") {
+            return HttpServerResponse.jsonUnsafe({ status: "revoked" }, { status: 401 });
+          }
+          if (!(yield* settings.get).connectionsEnabled) {
+            return HttpServerResponse.jsonUnsafe({ status: "disabled" }, { status: 503 });
+          }
+          return HttpServerResponse.jsonUnsafe({ status: "available" });
+        }),
+      );
       return protocol;
     }),
   ).pipe(Layer.provide(HttpRouter.layer));
