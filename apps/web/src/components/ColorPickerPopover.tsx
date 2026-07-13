@@ -21,14 +21,15 @@ export function ColorPickerPopover({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={trigger}>{children}</PopoverTrigger>
       <PopoverContent align="start">
-        <div className="grid grid-cols-6 gap-2">
+        <div role="radiogroup" aria-label="Color" className="grid grid-cols-6 gap-2">
           {colors.map((option) => (
             <button
               key={option}
               type="button"
+              role="radio"
               className="relative flex size-8 items-center justify-center rounded-md outline-none ring-ring/50 hover:bg-accent focus-visible:ring-3"
               aria-label={option}
-              aria-pressed={option === color}
+              aria-checked={option === color}
               onClick={() => {
                 onColorChange(option);
                 setOpen(false);

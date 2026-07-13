@@ -25,8 +25,8 @@ export const Profile = Schema.Struct({
   id: ProfileId,
   name: ProfileName,
   color: Color,
-  createdAt: Schema.String,
-  updatedAt: Schema.String,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
 });
 export type Profile = typeof Profile.Type;
 

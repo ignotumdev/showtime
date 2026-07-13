@@ -1,6 +1,6 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { ProfileName, profileIdPrefix } from "@showtime/contracts";
-import { Effect, Layer } from "effect";
+import { DateTime, Effect, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -45,6 +45,7 @@ describe("ProfileService", () => {
     expect(state.profiles).toMatchObject([{ name: "Default", color: "sky" }]);
     expect(state.defaultProfileId).toBe(state.profiles[0]?.id);
     expect(state.defaultProfileId).toMatch(new RegExp(`^${profileIdPrefix}[a-z0-9]{16}$`));
+    expect(DateTime.isDateTime(state.profiles[0]?.createdAt)).toBe(true);
     await expect(
       withService(
         home,
@@ -59,6 +60,7 @@ describe("ProfileService", () => {
 
     const file = JSON.parse(await readFile(join(home, ".showtime", "profiles.json"), "utf8"));
     expect(file.profiles[0].id).toBe(state.defaultProfileId);
+    expect(file.profiles[0].createdAt).toBe(DateTime.formatIso(state.profiles[0]!.createdAt));
   });
 
   it("creates, edits, changes default, deletes, and reloads profiles", async () => {

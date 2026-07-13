@@ -41,6 +41,9 @@ import { ColorPickerPopover } from "@/components/ColorPickerPopover";
 
 const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 
+const isPendingProfile = (profile: Profile): boolean =>
+  "pending" in profile && profile.pending === true;
+
 const currentState = (
   result: AsyncResult.AsyncResult<ProfilesState, unknown>,
 ): ProfilesState | undefined =>
@@ -74,7 +77,7 @@ export function ProfileSwitcher({ className }: { readonly className?: string }) 
           </SelectTrigger>
           <SelectContent>
             {state?.profiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
+              <SelectItem key={profile.id} value={profile.id} disabled={isPendingProfile(profile)}>
                 <ProfileLabel profile={profile} />
               </SelectItem>
             ))}
@@ -183,7 +186,9 @@ function ProfileRow({
   const [name, setName] = React.useState(profile.name as string);
   const [color, setColor] = React.useState<Color>(profile.color);
   const [busy, setBusy] = React.useState(false);
+  const pending = isPendingProfile(profile);
   const saveQueue = React.useRef(Promise.resolve());
+  const suppressNextBlurSave = React.useRef(false);
   React.useEffect(() => {
     setName(profile.name);
     setColor(profile.color);
@@ -229,11 +234,19 @@ function ProfileRow({
             aria-label={`Name for ${profile.name}`}
             value={name}
             maxLength={80}
+            disabled={pending}
             onChange={(event) => setName(event.currentTarget.value)}
-            onBlur={() => save(name, color)}
+            onBlur={() => {
+              if (suppressNextBlurSave.current) {
+                suppressNextBlurSave.current = false;
+                return;
+              }
+              save(name, color);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
               if (event.key === "Escape") {
+                suppressNextBlurSave.current = true;
                 setName(profile.name);
                 event.currentTarget.blur();
               }
@@ -247,7 +260,11 @@ function ProfileRow({
                 save(name, nextColor);
               }}
               trigger={
-                <InputGroupButton size="icon-xs" aria-label={`Choose color for ${profile.name}`} />
+                <InputGroupButton
+                  size="icon-xs"
+                  aria-label={`Choose color for ${profile.name}`}
+                  disabled={pending}
+                />
               }
             >
               <span className={cn(showColorClassNames[color], "size-3 rounded-full")} />
@@ -261,7 +278,7 @@ function ProfileRow({
           size="icon-sm"
           variant={isDefault ? "secondary" : "ghost"}
           aria-label={isDefault ? `${profile.name} is default` : `Set ${profile.name} as default`}
-          disabled={busy || isDefault}
+          disabled={busy || pending || isDefault}
           onClick={() => run(() => setDefault({ payload: { id: profile.id }, ...mutationOptions }))}
         >
           <StarIcon className={isDefault ? "fill-current" : undefined} />
@@ -271,7 +288,7 @@ function ProfileRow({
           size="icon-sm"
           variant="ghost"
           aria-label={`Delete ${profile.name}`}
-          disabled={busy || isDefault}
+          disabled={busy || pending || isDefault}
           onClick={() => run(() => remove({ payload: { id: profile.id }, ...mutationOptions }))}
         >
           <Trash2Icon />

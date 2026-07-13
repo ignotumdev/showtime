@@ -1,4 +1,4 @@
-import { Clock, Context, Effect, Layer, Path, Ref, Schema, Semaphore } from "effect";
+import { Context, DateTime, Effect, Layer, Path, Ref, Schema, Semaphore } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import {
   decodeProfileName,
@@ -54,7 +54,7 @@ const make = Effect.gen(function* () {
     Effect.map((value) => ({ value, isNew: false as const })),
     Effect.catchIf(isNotFound, () =>
       Effect.gen(function* () {
-        const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const now = yield* DateTime.now;
         const defaultProfile = {
           id: yield* ids.makeProfileId,
           name: ProfileName.make("Default"),
@@ -108,7 +108,7 @@ const make = Effect.gen(function* () {
             rpcError("Profile name cannot be empty or longer than 80 characters.", cause),
           ),
         );
-        const timestamp = new Date(yield* Clock.currentTimeMillis).toISOString();
+        const timestamp = yield* DateTime.now;
         const profile: Profile = {
           id: yield* ids.makeProfileId,
           name,
@@ -137,7 +137,7 @@ const make = Effect.gen(function* () {
           ...existing,
           name,
           color: params.color,
-          updatedAt: new Date(yield* Clock.currentTimeMillis).toISOString(),
+          updatedAt: yield* DateTime.now,
         };
         yield* persist({
           ...current,
