@@ -45,7 +45,7 @@ export function ShowMutationStatus() {
     <div
       role={visibleFailure ? "alert" : "status"}
       aria-live={visibleFailure ? "assertive" : "polite"}
-      className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-lg"
+      className="fixed right-4 bottom-16 z-50 flex max-w-sm items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-lg"
     >
       {visibleFailure ? (
         <AlertCircleIcon className="size-4 text-destructive" />

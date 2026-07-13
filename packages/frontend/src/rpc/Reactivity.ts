@@ -3,4 +3,5 @@ export {
   mixesSyncKey as mixesRpcReactivityKey,
   showsSyncKey as showsRpcReactivityKey,
   songsSyncKey as songsRpcReactivityKey,
+  profilesSyncKey as profilesRpcReactivityKey,
 } from "@showtime/contracts";

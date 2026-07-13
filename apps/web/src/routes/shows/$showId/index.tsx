@@ -21,6 +21,7 @@ import { ShowFormDialog } from "@/components/shows/ShowFormDialog";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { Spinner } from "@/components/ui/spinner";
 import { rpcErrorMessageFromCause } from "@/client";
+import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 
 export const Route = createFileRoute("/shows/$showId/")({
   component: RouteComponent,
@@ -111,6 +112,9 @@ function RouteComponent() {
               >
                 <ArrowLeftIcon /> Back to all shows
               </Button>
+              <div className="md:hidden">
+                <ProfileSwitcher />
+              </div>
             </div>
           </EmptyContent>
         )}

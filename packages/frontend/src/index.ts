@@ -4,6 +4,7 @@ import { makeMixAtoms } from "./mixes/MixAtoms.js";
 import { makeRpcClient, type RpcClientOptions } from "./rpc/RpcClient.js";
 import { makeShowAtoms } from "./shows/ShowAtoms.js";
 import { makeSongAtoms } from "./songs/SongAtoms.js";
+import { makeProfileAtoms } from "./profiles/ProfileAtoms.js";
 
 export interface ShowtimeFrontendOptions extends RpcClientOptions {
   readonly focusSignal?: Atom.Atom<unknown>;
@@ -19,6 +20,7 @@ export const makeShowtimeFrontend = (options: ShowtimeFrontendOptions) => {
     ...makeMicrophoneAtoms(RpcClient, atomOptions),
     ...makeMixAtoms(RpcClient, atomOptions),
     ...makeSongAtoms(RpcClient, atomOptions),
+    ...makeProfileAtoms(RpcClient),
   } as const;
 };
 
@@ -32,3 +34,4 @@ export * from "./rpc/Reactivity.js";
 export * from "./rpc/RpcClient.js";
 export * from "./shows/ShowAtoms.js";
 export * from "./songs/SongAtoms.js";
+export * from "./profiles/ProfileAtoms.js";
