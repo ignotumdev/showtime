@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "electron": "^30.0.1",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "catalog:",
     "typescript": "^5.2.2",
     "vite": "catalog:",
     "vite-plugin-electron": "^1.1.0",
