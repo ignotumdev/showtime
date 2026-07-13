@@ -4,6 +4,7 @@ import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon } from "lucide-reac
 import type {
   ShowtimeConnectionCandidate,
   ShowtimeConnectionsState,
+  ShowtimeLocalDiscoveryState,
   ShowtimePendingClient,
 } from "@showtime/shared";
 import { Button } from "@/components/ui/button";
@@ -286,6 +287,9 @@ function PairClientDialog({
     [],
   );
   const [selectedUrl, setSelectedUrl] = React.useState("");
+  const [discovery, setDiscovery] = React.useState<ShowtimeLocalDiscoveryState>({
+    kind: "disabled",
+  });
   const [qrCode, setQrCode] = React.useState<string>();
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState<string>();
@@ -294,20 +298,33 @@ function PairClientDialog({
     let active = true;
     setCandidates([]);
     setSelectedUrl("");
+    setDiscovery({ kind: "probing" });
     setQrCode(undefined);
     setCopied(false);
     setError(undefined);
-    void window.showtime!.pairingInfo(client.invitationId).then(
-      (info) => {
-        if (!active) return;
-        setCandidates(info.candidates);
-        setSelectedUrl(info.candidates[0]?.url ?? "");
-        if (info.candidates.length === 0) setError("No local network was found on this computer.");
-      },
-      () => active && setError("Showtime could not create a connection link."),
-    );
+    let timer: number | undefined;
+    const load = () =>
+      void window.showtime!.pairingInfo(client.invitationId).then(
+        (info) => {
+          if (!active) return;
+          setDiscovery(info.discovery);
+          setCandidates(info.candidates);
+          setSelectedUrl(info.candidates[0]?.url ?? "");
+          if (info.discovery.kind === "probing") {
+            setError(undefined);
+            timer = window.setTimeout(load, 750);
+          } else if (info.candidates.length === 0) {
+            setError("No local network was found on this computer.");
+          } else {
+            setError(undefined);
+          }
+        },
+        () => active && setError("Showtime could not create a connection link."),
+      );
+    load();
     return () => {
       active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [client]);
   React.useEffect(() => {
@@ -335,14 +352,12 @@ function PairClientDialog({
         {candidates.length > 0 && (
           <Select value={selectedUrl} onValueChange={(value) => value && setSelectedUrl(value)}>
             <SelectTrigger>
-              <SelectValue>
-                {selected ? `${selected.interfaceName} — ${selected.address}` : "Choose network"}
-              </SelectValue>
+              <SelectValue>{selected?.label ?? "Choose network"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {candidates.map((candidate) => (
                 <SelectItem key={candidate.url} value={candidate.url}>
-                  {candidate.interfaceName} — {candidate.address}
+                  {candidate.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -356,9 +371,18 @@ function PairClientDialog({
               className="w-full max-w-72"
             />
             <p className="text-xs text-muted-foreground">
-              {selected?.interfaceName} · {selected?.address}
+              {selected?.label} · {selected?.host}
             </p>
           </div>
+        )}
+        {discovery.kind === "probing" && (
+          <p className="text-sm text-muted-foreground">Finding an easy local address…</p>
+        )}
+        {discovery.kind === "degraded" && candidates.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            The easy local name is unavailable on this network. The IP address below will still
+            work.
+          </p>
         )}
         <Button
           type="button"

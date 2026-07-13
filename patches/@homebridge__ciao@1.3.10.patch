@@ -1,0 +1,73 @@
+diff --git a/lib/CiaoService.d.ts b/lib/CiaoService.d.ts
+index 278e31f0f396b0e098fef0bd448c5910c0a8b1b1..103dea57f53ea879ca9140d5f4ac84e2776dfea2 100644
+--- a/lib/CiaoService.d.ts
++++ b/lib/CiaoService.d.ts
+@@ -175,6 +175,7 @@ export type RecordsUpdateCallback = (error?: Error | null) => void;
+ export declare interface CiaoService {
+     on(event: "name-change", listener: (name: string) => void): this;
+     on(event: "hostname-change", listener: (hostname: string) => void): this;
++    on(event: "republish-error", listener: (error: Error) => void): this;
+     /**
+      * @private
+      */
+diff --git a/lib/CiaoService.js b/lib/CiaoService.js
+index a70f9b4906ccd9bd5d3d475eeef9d9ae076dacec..ecfbf462283e2e92a396204ab42850605ab1849f 100644
+--- a/lib/CiaoService.js
++++ b/lib/CiaoService.js
+@@ -21,7 +21,7 @@ const domainFormatter = tslib_1.__importStar(require("./util/domain-formatter"))
+ const domain_formatter_1 = require("./util/domain-formatter");
+ const debug = (0, debug_1.default)("ciao:CiaoService");
+ const numberedServiceNamePattern = /^(.*) \((\d+)\)$/; // matches a name lik "My Service (2)"
+-const numberedHostnamePattern = /^(.*)-\((\d+)\)(\.\w{2,}.)$/; // matches a hostname like "My-Computer-(2).local."
++const numberedHostnamePattern = /^(.*)-([1-9]\d*)(\.\w{2,}.)$/; // Showtime patch: "showtime-1.local."
+ /**
+  * This enum defines some commonly used service types.
+  * This is also referred to as service name (as of RFC 6763).
+@@ -473,11 +473,7 @@ class CiaoService extends events_1.EventEmitter {
+             // thus, when sending the first request, the socket will be bound, and we don't need to wait here
+             this.emit("republish" /* InternalServiceEvent.REPUBLISH */, error => {
+                 if (error) {
+-                    console.log("FATAL Error occurred trying to re-announce service " + this.fqdn + "! We can't recover from this!");
+-                    console.log(error.stack);
+-                    process.exit(1); // we have a service which should be announced, though we failed to re-announce.
+-                    // if this should ever happen in reality, whe might want to introduce a more sophisticated recovery
+-                    // for situations where it makes sense
++                    this.emit("republish-error", error); // Showtime owns recovery; never terminate the host process.
+                 }
+             });
+         }
+@@ -513,7 +509,7 @@ class CiaoService extends events_1.EventEmitter {
+         if (hostnameMatcher) { // if it matched. Extract the current nameNumber
+             hostnameBase = hostnameMatcher[1];
+             hostnameTLD = hostnameMatcher[3];
+-            hostnameNumber = parseInt(hostnameMatcher[2]);
++            hostnameNumber = parseInt(hostnameMatcher[2]) + 1; // external -1 is ciao's internal second name
+             (0, assert_1.default)(hostnameNumber, `Failed to extract hostname number from ${this.hostname}. Resulted in ${hostnameNumber}`);
+         }
+         else {
+@@ -531,7 +527,7 @@ class CiaoService extends events_1.EventEmitter {
+         const newNumber = Math.max(nameNumber, hostnameNumber);
+         // reassemble the name
+         this.name = newNumber === 1 ? nameBase : `${nameBase} (${newNumber})`;
+-        this.hostname = newNumber === 1 ? `${hostnameBase}${hostnameTLD}` : `${hostnameBase}-(${newNumber})${hostnameTLD}`;
++        this.hostname = newNumber === 1 ? `${hostnameBase}${hostnameTLD}` : `${hostnameBase}-${newNumber - 1}${hostnameTLD}`;
+         this.loweredHostname = (0, dns_equal_1.dnsLowerCase)(this.hostname);
+         this.fqdn = this.formatFQDN(); // update the fqdn
+         this.loweredFqdn = (0, dns_equal_1.dnsLowerCase)(this.fqdn);
+diff --git a/lib/Responder.js b/lib/Responder.js
+index 78b01f6e889cc33766dab335223f34a8aa7323b7..8640ef7c4e0d23a5cf7733f91e1c617c3567ef2c 100644
+--- a/lib/Responder.js
++++ b/lib/Responder.js
+@@ -651,11 +651,7 @@ class Responder {
+                 // noinspection JSIgnoredPromiseFromCall
+                 this.republishService(service, error => {
+                     if (error) {
+-                        console.log(`FATAL Error occurred trying to resolve conflict for service ${service.getFQDN()}! We can't recover from this!`);
+-                        console.log(error.stack);
+-                        process.exit(1); // we have a service which should be announced, though we failed to reannounce.
+-                        // if this should ever happen in reality, whe might want to introduce a more sophisticated recovery
+-                        // for situations where it makes sense
++                        service.emit("republish-error", error); // Showtime owns recovery; never terminate the host process.
+                     }
+                 }, true);
+             }

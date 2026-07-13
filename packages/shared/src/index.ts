@@ -5,16 +5,51 @@ export const desktopPairingInfoChannel = "showtime:pairing-info";
 export const desktopRemoveConnectionChannel = "showtime:remove-connection";
 export const desktopSetConnectionsEnabledChannel = "showtime:set-connections-enabled";
 export const showtimeConnectionStorageKey = "showtime.connection.v1";
+export * from "./local-endpoint.js";
 
-export interface ShowtimeConnectionCandidate {
-  readonly address: string;
-  readonly interfaceName: string;
-  readonly url: string;
-}
+import { Schema } from "effect";
+import { ShowtimeHostnameLabel } from "./local-endpoint.js";
 
-export interface ShowtimeConnectionInfo {
-  readonly candidates: ReadonlyArray<ShowtimeConnectionCandidate>;
-}
+export const ShowtimeLocalDiscoveryState = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("disabled") }),
+  Schema.Struct({ kind: Schema.Literal("probing") }),
+  Schema.Struct({ kind: Schema.Literal("announced"), hostname: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal("degraded"),
+    reason: Schema.Literal("network-unavailable"),
+  }),
+]);
+export type ShowtimeLocalDiscoveryState = typeof ShowtimeLocalDiscoveryState.Type;
+
+export const ShowtimeHostnameConnectionCandidate = Schema.Struct({
+  kind: Schema.Literal("hostname"),
+  label: Schema.String,
+  host: Schema.String,
+  hostnameLabel: ShowtimeHostnameLabel,
+  url: Schema.String,
+});
+export type ShowtimeHostnameConnectionCandidate = typeof ShowtimeHostnameConnectionCandidate.Type;
+
+export const ShowtimeIpConnectionCandidate = Schema.Struct({
+  kind: Schema.Literal("ip-address"),
+  label: Schema.String,
+  host: Schema.String,
+  interfaceName: Schema.String,
+  url: Schema.String,
+});
+export type ShowtimeIpConnectionCandidate = typeof ShowtimeIpConnectionCandidate.Type;
+
+export const ShowtimeConnectionCandidate = Schema.Union([
+  ShowtimeHostnameConnectionCandidate,
+  ShowtimeIpConnectionCandidate,
+]);
+export type ShowtimeConnectionCandidate = typeof ShowtimeConnectionCandidate.Type;
+
+export const ShowtimeConnectionInfo = Schema.Struct({
+  discovery: ShowtimeLocalDiscoveryState,
+  candidates: Schema.Array(ShowtimeConnectionCandidate),
+});
+export type ShowtimeConnectionInfo = typeof ShowtimeConnectionInfo.Type;
 
 export interface ShowtimePendingClient {
   readonly kind: "pending";

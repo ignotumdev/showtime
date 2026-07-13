@@ -1,12 +1,15 @@
 import { NodeFileSystem, NodeHttpServer, NodePath } from "@effect/platform-node";
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Semaphore } from "effect";
 import { HttpRouter, HttpServerResponse, HttpStaticServer } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { createServer } from "node:http";
-import type { ShowtimeConnectionInfo } from "@showtime/shared";
+import { showtimeLocalPort, type ShowtimeConnectionInfo } from "@showtime/shared";
 import { randomBytes } from "node:crypto";
 import * as ConnectionStore from "./connections/ConnectionStore.js";
 import * as NetworkAddresses from "./connections/NetworkAddresses.js";
+import * as LocalDiscovery from "./connections/LocalDiscovery.js";
+import * as MdnsAdvertiserLive from "./connections/MdnsAdvertiserLive.js";
+import type * as MdnsAdvertiser from "./connections/MdnsAdvertiser.js";
 import * as Ids from "./ids/Ids.js";
 import * as MicrophoneService from "./microphones/MicrophoneService.js";
 import * as MixService from "./mixes/MixService.js";
@@ -34,6 +37,8 @@ export interface BackendOptions {
   readonly port: number;
   readonly webRoot?: string;
   readonly homeDirectory?: string;
+  /** Defaults to enabled for the canonical production port and disabled for test overrides. */
+  readonly localDiscovery?: boolean;
 }
 
 const rpcWebSocketHost = (host: string) => {
@@ -60,17 +65,15 @@ export class ConnectionManager extends Context.Service<
   }
 >()("@showtime/backend/ConnectionManager") {}
 
-const makeBackendServices = (options: BackendOptions) =>
-  Layer.mergeAll(Ids.layer, ShowRepositoryLive, ProfileLive).pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        NodeFileSystem.layer,
-        NodePath.layer,
-        options.homeDirectory === undefined
-          ? HomeDirectory.layerNode
-          : HomeDirectory.makeLayer(options.homeDirectory),
-      ),
-    ),
+const makeBackendServices = () => Layer.mergeAll(Ids.layer, ShowRepositoryLive, ProfileLive);
+
+const makePlatformLayer = (options: BackendOptions) =>
+  Layer.mergeAll(
+    NodeFileSystem.layer,
+    NodePath.layer,
+    options.homeDirectory === undefined
+      ? HomeDirectory.layerNode
+      : HomeDirectory.makeLayer(options.homeDirectory),
   );
 
 const makeRpcProtocol = (desktopCapability: string) =>
@@ -184,7 +187,6 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
           },
         ),
       ),
-      Layer.provide(NodeHttpServer.layer(createServer, { host: options.host, port: options.port })),
       Layer.provide(RpcSerialization.layerJson),
     );
   })();
@@ -196,6 +198,8 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
       const connections = yield* ConnectionStore.ConnectionStore;
       const settings = yield* Settings.Settings;
       const addresses = yield* NetworkAddresses.NetworkAddresses;
+      const discovery = yield* LocalDiscovery.LocalDiscovery;
+      const connectionTransition = yield* Semaphore.make(1);
       const state = Effect.all({
         settings: settings.get,
         clients: connections.clients,
@@ -231,49 +235,76 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
           connections.pairingInvitation(invitationId).pipe(
             Effect.flatMap((invitation) =>
               invitation
-                ? addresses.candidates(options.port, invitation.token)
-                : Effect.succeed([]),
+                ? Effect.all(
+                    {
+                      discovery: discovery.state,
+                      hostname: discovery.pairingCandidate(invitation.token),
+                      ipAddresses: addresses.candidates(options.port, invitation.token),
+                    },
+                    { concurrency: "unbounded" },
+                  )
+                : Effect.succeed({
+                    discovery: { kind: "disabled" as const },
+                    hostname: undefined,
+                    ipAddresses: [],
+                  }),
             ),
-            Effect.map((candidates) => ({ candidates })),
+            Effect.map(({ discovery: discoveryState, hostname, ipAddresses }) => ({
+              discovery:
+                hostname === undefined
+                  ? discoveryState
+                  : ({ kind: "announced", hostname: hostname.host } as const),
+              candidates: hostname === undefined ? ipAddresses : [hostname, ...ipAddresses],
+            })),
           ),
         removeConnection: (id) => connections.remove(id).pipe(Effect.andThen(state)),
         setConnectionsEnabled: (enabled) =>
-          settings.setConnectionsEnabled(enabled).pipe(
-            Effect.andThen(enabled ? Effect.void : connections.disconnectAll),
-            Effect.tap(() =>
-              Effect.logInfo(
-                enabled ? "Enabled remote connections" : "Disabled remote connections",
+          connectionTransition.withPermits(1)(
+            settings.setConnectionsEnabled(enabled).pipe(
+              Effect.andThen(enabled ? Effect.void : connections.disconnectAll),
+              Effect.andThen(discovery.setEnabled(enabled)),
+              Effect.tap(() =>
+                Effect.logInfo(
+                  enabled ? "Enabled remote connections" : "Disabled remote connections",
+                ),
               ),
+              Effect.andThen(state),
             ),
-            Effect.andThen(state),
           ),
       });
     }),
   );
 
-const makeConnectionLayers = (options: BackendOptions) =>
-  Layer.mergeAll(ConnectionStore.layer, Settings.layer, NetworkAddresses.layer).pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        NodeFileSystem.layer,
-        NodePath.layer,
-        options.homeDirectory === undefined
-          ? HomeDirectory.layerNode
-          : HomeDirectory.makeLayer(options.homeDirectory),
-      ),
-    ),
-  );
+const makeConnectionLayers = () =>
+  Layer.mergeAll(ConnectionStore.layer, Settings.layer, NetworkAddresses.layer);
 
-export const makeBackendLayer = (options: BackendOptions) => {
+export const makeBackendLayer = (
+  options: BackendOptions,
+  mdnsAdvertiserLayer: Layer.Layer<MdnsAdvertiser.MdnsAdvertiser> = MdnsAdvertiserLive.layer,
+) => {
   const desktopCapability = randomBytes(32).toString("base64url");
+  const HttpServerLive = NodeHttpServer.layer(createServer, {
+    host: options.host,
+    port: options.port,
+  });
+  const LocalDiscoveryLive = LocalDiscovery.layer({
+    port: options.port,
+    runtimeEnabled: options.localDiscovery ?? options.port === showtimeLocalPort,
+  }).pipe(Layer.provide(mdnsAdvertiserLayer));
   return Layer.mergeAll(
     makeServerLive(options, desktopCapability),
-    makeConnectionManagerLayer(options, desktopCapability),
+    makeConnectionManagerLayer(options, desktopCapability).pipe(
+      Layer.provideMerge(LocalDiscoveryLive),
+    ),
   ).pipe(
-    Layer.provideMerge(makeConnectionLayers(options)),
-    Layer.provide(makeBackendServices(options)),
+    Layer.provideMerge(HttpServerLive),
+    Layer.provideMerge(makeConnectionLayers()),
+    Layer.provideMerge(makeBackendServices()),
+    Layer.provide(makePlatformLayer(options)),
   );
 };
 
-export const makeBackendRuntime = (options: BackendOptions) =>
-  ManagedRuntime.make(makeBackendLayer(options));
+export const makeBackendRuntime = (
+  options: BackendOptions,
+  mdnsAdvertiserLayer?: Layer.Layer<MdnsAdvertiser.MdnsAdvertiser>,
+) => ManagedRuntime.make(makeBackendLayer(options, mdnsAdvertiserLayer));
