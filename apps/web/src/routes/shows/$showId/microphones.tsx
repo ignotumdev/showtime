@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
+import { colorPreviewClassNames } from "@/components/color";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { microphoneAtoms, microphonesRpcReactivityKey, type MicrophoneListItem } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
@@ -216,19 +217,9 @@ function MicrophoneCard({
                     if (Exit.isFailure(result)) setColor(microphone.color);
                   }}
                 >
-                  <span
-                    className={cn(
-                      "size-5 rounded-md",
-                      microphoneColorClassNames[option].background,
-                    )}
-                  />
+                  <span className={cn("size-5 rounded-md", colorPreviewClassNames[option])} />
                   {option === color && (
-                    <CheckIcon
-                      className={cn(
-                        "absolute size-3 drop-shadow",
-                        microphoneColorClassNames[option].text,
-                      )}
-                    />
+                    <CheckIcon className={cn("absolute size-3 drop-shadow", "text-white")} />
                   )}
                 </button>
               ))}
