@@ -102,7 +102,12 @@ export function TitleBar({
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
-        {desktopHost && !isLiveRoute && <ConnectionDialog />}
+        {!isLiveRoute && (
+          <>
+            <ConnectionDialog compact className="md:hidden" />
+            <ConnectionDialog className="hidden md:inline-flex" />
+          </>
+        )}
         {isShowsRoute && (
           <Button size="sm" aria-label="New show" onClick={() => setDialog({ type: "create" })}>
             <PlusIcon />

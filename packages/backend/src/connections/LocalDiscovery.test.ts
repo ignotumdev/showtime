@@ -48,7 +48,7 @@ const invitationId = (state: ShowtimeConnectionsState) => {
 
 const createInvitation = (runtime: ReturnType<typeof makeBackendRuntime>) =>
   runtime.runPromise(
-    Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Discovery test client")),
+    Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Discovery test client", [])),
   );
 
 describe("LocalDiscovery", () => {

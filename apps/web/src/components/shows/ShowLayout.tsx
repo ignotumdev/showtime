@@ -36,6 +36,7 @@ import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
+import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -185,7 +186,10 @@ function ShowHeader({
           <span className="truncate font-semibold">{showName}</span>
         </Link>
         <div className="ml-auto shrink-0">
-          <ShowPageAction showId={showId} pathname={pathname} />
+          <div className="flex items-center gap-1">
+            <ConnectionDialog compact />
+            <ShowPageAction showId={showId} pathname={pathname} />
+          </div>
         </div>
       </header>
       {isAllSongsRoute && songCreator.error && (
