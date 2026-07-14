@@ -82,6 +82,7 @@ describe("LocalDiscovery", () => {
     expect(listeningStatus).toBe(404);
     expect(info.candidates[0]).toMatchObject({
       kind: "hostname",
+      label: "Recommended — showtime.local",
       host: "showtime.local",
     });
     expect(info.candidates[0]?.url).toMatch(
