@@ -22,6 +22,23 @@ const testLayer = (homeDirectory: string) =>
   );
 
 describe("ConnectionStore session admission", () => {
+  it("assigns incrementing labels when client labels are omitted", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
+    tempHomes.add(homeDirectory);
+
+    const names = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        const first = yield* store.createInvitation();
+        const custom = yield* store.createInvitation("Monitor iPad");
+        const second = yield* store.createInvitation("   ");
+        return [first.name, custom.name, second.name];
+      }).pipe(Effect.provide(testLayer(homeDirectory))),
+    );
+
+    expect(names).toEqual(["Client 1", "Monitor iPad", "Client 2"]);
+  });
+
   it("loads version 1 connection data without rewriting it", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
     tempHomes.add(homeDirectory);

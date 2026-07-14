@@ -35,6 +35,15 @@ export interface PairingCredentials {
 
 const pairingLifetimeMs = 5 * 60 * 1_000;
 const makeToken = () => randomBytes(32).toString("base64url");
+const defaultClientNamePattern = /^Client (\d+)$/;
+const nextDefaultClientName = (names: Iterable<string>) => {
+  let highest = 0;
+  for (const name of names) {
+    const match = defaultClientNamePattern.exec(name);
+    if (match) highest = Math.max(highest, Number(match[1]));
+  }
+  return `Client ${highest + 1}`;
+};
 const makeInvitation = (name: string, now: number): StoredInvitation => ({
   invitationId: nanoid(),
   name,
@@ -48,7 +57,7 @@ export class ConnectionStore extends Context.Service<
     readonly clients: Effect.Effect<ReadonlyArray<StoredClient>>;
     readonly invitations: Effect.Effect<ReadonlyArray<StoredInvitation>>;
     readonly connectedClientIds: Effect.Effect<ReadonlySet<string>>;
-    readonly createInvitation: (name: string) => Effect.Effect<StoredInvitation>;
+    readonly createInvitation: (name?: string) => Effect.Effect<StoredInvitation>;
     readonly pairingInvitation: (
       invitationId: string,
     ) => Effect.Effect<StoredInvitation | undefined>;
@@ -89,15 +98,22 @@ const make = Effect.gen(function* () {
       Effect.andThen(Ref.set(state, next)),
     );
 
-  const createInvitation = (name: string) =>
+  const createInvitation = (name?: string) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
-        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(name.trim()).pipe(
+        const current = yield* Ref.get(state);
+        const trimmedName = name?.trim();
+        const resolvedName =
+          trimmedName ||
+          nextDefaultClientName([
+            ...current.clients.map((client) => client.name),
+            ...current.invitations.map((invitation) => invitation.name),
+          ]);
+        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName).pipe(
           Effect.orDie,
         );
         const now = yield* Clock.currentTimeMillis;
         const invitation = makeInvitation(validatedName, now);
-        const current = yield* Ref.get(state);
         yield* persist({
           ...current,
           invitations: [...current.invitations, invitation],
