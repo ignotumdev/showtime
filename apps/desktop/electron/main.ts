@@ -10,6 +10,7 @@ import {
   desktopRemoveConnectionChannel,
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
+  showtimeLocalPort,
 } from "@showtime/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,11 +41,12 @@ let win: BrowserWindow | null;
 let backendStarted = false;
 let backendShutdownStarted = false;
 const rpcHost = "0.0.0.0";
-const rpcPort = 34987;
+const rpcPort = showtimeLocalPort;
 const backendRuntime = makeBackendRuntime({
   host: rpcHost,
   port: rpcPort,
   webRoot: RENDERER_DIST,
+  localDiscovery: true,
 });
 
 function getAppIconPath() {

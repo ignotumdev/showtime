@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime Local Hostnames and Port 8585 Plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      body { max-width: 1040px; margin: 0 auto; padding: 48px 24px 96px; }
+      h1, h2, h3 { line-height: 1.2; }
+      h1 { margin-bottom: 0.3rem; }
+      h2 { margin-top: 2.5rem; }
+      h3 { margin-top: 1.6rem; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+      code { overflow-wrap: anywhere; }
+      a { color: inherit; }
+      li + li { margin-top: 0.55rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td {
+        border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+        padding: 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: color-mix(in srgb, currentColor 7%, transparent); }
+      .lede { font-size: 1.15rem; opacity: 0.84; }
+      .callout { border-inline-start: 4px solid currentColor; padding: 0.3rem 1rem; }
+      .flow {
+        padding: 1rem 1.25rem;
+        background: color-mix(in srgb, currentColor 6%, transparent);
+        overflow-x: auto;
+        white-space: pre-wrap;
+      }
+      .decision {
+        border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+        border-radius: 0.5rem;
+        padding: 1rem 1.25rem;
+      }
+      .muted { opacity: 0.75; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Predictable <code>.local</code> addresses and port <code>8585</code></h1>
+      <p class="lede">
+        Give each Showtime desktop server an easy local-network address while preserving the existing
+        authenticated pairing, WebSocket RPC, reconnect, and IP-address fallback paths.
+      </p>
+
+      <section>
+        <h2>Review summary</h2>
+        <div class="decision">
+          <p><strong>Canonical addresses</strong></p>
+          <ul>
+            <li>The first successful claimant uses <code>http://showtime.local:8585</code>.</li>
+            <li>Conflicting servers use <code>http://showtime-1.local:8585</code>, then <code>showtime-2.local:8585</code>, and so on.</li>
+            <li>The production/LAN HTTP and WebSocket server moves from <code>34987</code> to <code>8585</code>. Vite's development-only renderer remains separate because it cannot share the backend's listening port.</li>
+          </ul>
+        </div>
+        <div class="callout">
+          <p>
+            <strong>The port must remain visible in a typed or copied browser URL.</strong> A <code>.local</code>
+            A/AAAA record resolves a host, not an HTTP port. DNS-SD can advertise port <code>8585</code> to
+            service browsers, but entering bare <code>showtime.local</code> still makes an ordinary browser try
+            port <code>80</code>. This plan intentionally does not open port 80 or add a second redirect server.
+          </p>
+        </div>
+        <p>
+          Port <code>8585</code> is currently unassigned in IANA's service-name and port-number registry. It is
+          in the user-port range, so binding does not require administrator privileges. &ldquo;Unassigned&rdquo; is not a
+          permanent reservation for Showtime; a bind conflict must still fail clearly rather than silently
+          selecting another port.
+        </p>
+      </section>
+
+      <section>
+        <h2>Current architecture to preserve</h2>
+        <ul>
+          <li><code>packages/backend/src/index.ts</code> already owns one Effect-managed Node HTTP server for the static web build, pairing endpoints, connection-status endpoint, and authenticated Effect RPC WebSocket upgrades.</li>
+          <li><code>ConnectionStore</code> persists per-client capabilities, tracks live sessions, interrupts revoked clients, and survives backend restarts.</li>
+          <li><code>NetworkAddresses</code> already creates private-IPv4 pairing candidates used by the Electron connection dialog.</li>
+          <li>The browser consumes the single-use <code>#pair=&hellip;</code> fragment, stores credentials under that origin, removes the fragment, and reconnects the RPC client through the current page origin.</li>
+          <li>The &ldquo;Allow connections&rdquo; switch gates static hosting and RPC admission and disconnects active remote clients when disabled.</li>
+          <li>The desktop runtime is scoped through <code>ManagedRuntime</code> and is disposed during Electron shutdown.</li>
+        </ul>
+        <p>
+          The implementation must extend this graph. It must not create a second HTTP server, a second RPC
+          transport, or an unauthenticated path around the existing connection capability.
+        </p>
+      </section>
+
+      <section>
+        <h2>Resulting flow</h2>
+        <pre class="flow">Effect runtime starts
+  &rarr; TCP 8585 successfully binds on 0.0.0.0
+  &rarr; local-discovery scoped fiber probes its preferred .local name over mDNS
+  &rarr; winner announces A record + _http._tcp DNS-SD service for port 8585
+  &rarr; Connection dialog prefers http://showtime[-N].local:8585/#pair=&hellip;
+  &rarr; browser pairs through the existing POST /pair/:token endpoint
+  &rarr; browser reconnects through ws://showtime[-N].local:8585/rpc/:clientId/:capability
+
+If mDNS is blocked or unsupported
+  &rarr; TCP server and desktop remain healthy
+  &rarr; dialog clearly falls back to the existing private-IP pairing URLs</pre>
+      </section>
+
+      <section>
+        <h2>Naming rules</h2>
+        <table>
+          <thead>
+            <tr><th>Situation</th><th>Required behavior</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>No existing Showtime responder</td>
+              <td>Probe and announce <code>showtime.local</code>.</td>
+            </tr>
+            <tr>
+              <td>One or more names already claimed</td>
+              <td>Probe candidates in order and claim the first available exact label: <code>showtime-1</code>, <code>showtime-2</code>, and so on. Never expose library-default forms such as <code>showtime-(2).local</code>.</td>
+            </tr>
+            <tr>
+              <td>Simultaneous startup</td>
+              <td>Use RFC 6762 probing and record-data tie-breaking. &ldquo;First&rdquo; means the server that wins the uniqueness probe; wall-clock launch order cannot be guaranteed when probes are simultaneous.</td>
+            </tr>
+            <tr>
+              <td>Normal restart</td>
+              <td>Try the last successfully announced label first. This keeps the browser origin stable, so a server previously known as <code>showtime-1.local</code> does not unexpectedly become <code>showtime.local</code> and strand saved browser credentials.</td>
+            </tr>
+            <tr>
+              <td>Saved label is now owned elsewhere</td>
+              <td>Run conflict resolution again, select the next exact suffix, atomically persist it, and show the new URL in the connection dialog.</td>
+            </tr>
+            <tr>
+              <td>A lower suffix later becomes free</td>
+              <td>Do not promote a running server. Stable origins and reconnect reliability take priority over closing cosmetic gaps in the numbering.</td>
+            </tr>
+            <tr>
+              <td>Graceful shutdown or connections disabled</td>
+              <td>Send mDNS goodbye records before releasing the responder so clients do not retain avoidable stale cache entries.</td>
+            </tr>
+            <tr>
+              <td>Crash or power loss</td>
+              <td>On restart, probe rather than trusting cached state. Stale cache entries are not treated as ownership; an active responder must defend a name.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Persistence means a lone server may continue to use a previously assigned suffix after moving to a
+          different network. That is deliberate: existing bookmarks and saved credentials are more important
+          than always reclaiming the shortest label.
+        </p>
+      </section>
+
+      <section>
+        <h2>mDNS implementation decision</h2>
+        <p>
+          Use <code>@homebridge/ciao</code> behind a repository-owned adapter. It is a pure TypeScript/JavaScript
+          RFC 6762/6763 responder, performs uniqueness probing, publishes host and DNS-SD records, tracks
+          interface changes, and supports goodbye packets without adding fragile native build dependencies on
+          Windows.
+        </p>
+        <div class="callout">
+          <p>
+            The dependency cannot be used unmodified. Its current conflict policy emits hostnames like
+            <code>showtime-(2).local</code>, and its interface-republish failure path contains a process-level
+            exit. Both conflict with Showtime's explicit naming requirement and live-show reliability policy.
+          </p>
+        </div>
+        <ol>
+          <li>Pin the reviewed <code>@homebridge/ciao</code> version and use pnpm's checked-in patched-dependency mechanism.</li>
+          <li>Patch only the hostname suffix formatter/parser so the first conflict maps to <code>-1</code>, the next to <code>-2</code>, and already-suffixed persisted names resume at the correct internal sequence.</li>
+          <li>Patch the republish failure path to notify the adapter instead of calling <code>process.exit</code>. The adapter moves to a degraded state, disposes the failed responder, and retries in a scoped background fiber.</li>
+          <li>Add regression tests that fail if a dependency upgrade restores parenthesized names, exits the process, leaks a responder, or omits goodbye cleanup.</li>
+          <li>Keep every third-party type and callback inside <code>MdnsAdvertiserLive</code>; the rest of Showtime depends only on its own Effect service contract. Any later replacement of the library is then local.</li>
+        </ol>
+        <p>
+          Do not hand-build an mDNS responder from raw UDP packets. Correct simultaneous probing, cache-flush
+          semantics, ongoing conflict detection, interface churn, IPv4/IPv6 behavior, and packet sizing are too
+          failure-prone to recreate for this feature.
+        </p>
+      </section>
+
+      <section>
+        <h2>Effect-native backend design</h2>
+        <h3>1. Central endpoint configuration</h3>
+        <ul>
+          <li>Create one shared local-endpoint module with production port <code>8585</code>, base label <code>showtime</code>, label schema, suffix formatting/parsing, and URL constructors. Remove production/test copies of <code>34987</code>.</li>
+          <li>Keep a test-layer override for ephemeral ports. Production must never auto-fall back from <code>8585</code>, because a different runtime port would make the advertised and remembered address unpredictable.</li>
+          <li>Continue binding the HTTP server to <code>0.0.0.0</code> and the Electron RPC client to loopback. Advertise only address families actually served; with the current IPv4 bind, disable AAAA publication to prevent clients preferring an unreachable IPv6 record.</li>
+        </ul>
+
+        <h3>2. <code>LocalDiscovery</code> service</h3>
+        <p>Introduce a backend service with a narrow contract:</p>
+        <ul>
+          <li>Current state: <code>disabled</code>, <code>probing</code>, <code>announced</code> with hostname, or <code>degraded</code> with a typed/redacted reason.</li>
+          <li>An idempotent <code>setEnabled(boolean)</code> operation serialized inside the service.</li>
+          <li>An Effect that returns the current hostname pairing candidate only after announcement succeeds.</li>
+        </ul>
+        <p>
+          Build the live layer with <code>Layer.scoped</code> and <code>Effect.acquireRelease</code>. Acquisition
+          owns the responder, service, event listeners, retry fiber, and state reference; release interrupts
+          retries, sends bounded goodbye packets, removes listeners, and shuts the responder down exactly once.
+          Use Effect <code>Schema</code> for persisted labels, <code>Ref</code>/<code>SubscriptionRef</code> for
+          observable state, <code>Semaphore</code> for transitions, <code>Deferred</code> or <code>Queue</code> to
+          bridge library events, and typed <code>Effect.tryPromise</code> boundaries for every promise callback.
+        </p>
+
+        <h3>3. Dependency ordering and failure containment</h3>
+        <ul>
+          <li>Make discovery depend on the acquired <code>HttpServer</code> service so port <code>8585</code> is listening before any DNS-SD announcement becomes visible.</li>
+          <li>Because of that layer dependency, discovery finalizers run before the HTTP server finalizer and can withdraw the address cleanly.</li>
+          <li>Run advertising under a scoped supervisor with capped exponential backoff and jitter. Retry UDP/socket, temporary no-network, and interface-republish failures without producing an unhandled rejection or terminating Showtime.</li>
+          <li>Deduplicate repeated logs. Record state transitions and selected non-secret hostname, but never invitation tokens, client capabilities, or full pairing URLs.</li>
+          <li>mDNS failure is degraded, not fatal: the show database, desktop renderer, HTTP server, RPC loopback client, and IP pairing candidates continue to work. A TCP <code>8585</code> bind failure remains fatal and produces the existing actionable startup dialog.</li>
+        </ul>
+
+        <h3>4. Persistent hostname preference</h3>
+        <ul>
+          <li>Store a small schema-versioned discovery file under the existing <code>.showtime</code> data directory using the shared atomic JSON helper.</li>
+          <li>Persist only the successfully announced label, never a candidate still being probed.</li>
+          <li>There is no migration: a missing file means first-run probing from <code>showtime</code>. A malformed non-security-critical discovery file is quarantined/ignored with a warning and regenerated after successful announcement rather than crashing the backend.</li>
+        </ul>
+
+        <h3>5. Connection enable/disable integration</h3>
+        <ul>
+          <li>Initial advertisement follows persisted <code>connectionsEnabled</code>. Disabled remote hosting must not advertise a usable Showtime service.</li>
+          <li>Disabling connections first closes admission through settings, interrupts active remote sessions, then withdraws mDNS records. Repeated disable calls are no-ops.</li>
+          <li>Enabling connections opens the existing HTTP/RPC gate and starts announcement. If announcement is degraded, private-IP pairing remains available and the UI explains the fallback.</li>
+          <li>Serialize this lifecycle with the existing connection-management transition so UI state is reported only after the requested local state is settled.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Connection and UI integration</h2>
+        <ol>
+          <li>
+            Replace the IP-specific candidate DTO with a schema-derived union for <code>hostname</code> and
+            <code>ip-address</code> candidates. Include a human label, host, complete pairing URL, and optional
+            interface name. Validate DTOs at the Electron IPC boundary.
+          </li>
+          <li>
+            <code>ConnectionManager.pairingInfo</code> asks <code>LocalDiscovery</code> and
+            <code>NetworkAddresses</code> concurrently, puts the announced <code>.local</code> URL first, and
+            retains all valid private-IP candidates as fallbacks.
+          </li>
+          <li>
+            The connection dialog defaults the QR code and copy action to
+            <code>http://showtime[-N].local:8585/#pair=&hellip;</code>. Its selector labels that option &ldquo;Showtime local
+            address&rdquo; and keeps adapter-specific IP choices underneath. Use existing UI component defaults;
+            only layout changes are needed.
+          </li>
+          <li>
+            While probing, show a short non-technical &ldquo;Finding an easy local address&hellip;&rdquo; state. On degradation,
+            select the best IP automatically and say that the easy name is unavailable on this network; do not
+            block pairing or expose raw socket errors.
+          </li>
+          <li>
+            No browser credential or reconnect algorithm changes are needed. Pairing and RPC URLs remain
+            same-origin, so the current stored-connection resolver automatically uses the hostname and port from
+            <code>window.location</code>.
+          </li>
+        </ol>
+        <div class="callout">
+          <p>
+            Moving from port <code>34987</code> to <code>8585</code> changes the browser origin. Previously paired
+            browsers cannot read credentials stored under the old origin and must scan a new invitation once.
+            The prerelease/no-migration permission makes this an accepted breaking change. Do not keep an old-port
+            redirect or compatibility listener.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Security and network boundaries</h2>
+        <ul>
+          <li>mDNS publishes only the hostname, minimal <code>_http._tcp</code> service metadata, and port <code>8585</code>. It must never publish show names, device names, invitation tokens, client IDs, capabilities, or pairing URLs in TXT records.</li>
+          <li>The hostname is discovery, not authorization. Existing single-use invitation tokens and per-client RPC capabilities remain mandatory.</li>
+          <li><code>.local</code> is link-local. It is not promised across routed VLANs, guest-network isolation, enterprise multicast filtering, VPN boundaries, or access points that suppress multicast.</li>
+          <li>Keep IP URLs because some venue networks and client operating systems disable or filter mDNS. The UI should never imply that a missing <code>.local</code> name means the server itself is down.</li>
+          <li>Verify packaged-app firewall behavior for TCP <code>8585</code> and mDNS UDP <code>5353</code>. Do not request broad firewall exceptions beyond the executable and required protocols.</li>
+          <li>Plain HTTP retains the trusted-LAN confidentiality limitation documented by the existing connection design; this change does not weaken or claim to solve it.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Expected implementation areas</h2>
+        <table>
+          <thead><tr><th>Area</th><th>Planned work</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>pnpm-workspace.yaml</code>, lockfile, patch</td>
+              <td>Pin and patch the mDNS dependency; document the two intentional deviations and make dependency upgrades fail verification if the patch no longer applies.</td>
+            </tr>
+            <tr>
+              <td><code>packages/backend/src/connections</code></td>
+              <td>Add endpoint configuration, hostname persistence, <code>LocalDiscovery</code> contract/live/test layers, typed errors, lifecycle supervisor, and URL candidate composition.</td>
+            </tr>
+            <tr>
+              <td><code>packages/backend/src/index.ts</code></td>
+              <td>Refactor the oversized composition root, enforce HTTP-before-advertisement layer ordering, integrate enable/disable, and expose discovery state through <code>ConnectionManager</code>.</td>
+            </tr>
+            <tr>
+              <td><code>packages/shared</code></td>
+              <td>Schema-derived candidate/discovery-state DTOs and the canonical port/name constants or constructors shared by desktop, backend, and tests.</td>
+            </tr>
+            <tr>
+              <td><code>apps/desktop/electron/main.ts</code></td>
+              <td>Use port <code>8585</code>, retain loopback desktop RPC, and preserve orderly runtime disposal before app exit.</td>
+            </tr>
+            <tr>
+              <td><code>apps/web/src/components/connections</code></td>
+              <td>Prefer the easy hostname in QR/copy/select UI and present probing/degraded fallback states using current component defaults.</td>
+            </tr>
+            <tr>
+              <td>Existing connection/platform tests</td>
+              <td>Replace old-port expectations and prove the existing fragment storage, same-origin WebSocket URL, revocation, disable, and reconnect behavior under hostname origins.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Failure behavior</h2>
+        <table>
+          <thead><tr><th>Failure</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>TCP <code>8585</code> already bound</td><td>Fail desktop startup with a concise instruction to close the conflicting Showtime/app. Never choose another port.</td></tr>
+            <tr><td>UDP <code>5353</code> unavailable or multicast blocked</td><td>Keep the server running, mark discovery degraded, retry with bounded backoff, and use IP candidates.</td></tr>
+            <tr><td>No usable LAN IPv4 address</td><td>Desktop loopback continues. Pairing UI reports no local network until an adapter becomes available; discovery retries without busy-looping.</td></tr>
+            <tr><td>Hostname conflict during startup</td><td>Resolve through RFC probing, announce the next exact suffix, persist only after success, and update pairing info atomically.</td></tr>
+            <tr><td>Conflict appears after announcement</td><td>Withdraw/defend according to RFC behavior; if the name is lost, transition through probing to the next suffix without terminating the process.</td></tr>
+            <tr><td>Network adapter/DHCP change</td><td>Reannounce valid records. If the responder cannot recover, dispose it and retry while RPC loopback and backend state remain alive.</td></tr>
+            <tr><td>Hostname persistence write fails</td><td>Current announcement remains valid, but state reports a deduplicated warning; retry persistence. Never log credentials or crash show operation.</td></tr>
+            <tr><td>Shutdown cleanup times out</td><td>Bound goodbye cleanup so app quit cannot hang forever, then force-close the responder. The next startup still probes before claiming.</td></tr>
+            <tr><td>Client cannot resolve <code>.local</code></td><td>User selects/scans an IP candidate from the same dialog; pairing and reconnection behavior are otherwise unchanged.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification plan</h2>
+        <ol>
+          <li>Unit-test label parsing/formatting, DNS-label length limits, exact suffix sequence, persisted preference, corrupt-state recovery, URL encoding, and port <code>8585</code>.</li>
+          <li>Use a fake <code>MdnsAdvertiser</code> layer to deterministically test disabled, probing, announced, conflicted, degraded, retried, and disposed state transitions with Effect's test clock where timing is involved.</li>
+          <li>Run isolated responder integration tests proving one process gets <code>showtime.local</code>, the next gets <code>showtime-1.local</code>, a third gets <code>showtime-2.local</code>, and simultaneous starts never share a unique hostname.</li>
+          <li>Test restart continuity: a suffixed server reclaims its persisted label when free, advances when occupied, and never promotes itself while running.</li>
+          <li>Assert the patched dependency never invokes <code>process.exit</code> on an injected republish failure and that the adapter retries without an unhandled rejection.</li>
+          <li>Capture mDNS packets in integration tests or a test decoder to verify A, PTR, SRV, TXT, cache-flush, and goodbye records; assert SRV port <code>8585</code> and absence of secrets.</li>
+          <li>Prove announcement begins only after TCP is listening and shutdown withdraws discovery before the HTTP layer is released.</li>
+          <li>Extend backend HTTP/WebSocket tests for <code>showtime.local:8585</code>-style Host headers while preserving unauthenticated 404s, one-time pairing, RPC authorization, presence, revocation, disable, and restart reconnect.</li>
+          <li>Extend UI/platform tests so the hostname candidate is preferred, IP fallback remains selectable, and a hostname page constructs its WebSocket URL from the same origin.</li>
+          <li>Perform packaged Windows, macOS, and Linux smoke tests with two machines on one LAN, two Showtime servers, restart/crash recovery, Wi-Fi reconnect, firewall prompt/rules, Android/iOS browsers, and a multicast-blocking guest network.</li>
+          <li>Run <code>pnpm ready</code> and a source search confirming active production/test code no longer contains port <code>34987</code>.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Acceptance criteria</h2>
+        <ul>
+          <li>A single enabled Showtime server is reachable at <code>http://showtime.local:8585</code> on an mDNS-capable local network.</li>
+          <li>Additional concurrent servers receive exact, unique <code>showtime-1.local</code>, <code>showtime-2.local</code>, &hellip; addresses without manual configuration.</li>
+          <li>The advertised DNS-SD service and every production pairing/RPC URL use port <code>8585</code>; the backend never silently changes ports.</li>
+          <li>Existing invitation consumption, credential storage, WebSocket authorization, reconnection, disable, and revocation semantics remain intact.</li>
+          <li>No mDNS failure, interface churn, rejected promise, or dependency callback can terminate the Showtime process.</li>
+          <li>Disabling connections withdraws the advertisement and blocks remote hosting; re-enabling restores it.</li>
+          <li>When <code>.local</code> is unavailable, users can still connect through an automatically offered IP URL.</li>
+          <li>Graceful runtime disposal sends goodbye records and closes all responder resources without delaying app exit indefinitely.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Explicitly out of scope</h2>
+        <ul>
+          <li>Making bare <code>http://showtime.local</code> work without <code>:8585</code> by also binding privileged/default port 80.</li>
+          <li>Routing <code>.local</code> across VLANs, the public internet, guest isolation, or networks that suppress multicast.</li>
+          <li>Replacing trusted-LAN HTTP with automatic TLS certificates.</li>
+          <li>Maintaining a compatibility listener or browser-storage migration from port <code>34987</code>.</li>
+          <li>Using DNS-SD browsing to build a list of all Showtime servers in the web UI; this change only publishes stable addresses.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Primary references</h2>
+        <ul>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6762.html">RFC 6762 &mdash; Multicast DNS</a>: <code>.local</code> resolution, probing, simultaneous conflict tie-breaking, announcements, cache flush, ongoing conflict handling, and goodbye records.</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6763.html">RFC 6763 &mdash; DNS-Based Service Discovery</a>: PTR/SRV/TXT service publication and port discovery.</li>
+          <li><a href="https://developers.homebridge.io/ciao/classes/CiaoService.html"><code>@homebridge/ciao</code> service lifecycle documentation</a>: uniqueness probing, announcements, interface records, and cleanup.</li>
+          <li><a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml">IANA Service Name and Transport Protocol Port Number Registry</a>: current port assignment status.</li>
+          <li><code>.repos/effect/packages/effect/src/Effect.ts</code> and <code>.repos/effect/packages/platform-node/src/NodeHttpServer.ts</code>: Effect v4 scoped acquisition/finalization and the server lifecycle pattern used by this repository.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
