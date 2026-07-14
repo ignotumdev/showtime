@@ -198,8 +198,8 @@ export const capturePairingFragment = async (
 
   releaseReservation();
   try {
-    writeProfileSelection(parsed.clientProfile, storage);
     storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
+    writeProfileSelection(parsed.clientProfile, storage);
     if (typeof window !== "undefined")
       window.dispatchEvent(new Event(profileSelectionChangedEvent));
   } catch {
@@ -214,23 +214,42 @@ export const capturePairingFragment = async (
   return { status: "paired" };
 };
 
-export const updateConnectionProfile = async (
+let connectionProfileUpdateQueue: Promise<void> = Promise.resolve();
+
+export const updateConnectionProfile = (
   clientProfile: ProfileIdType,
   storage: Pick<Storage, "getItem" | "setItem"> | undefined = browserLocalStorage(),
   request: typeof fetch = fetch,
 ): Promise<void> => {
-  const connection = readStoredConnection(storage);
-  if (!connection || connection.clientProfile === clientProfile) return;
-  const response = await request(
-    `/connection-profile/${encodeURIComponent(connection.clientId)}/${encodeURIComponent(connection.capability)}`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientProfile }),
-    },
-  );
-  if (!response.ok) throw new Error(`Profile update failed (${response.status})`);
-  storage?.setItem(showtimeConnectionStorageKey, JSON.stringify({ ...connection, clientProfile }));
+  const update = connectionProfileUpdateQueue.then(async () => {
+    const connection = readStoredConnection(storage);
+    if (!connection || connection.clientProfile === clientProfile) return;
+    const response = await request(
+      `/connection-profile/${encodeURIComponent(connection.clientId)}/${encodeURIComponent(connection.capability)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clientProfile }),
+      },
+    );
+    if (!response.ok) throw new Error(`Profile update failed (${response.status})`);
+
+    // The connection may have been replaced while the request was in flight.
+    // Never overwrite newer credentials with the snapshot used for this request.
+    const currentConnection = readStoredConnection(storage);
+    if (
+      !currentConnection ||
+      currentConnection.clientId !== connection.clientId ||
+      currentConnection.capability !== connection.capability
+    )
+      return;
+    storage?.setItem(
+      showtimeConnectionStorageKey,
+      JSON.stringify({ ...currentConnection, clientProfile }),
+    );
+  });
+  connectionProfileUpdateQueue = update.catch(() => undefined);
+  return update;
 };
 
 export const storedRpcWebSocketUrl = (

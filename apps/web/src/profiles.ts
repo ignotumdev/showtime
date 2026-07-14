@@ -16,7 +16,7 @@ const writeSelection = (profileId: ProfileId) => {
   }
 };
 
-export function useSelectedProfile(state: ProfilesState | undefined) {
+export function useProfileSelection(state: ProfilesState | undefined) {
   const [storedId, setStoredId] = React.useState(readProfileSelection);
   React.useEffect(() => {
     const update = () => setStoredId(readProfileSelection());
@@ -40,6 +40,18 @@ export function useSelectedProfile(state: ProfilesState | undefined) {
     }
   }, [selected, storedId]);
 
+  const select = React.useCallback((profile: Profile) => {
+    setStoredId(profile.id);
+    writeSelection(profile.id);
+  }, []);
+
+  return { selected, select } as const;
+}
+
+export function useSelectedProfile(state: ProfilesState | undefined) {
+  const selection = useProfileSelection(state);
+  const selected = selection.selected;
+
   React.useEffect(() => {
     if (!selected) return;
     let active = true;
@@ -59,10 +71,5 @@ export function useSelectedProfile(state: ProfilesState | undefined) {
     };
   }, [selected]);
 
-  const select = React.useCallback((profile: Profile) => {
-    setStoredId(profile.id);
-    writeSelection(profile.id);
-  }, []);
-
-  return { selected, select } as const;
+  return selection;
 }

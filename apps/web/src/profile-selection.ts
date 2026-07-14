@@ -1,4 +1,5 @@
-import type { ProfileId } from "@showtime/contracts";
+import { ProfileId } from "@showtime/contracts";
+import { Schema } from "effect";
 
 export const profileSelectionStorageKey = "showtime.selected-profile.v1";
 export const profileSelectionChangedEvent = "showtime-profile-selection";
@@ -8,13 +9,13 @@ type WritableStorage = Pick<Storage, "setItem">;
 
 export const readProfileSelection = (
   storage: ReadableStorage = localStorage,
-): string | undefined => {
+): ProfileId | undefined => {
   try {
     const parsed = JSON.parse(storage.getItem(profileSelectionStorageKey) ?? "null") as unknown;
     return typeof parsed === "object" &&
       parsed !== null &&
       "profileId" in parsed &&
-      typeof parsed.profileId === "string"
+      Schema.is(ProfileId)(parsed.profileId)
       ? parsed.profileId
       : undefined;
   } catch {

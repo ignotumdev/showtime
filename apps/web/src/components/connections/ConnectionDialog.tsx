@@ -55,7 +55,7 @@ import {
 } from "./connection-management";
 import { cn } from "@/lib/utils";
 import { profileAtoms } from "@/client";
-import { useSelectedProfile } from "@/profiles";
+import { useProfileSelection } from "@/profiles";
 import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
 import { showColorClassNames } from "@/components/shows/show-color";
 
@@ -319,17 +319,25 @@ function CreateClientDialog({
   readonly profilesState: ReturnType<typeof currentProfilesState>;
   readonly profilesResult: Parameters<typeof currentProfilesState>[0];
 }) {
-  const { selected: currentProfile } = useSelectedProfile(profilesState);
+  const { selected: currentProfile } = useProfileSelection(profilesState);
   const [name, setName] = React.useState("");
   const [clientProfileId, setClientProfileId] = React.useState("");
   const [canManageConnections, setCanManageConnections] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const creatingRef = React.useRef(false);
+  const profileInitializedForOpen = React.useRef(false);
   const [error, setError] = React.useState<string>();
   const selectedProfile =
     profilesState?.profiles.find((profile) => profile.id === clientProfileId) ?? currentProfile;
   React.useEffect(() => {
-    if (open && currentProfile) setClientProfileId(currentProfile.id);
+    if (!open) {
+      profileInitializedForOpen.current = false;
+      return;
+    }
+    if (!profileInitializedForOpen.current && currentProfile) {
+      profileInitializedForOpen.current = true;
+      setClientProfileId(currentProfile.id);
+    }
   }, [currentProfile, open]);
   const create = async () => {
     if (creatingRef.current || !selectedProfile) return;
@@ -376,7 +384,10 @@ function CreateClientDialog({
           className="w-full"
           state={profilesState}
           selected={selectedProfile}
-          onSelect={(profile) => setClientProfileId(profile.id)}
+          onSelect={(profile) => {
+            profileInitializedForOpen.current = true;
+            setClientProfileId(profile.id);
+          }}
           loadResult={profilesResult}
           fullWidth
         />
