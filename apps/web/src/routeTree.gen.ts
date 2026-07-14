@@ -16,6 +16,7 @@ import { Route as ShowsShowIdRouteRouteImport } from './routes/shows/$showId/rou
 import { Route as ShowsShowIdIndexRouteImport } from './routes/shows/$showId/index'
 import { Route as ShowsShowIdMixesRouteImport } from './routes/shows/$showId/mixes'
 import { Route as ShowsShowIdMicrophonesRouteImport } from './routes/shows/$showId/microphones'
+import { Route as ShowsShowIdChatRouteImport } from './routes/shows/$showId/chat'
 import { Route as ShowsShowIdSetlistIndexRouteImport } from './routes/shows/$showId/setlist/index'
 import { Route as ShowsShowIdSetlistSongIdRouteImport } from './routes/shows/$showId/setlist/$songId'
 
@@ -54,6 +55,11 @@ const ShowsShowIdMicrophonesRoute = ShowsShowIdMicrophonesRouteImport.update({
   path: '/microphones',
   getParentRoute: () => ShowsShowIdRouteRoute,
 } as any)
+const ShowsShowIdChatRoute = ShowsShowIdChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => ShowsShowIdRouteRoute,
+} as any)
 const ShowsShowIdSetlistIndexRoute = ShowsShowIdSetlistIndexRouteImport.update({
   id: '/setlist/',
   path: '/setlist/',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/live': typeof LiveRouteRouteWithChildren
   '/shows/$showId': typeof ShowsShowIdRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/live': typeof LiveRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId': typeof ShowsShowIdIndexRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/live': typeof LiveRouteRouteWithChildren
   '/shows/$showId': typeof ShowsShowIdRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/live'
     | '/shows/$showId'
     | '/live/$showId'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId/'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/live'
     | '/live/$showId'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/live'
     | '/shows/$showId'
     | '/live/$showId'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId/'
@@ -191,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShowsShowIdMicrophonesRouteImport
       parentRoute: typeof ShowsShowIdRouteRoute
     }
+    '/shows/$showId/chat': {
+      id: '/shows/$showId/chat'
+      path: '/chat'
+      fullPath: '/shows/$showId/chat'
+      preLoaderRoute: typeof ShowsShowIdChatRouteImport
+      parentRoute: typeof ShowsShowIdRouteRoute
+    }
     '/shows/$showId/setlist/': {
       id: '/shows/$showId/setlist/'
       path: '/setlist'
@@ -221,6 +240,7 @@ const LiveRouteRouteWithChildren = LiveRouteRoute._addFileChildren(
 )
 
 interface ShowsShowIdRouteRouteChildren {
+  ShowsShowIdChatRoute: typeof ShowsShowIdChatRoute
   ShowsShowIdMicrophonesRoute: typeof ShowsShowIdMicrophonesRoute
   ShowsShowIdMixesRoute: typeof ShowsShowIdMixesRoute
   ShowsShowIdIndexRoute: typeof ShowsShowIdIndexRoute
@@ -229,6 +249,7 @@ interface ShowsShowIdRouteRouteChildren {
 }
 
 const ShowsShowIdRouteRouteChildren: ShowsShowIdRouteRouteChildren = {
+  ShowsShowIdChatRoute: ShowsShowIdChatRoute,
   ShowsShowIdMicrophonesRoute: ShowsShowIdMicrophonesRoute,
   ShowsShowIdMixesRoute: ShowsShowIdMixesRoute,
   ShowsShowIdIndexRoute: ShowsShowIdIndexRoute,

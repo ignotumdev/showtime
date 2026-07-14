@@ -7,6 +7,7 @@ import {
   ShowtimeRpcs,
   songsSyncKey,
   profilesSyncKey,
+  chatsSyncKey,
 } from "@showtime/contracts";
 import { MicrophoneService } from "../microphones/MicrophoneService.js";
 import { MixService } from "../mixes/MixService.js";
@@ -14,6 +15,7 @@ import { ShowService } from "../shows/ShowService.js";
 import { SongService } from "../songs/SongService.js";
 import { SyncEngine } from "../sync/SyncEngine.js";
 import { ProfileService } from "../profiles/ProfileService.js";
+import { ChatService } from "../chats/ChatService.js";
 
 const handlers = ShowtimeRpcs.toLayer(
   Effect.gen(function* () {
@@ -23,6 +25,7 @@ const handlers = ShowtimeRpcs.toLayer(
     const songs = yield* SongService;
     const sync = yield* SyncEngine;
     const profiles = yield* ProfileService;
+    const chats = yield* ChatService;
     return ShowtimeRpcs.of({
       "shows.list": () => sync.query(showsSyncKey, shows.list),
       "shows.create": ({ name, color }) =>
@@ -31,8 +34,14 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(showsSyncKey, shows.edit({ id, name, color })),
       "shows.delete": ({ id }) =>
         sync.mutation(
-          [...showsSyncKey, ...microphonesSyncKey(id), ...mixesSyncKey(id), ...songsSyncKey(id)],
-          shows.delete(id),
+          [
+            ...showsSyncKey,
+            ...microphonesSyncKey(id),
+            ...mixesSyncKey(id),
+            ...songsSyncKey(id),
+            ...chatsSyncKey(id),
+          ],
+          shows.delete(id).pipe(Effect.andThen(chats.deleteShow(id))),
         ),
       "profiles.list": () => sync.query(profilesSyncKey, profiles.list),
       "profiles.create": ({ name, color }) =>
@@ -41,6 +50,25 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(profilesSyncKey, profiles.edit({ id, name, color })),
       "profiles.delete": ({ id }) => sync.mutation(profilesSyncKey, profiles.delete(id)),
       "profiles.setDefault": ({ id }) => sync.mutation(profilesSyncKey, profiles.setDefault(id)),
+      "chats.state": ({ showId, profileId }) =>
+        sync.query(chatsSyncKey(showId), chats.state(showId, profileId)),
+      "chats.createChannel": ({ showId, name }) =>
+        sync.mutation(chatsSyncKey(showId), chats.createChannel({ showId, name })),
+      "chats.send": ({ showId, channelId, senderProfileId, body }) =>
+        sync.mutation(
+          chatsSyncKey(showId),
+          chats.send({ showId, channelId, senderProfileId, body }),
+        ),
+      "chats.markRead": ({ showId, channelId, profileId, sequence }) =>
+        sync.mutation(
+          chatsSyncKey(showId),
+          chats.markRead({ showId, channelId, profileId, sequence }),
+        ),
+      "chats.setNotifications": ({ showId, channelId, profileId, enabled }) =>
+        sync.mutation(
+          chatsSyncKey(showId),
+          chats.setNotifications({ showId, channelId, profileId, enabled }),
+        ),
       "microphones.list": ({ showId }) =>
         sync.query(microphonesSyncKey(showId), microphones.list(showId)),
       "microphones.create": ({ showId, color }) =>

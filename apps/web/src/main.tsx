@@ -13,6 +13,8 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { showsAtom } from "./client";
 import { useBrowserConnectionIdentity } from "./browser-connection-state";
+import { NotificationProvider } from "./notifications/NotificationProvider";
+import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");
@@ -46,31 +48,34 @@ function SynchronizedApp() {
     isDesktopHost() || pairedBrowser || Boolean(import.meta.env.VITE_SHOWTIME_RPC_WEBSOCKET_URL);
   const revoked = expectsConnection && connection.status === "revoked";
   return (
-    <AtomProvider>
-      <TooltipProvider>
-        {expectsConnection && !revoked && <ConnectionCoordinator attempt={connection.attempt} />}
-        {expectsConnection && (
-          <ConnectionRecovery
-            status={connection.status}
-            attempt={connection.attempt}
-            pairedBrowser={pairedBrowser}
-            browserConnectionIdentity={browserConnectionIdentity}
-          />
-        )}
-        {!revoked && (
-          <div
-            className="min-h-screen bg-[#0a0a0a]"
-            aria-hidden={expectsConnection && connection.status !== "connected"}
-            inert={expectsConnection && connection.status !== "connected" ? true : undefined}
-          >
-            <RouterProvider router={router} />
-          </div>
-        )}
-        {expectsConnection && connection.status !== "connected" && (
-          <ConnectionOverlay status={connection.status} />
-        )}
-      </TooltipProvider>
-    </AtomProvider>
+    <NotificationProvider>
+      <AtomProvider>
+        <TooltipProvider>
+          {expectsConnection && !revoked && <ConnectionCoordinator attempt={connection.attempt} />}
+          {expectsConnection && (
+            <ConnectionRecovery
+              status={connection.status}
+              attempt={connection.attempt}
+              pairedBrowser={pairedBrowser}
+              browserConnectionIdentity={browserConnectionIdentity}
+            />
+          )}
+          {!revoked && (
+            <div
+              className="min-h-screen bg-[#0a0a0a]"
+              aria-hidden={expectsConnection && connection.status !== "connected"}
+              inert={expectsConnection && connection.status !== "connected" ? true : undefined}
+            >
+              <RouterProvider router={router} />
+            </div>
+          )}
+          {expectsConnection && connection.status !== "connected" && (
+            <ConnectionOverlay status={connection.status} />
+          )}
+          {!revoked && <ChatNotificationCoordinator />}
+        </TooltipProvider>
+      </AtomProvider>
+    </NotificationProvider>
   );
 }
 

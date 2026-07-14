@@ -6,6 +6,7 @@ import {
   PlayIcon,
   PlusIcon,
   SpeakerIcon,
+  MessageCircleIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +82,12 @@ export function ShowLayout() {
                   params={{ showId }}
                   label="Mixes"
                   icon={SpeakerIcon}
+                />
+                <ShowSidebarLink
+                  to="/shows/$showId/chat"
+                  params={{ showId }}
+                  label="Chat"
+                  icon={MessageCircleIcon}
                 />
               </SidebarMenu>
             </SidebarGroup>
@@ -225,14 +232,18 @@ function MobileBottomNavigation({ showId }: { readonly showId: string }) {
         </span>
         Live
       </Link>
-      <div className="col-span-2 grid">
-        <MobileNavigationLink
-          to="/shows/$showId/setlist"
-          showId={showId}
-          label="Songs"
-          icon={ListMusicIcon}
-        />
-      </div>
+      <MobileNavigationLink
+        to="/shows/$showId/setlist"
+        showId={showId}
+        label="Songs"
+        icon={ListMusicIcon}
+      />
+      <MobileNavigationLink
+        to="/shows/$showId/chat"
+        showId={showId}
+        label="Chat"
+        icon={MessageCircleIcon}
+      />
     </nav>
   );
 }
@@ -243,7 +254,11 @@ function MobileNavigationLink({
   label,
   icon: Icon,
 }: {
-  readonly to: "/shows/$showId/microphones" | "/shows/$showId/mixes" | "/shows/$showId/setlist";
+  readonly to:
+    | "/shows/$showId/microphones"
+    | "/shows/$showId/mixes"
+    | "/shows/$showId/setlist"
+    | "/shows/$showId/chat";
   readonly showId: string;
   readonly label: string;
   readonly icon: React.ComponentType<{ className?: string }>;
@@ -268,6 +283,7 @@ type ShowSidebarLinkProps = (
         | "/shows/$showId"
         | "/shows/$showId/microphones"
         | "/shows/$showId/mixes"
+        | "/shows/$showId/chat"
         | "/shows/$showId/setlist";
       readonly params: { readonly showId: string };
     }

@@ -12,6 +12,15 @@ import {
 } from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
 import { Profile, ProfileId, ProfileName, ProfilesState } from "./profile.js";
+import {
+  ChatChannel,
+  ChatChannelId,
+  ChatChannelName,
+  ChatMessage,
+  ChatMessageBody,
+  ChatSequence,
+  ChatSnapshot,
+} from "./chat.js";
 
 export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
   message: Schema.String,
@@ -57,6 +66,47 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
   }),
   Rpc.make("profiles.setDefault", {
     payload: { id: ProfileId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
+  Rpc.make("chats.state", {
+    payload: { showId: ShowId, profileId: ProfileId },
+    success: ChatSnapshot,
+    error: RpcError,
+    stream: true,
+  }),
+  Rpc.make("chats.createChannel", {
+    payload: { showId: ShowId, name: ChatChannelName },
+    success: ChatChannel,
+    error: RpcError,
+  }),
+  Rpc.make("chats.send", {
+    payload: {
+      showId: ShowId,
+      channelId: ChatChannelId,
+      senderProfileId: ProfileId,
+      body: ChatMessageBody,
+    },
+    success: ChatMessage,
+    error: RpcError,
+  }),
+  Rpc.make("chats.markRead", {
+    payload: {
+      showId: ShowId,
+      channelId: ChatChannelId,
+      profileId: ProfileId,
+      sequence: ChatSequence,
+    },
+    success: Schema.Void,
+    error: RpcError,
+  }),
+  Rpc.make("chats.setNotifications", {
+    payload: {
+      showId: ShowId,
+      channelId: ChatChannelId,
+      profileId: ProfileId,
+      enabled: Schema.Boolean,
+    },
     success: Schema.Void,
     error: RpcError,
   }),
