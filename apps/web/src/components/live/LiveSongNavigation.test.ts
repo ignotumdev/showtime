@@ -10,7 +10,7 @@ describe("liveSongNavigationDirection", () => {
     expect(liveSongNavigationDirection(key)).toBe("previous");
   });
 
-  it.each(["Enter", "Escape", "Space", "a"])("ignores %j", (key) => {
+  it.each(["Enter", "Escape", "Tab", "a"])("ignores %j", (key) => {
     expect(liveSongNavigationDirection(key)).toBeUndefined();
   });
 });

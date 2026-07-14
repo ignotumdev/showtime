@@ -30,7 +30,7 @@ export function LiveSongNavigation({
       if (
         target instanceof Element &&
         target.closest(
-          "a,button,input,select,textarea,[contenteditable='true'],[role='button'],[role='textbox']",
+          "a,button,input,select,textarea,[contenteditable],[role='button'],[role='textbox']",
         )
       )
         return;
