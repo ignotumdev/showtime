@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { showtimeConnectionStorageKey } from "@showtime/shared";
-import { canManageConnections, getConnectionManagementClient } from "./connection-management";
+import { getConnectionManagementClient } from "./connection-management";
 
 const credentials = {
   version: 1,
@@ -12,22 +12,20 @@ const credentials = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("browser connection management", () => {
-  it("exposes management only when every management scope is present", () => {
+  it("exposes a read-only client when the read scope is present", () => {
     vi.stubGlobal("window", {
       localStorage: {
         getItem: (key: string) =>
-          key === showtimeConnectionStorageKey ? JSON.stringify(credentials) : null,
+          key === showtimeConnectionStorageKey
+            ? JSON.stringify({ ...credentials, scopes: ["connections:read"] })
+            : null,
       },
     });
-    expect(canManageConnections()).toBe(true);
-
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: () =>
-          JSON.stringify({ ...credentials, scopes: ["connections:read", "connections:create"] }),
-      },
+    expect(getConnectionManagementClient()).toMatchObject({
+      isOwner: false,
+      canCreate: false,
+      canDelete: false,
     });
-    expect(canManageConnections()).toBe(false);
   });
 
   it("sends every operation through the authenticated scoped endpoint", async () => {

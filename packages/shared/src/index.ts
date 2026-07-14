@@ -18,11 +18,8 @@ export const showtimeConnectionScopes = [
 export const ShowtimeConnectionScope = Schema.Literals(showtimeConnectionScopes);
 export type ShowtimeConnectionScope = typeof ShowtimeConnectionScope.Type;
 export const ShowtimeConnectionScopes = Schema.Array(ShowtimeConnectionScope);
-export const showtimeConnectionManagementScopes: ReadonlyArray<ShowtimeConnectionScope> = [
-  "connections:read",
-  "connections:create",
-  "connections:delete",
-];
+export const showtimeConnectionManagementScopes: ReadonlyArray<ShowtimeConnectionScope> =
+  showtimeConnectionScopes;
 
 export const hasShowtimeConnectionScope = (
   scopes: ReadonlyArray<ShowtimeConnectionScope>,

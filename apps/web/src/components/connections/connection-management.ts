@@ -3,11 +3,8 @@ import type {
   ShowtimeConnectionScope,
   ShowtimeConnectionsState,
 } from "@showtime/shared";
-import {
-  hasShowtimeConnectionManagementScopes,
-  hasShowtimeConnectionScope,
-} from "@showtime/shared";
-import { readStoredConnection } from "@/connection";
+import { hasShowtimeConnectionScope } from "@showtime/shared";
+import { readStoredConnection } from "../../connection";
 
 export interface ConnectionManagementClient {
   readonly isOwner: boolean;
@@ -71,10 +68,4 @@ export const getConnectionManagementClient = (): ConnectionManagementClient | un
         responseJson<ShowtimeConnectionsState>(response),
       ),
   };
-};
-
-export const canManageConnections = () => {
-  if (window.showtime) return true;
-  const connection = readStoredConnection();
-  return connection !== undefined && hasShowtimeConnectionManagementScopes(connection.scopes);
 };

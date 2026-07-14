@@ -37,7 +37,6 @@ import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
-import { canManageConnections } from "@/components/connections/connection-management";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -188,7 +187,7 @@ function ShowHeader({
         </Link>
         <div className="ml-auto shrink-0">
           <div className="flex items-center gap-1">
-            {canManageConnections() && <ConnectionDialog compact />}
+            <ConnectionDialog compact />
             <ShowPageAction showId={showId} pathname={pathname} />
           </div>
         </div>
