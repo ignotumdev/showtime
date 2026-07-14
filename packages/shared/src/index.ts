@@ -84,7 +84,7 @@ export interface ShowtimeStoredConnection {
 export interface ShowtimeHostBridge {
   readonly rpcWebSocketUrl: () => Promise<string>;
   readonly connectionsState: () => Promise<ShowtimeConnectionsState>;
-  readonly createInvitation: (name: string) => Promise<ShowtimeConnectionsState>;
+  readonly createInvitation: (name?: string) => Promise<ShowtimeConnectionsState>;
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;
   readonly removeConnection: (id: string) => Promise<ShowtimeConnectionsState>;
   readonly setConnectionsEnabled: (enabled: boolean) => Promise<ShowtimeConnectionsState>;

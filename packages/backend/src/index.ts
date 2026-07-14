@@ -53,7 +53,7 @@ export class ConnectionManager extends Context.Service<
     readonly rpcWebSocketUrl: Effect.Effect<string>;
     readonly connectionsState: Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly createInvitation: (
-      name: string,
+      name?: string,
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
     readonly removeConnection: (

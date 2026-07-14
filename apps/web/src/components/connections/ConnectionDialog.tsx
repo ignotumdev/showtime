@@ -241,12 +241,12 @@ function CreateClientDialog({
   const creatingRef = React.useRef(false);
   const [error, setError] = React.useState<string>();
   const create = async () => {
-    if (creatingRef.current || !name.trim()) return;
+    if (creatingRef.current) return;
     creatingRef.current = true;
     setCreating(true);
     setError(undefined);
     try {
-      onCreated(await window.showtime!.createInvitation(name.trim()));
+      onCreated(await window.showtime!.createInvitation(name.trim() || undefined));
       setName("");
       onOpenChange(false);
     } catch {
@@ -261,7 +261,10 @@ function CreateClientDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a new client</DialogTitle>
-          <DialogDescription>Name this device so it is easy to recognize later.</DialogDescription>
+          <DialogDescription>
+            Add a label to make this device easy to recognize, or leave it blank to use the next
+            client number.
+          </DialogDescription>
         </DialogHeader>
         <Input
           autoFocus
@@ -271,7 +274,7 @@ function CreateClientDialog({
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => event.key === "Enter" && !creating && void create()}
         />
-        <Button type="button" disabled={creating || !name.trim()} onClick={create}>
+        <Button type="button" disabled={creating} onClick={create}>
           {creating ? "Creating…" : "Create client"}
         </Button>
         {error && (
