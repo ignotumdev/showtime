@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  canLoadPairingInfo,
   pairingCandidateCaption,
   pairingInfoPollDelay,
   pairingInfoRetryDelay,
@@ -312,7 +313,8 @@ function PairClientDialog({
     setError(undefined);
     let timer: number | undefined;
     let consecutiveFailures = 0;
-    const expiresAt = Date.parse(client.expiresAt);
+    let expiresAt = Date.parse(client.expiresAt);
+    let hasRequestedPairingInfo = false;
     const setExpiredError = () => setError("This connection link has expired.");
     const hasExpired = () => pairingInfoRetryWait(expiresAt, 0) === undefined;
     const scheduleLoad = (delay: number) => {
@@ -325,13 +327,19 @@ function PairClientDialog({
     };
     const load = () => {
       if (!active) return;
-      if (hasExpired()) {
+      if (!canLoadPairingInfo(hasRequestedPairingInfo, expiresAt)) {
         setExpiredError();
         return;
       }
+      hasRequestedPairingInfo = true;
       void window.showtime!.pairingInfo(client.invitationId).then(
         (info) => {
           if (!active) return;
+          if (info.expiresAt === null) {
+            setExpiredError();
+            return;
+          }
+          expiresAt = Date.parse(info.expiresAt);
           if (hasExpired()) {
             setExpiredError();
             return;

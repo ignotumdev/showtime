@@ -31,6 +31,12 @@ export const pairingInfoRetryWait = (
     : undefined;
 };
 
+export const canLoadPairingInfo = (
+  hasRequestedPairingInfo: boolean,
+  expiresAt: number,
+  now = Date.now(),
+) => !hasRequestedPairingInfo || pairingInfoRetryWait(expiresAt, 0, now) !== undefined;
+
 export const pairingCandidateCaption = (candidate: ShowtimeConnectionCandidate) =>
   candidate.kind === "ip-address" ? candidate.label : `${candidate.label} · ${candidate.host}`;
 

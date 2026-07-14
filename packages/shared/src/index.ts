@@ -48,6 +48,7 @@ export type ShowtimeConnectionCandidate = typeof ShowtimeConnectionCandidate.Typ
 export const ShowtimeConnectionInfo = Schema.Struct({
   discovery: ShowtimeLocalDiscoveryState,
   candidates: Schema.Array(ShowtimeConnectionCandidate),
+  expiresAt: Schema.NullOr(Schema.String),
 });
 export type ShowtimeConnectionInfo = typeof ShowtimeConnectionInfo.Type;
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ShowtimeConnectionCandidate } from "@showtime/shared";
 import {
+  canLoadPairingInfo,
   pairingCandidateCaption,
   pairingInfoRetryDelay,
   pairingInfoRetryWait,
@@ -43,6 +44,11 @@ describe("pairing dialog", () => {
     expect(pairingInfoRetryWait(1_500, 750, 1_000)).toBe(500);
     expect(pairingInfoRetryWait(1_000, 750, 1_000)).toBeUndefined();
     expect(pairingInfoRetryWait(Number.NaN, 750, 1_000)).toBeUndefined();
+  });
+
+  it("allows the first pairing-info request to renew an expired invitation", () => {
+    expect(canLoadPairingInfo(false, 1_000, 1_000)).toBe(true);
+    expect(canLoadPairingInfo(true, 1_000, 1_000)).toBe(false);
   });
 
   it("does not repeat the host in IP candidate captions", () => {

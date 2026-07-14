@@ -233,29 +233,32 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
         createInvitation: (name) => connections.createInvitation(name).pipe(Effect.andThen(state)),
         pairingInfo: (invitationId) =>
           connections.pairingInvitation(invitationId).pipe(
-            Effect.flatMap((invitation) =>
-              invitation
-                ? Effect.all(
-                    {
-                      discovery: discovery.state,
-                      hostname: discovery.pairingCandidate(invitation.token),
-                      ipAddresses: addresses.candidates(options.port, invitation.token),
-                    },
-                    { concurrency: "unbounded" },
-                  )
-                : Effect.succeed({
-                    discovery: { kind: "disabled" as const },
-                    hostname: undefined,
-                    ipAddresses: [],
-                  }),
-            ),
-            Effect.map(({ discovery: discoveryState, hostname, ipAddresses }) => ({
-              discovery:
-                hostname === undefined
-                  ? discoveryState
-                  : ({ kind: "announced", hostname: hostname.host } as const),
-              candidates: hostname === undefined ? ipAddresses : [hostname, ...ipAddresses],
-            })),
+            Effect.flatMap((invitation): Effect.Effect<ShowtimeConnectionInfo> => {
+              if (!invitation) {
+                return Effect.succeed({
+                  discovery: { kind: "disabled" },
+                  candidates: [],
+                  expiresAt: null,
+                });
+              }
+              return Effect.all(
+                {
+                  discovery: discovery.state,
+                  hostname: discovery.pairingCandidate(invitation.token),
+                  ipAddresses: addresses.candidates(options.port, invitation.token),
+                },
+                { concurrency: "unbounded" },
+              ).pipe(
+                Effect.map(({ discovery: discoveryState, hostname, ipAddresses }) => ({
+                  discovery:
+                    hostname === undefined
+                      ? discoveryState
+                      : ({ kind: "announced", hostname: hostname.host } as const),
+                  candidates: hostname === undefined ? ipAddresses : [hostname, ...ipAddresses],
+                  expiresAt: invitation.expiresAt,
+                })),
+              );
+            }),
           ),
         removeConnection: (id) => connections.remove(id).pipe(Effect.andThen(state)),
         setConnectionsEnabled: (enabled) =>

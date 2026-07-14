@@ -49,5 +49,12 @@ describe("local endpoint", () => {
     expect(() =>
       Schema.decodeUnknownSync(ShowtimeConnectionInfo)({ discovery: { kind: "probing" } }),
     ).toThrow();
+    expect(
+      Schema.decodeUnknownSync(ShowtimeConnectionInfo)({
+        discovery: { kind: "disabled" },
+        candidates: [],
+        expiresAt: null,
+      }),
+    ).toEqual({ discovery: { kind: "disabled" }, candidates: [], expiresAt: null });
   });
 });
