@@ -1,9 +1,20 @@
-import { showtimeConnectionStorageKey, type ShowtimeStoredConnection } from "@showtime/shared";
+import {
+  showtimeConnectionScopes,
+  showtimeConnectionManagementScopes,
+  showtimeConnectionStorageKey,
+  type ShowtimeConnectionScope,
+  type ShowtimeStoredConnection,
+} from "@showtime/shared";
 
 const capabilityPattern = /^[A-Za-z0-9_-]{43}$/;
 const clientIdPattern = /^[A-Za-z0-9_-]{21}$/;
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
+const connectionScopeSet = new Set<string>(showtimeConnectionScopes);
+
+const validScopes = (value: unknown): value is ReadonlyArray<ShowtimeConnectionScope> =>
+  Array.isArray(value) &&
+  value.every((scope) => typeof scope === "string" && connectionScopeSet.has(scope));
 
 export type PairingResult =
   | { readonly status: "none" }
@@ -47,7 +58,9 @@ export const readStoredConnection = (
       clientIdPattern.test(parsed.clientId) &&
       "capability" in parsed &&
       typeof parsed.capability === "string" &&
-      capabilityPattern.test(parsed.capability)
+      capabilityPattern.test(parsed.capability) &&
+      "scopes" in parsed &&
+      validScopes(parsed.scopes)
     ) {
       return parsed as ShowtimeStoredConnection;
     }
@@ -86,7 +99,12 @@ export const capturePairingFragment = async (
   try {
     storage.setItem(
       probeKey,
-      JSON.stringify({ version: 1, clientId: "c".repeat(21), capability: "c".repeat(43) }),
+      JSON.stringify({
+        version: 1,
+        clientId: "c".repeat(21),
+        capability: "c".repeat(43),
+        scopes: showtimeConnectionManagementScopes,
+      }),
     );
   } catch {
     return {
@@ -144,7 +162,9 @@ export const capturePairingFragment = async (
     !clientIdPattern.test(parsed.clientId) ||
     !("capability" in parsed) ||
     typeof parsed.capability !== "string" ||
-    !capabilityPattern.test(parsed.capability)
+    !capabilityPattern.test(parsed.capability) ||
+    !("scopes" in parsed) ||
+    !validScopes(parsed.scopes)
   ) {
     releaseReservation();
     removePairingFragment();
