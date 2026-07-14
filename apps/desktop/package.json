@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "electron": "^30.0.1",
+    "electron": "^43.0.0",
     "electron-builder": "catalog:",
     "typescript": "^5.2.2",
     "vite": "catalog:",

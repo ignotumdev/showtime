@@ -34,6 +34,8 @@ import * as SongService from "./songs/SongService.js";
 import * as SyncEngine from "./sync/SyncEngine.js";
 import * as Settings from "./settings/Settings.js";
 import * as ProfileService from "./profiles/ProfileService.js";
+import * as ChatService from "./chats/ChatService.js";
+import * as ChatDatabase from "./chats/ChatDatabase.js";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
@@ -41,6 +43,7 @@ const ShowBackendLive = ShowDiscovery.layer.pipe(
 
 const ShowRepositoryLive = ShowRepository.layer.pipe(Layer.provideMerge(ShowBackendLive));
 const ProfileLive = ProfileService.layer.pipe(Layer.provideMerge(Ids.layer));
+const ChatLive = ChatService.layer.pipe(Layer.provideMerge(ChatDatabase.layer));
 
 export interface BackendOptions {
   readonly host: string;
@@ -301,6 +304,7 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
           MicrophoneService.layer,
           MixService.layer,
           SongService.layer,
+          ChatLive,
           SyncEngine.layer,
         ),
       ),

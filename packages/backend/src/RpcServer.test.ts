@@ -140,6 +140,41 @@ describe("Showtime WebSocket RPC", () => {
     }
   });
 
+  it("rejects chat state for a deleted show", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-chat-rpc-home-"));
+    tempHomes.add(homeDirectory);
+    const port = await findAvailablePort();
+    const runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+
+    await runtime.runPromise(Effect.void);
+    try {
+      const rpcWebSocketUrl = await runtime.runPromise(
+        Effect.flatMap(ConnectionManager, (connections) => connections.rpcWebSocketUrl),
+      );
+      const clientProtocol = RpcClient.layerProtocolSocket().pipe(
+        Layer.provide(NodeSocket.layerWebSocket(rpcWebSocketUrl)),
+        Layer.provide(RpcSerialization.layerJson),
+      );
+      const request = Effect.gen(function* () {
+        const client = yield* RpcClient.make(ShowtimeRpcs);
+        const profiles = yield* client["profiles.list"]().pipe(Stream.take(1), Stream.runCollect);
+        const created = yield* client["shows.create"]({
+          name: ShowName.make("Deleted chat show"),
+          color: "blue",
+        });
+        yield* client["shows.delete"]({ id: created.id });
+        return yield* client["chats.state"]({
+          showId: created.id,
+          profileId: profiles[0]!.defaultProfileId,
+        }).pipe(Stream.take(1), Stream.runCollect);
+      }).pipe(Effect.scoped, Effect.provide(clientProtocol));
+
+      await expect(Effect.runPromise(request)).rejects.toThrow("Show not found");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("broadcasts authoritative snapshots between independent WebSocket clients", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-sync-home-"));
     tempHomes.add(homeDirectory);

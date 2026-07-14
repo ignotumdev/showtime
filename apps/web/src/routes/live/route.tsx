@@ -8,6 +8,7 @@ import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import type { ShowId } from "@showtime/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import React from "react";
+import { LiveChatDrawer } from "@/components/live/LiveChatDrawer";
 
 export const Route = createFileRoute("/live")({
   component: RouteComponent,
@@ -68,6 +69,7 @@ function LiveRouteContent({
       <div className="h-screen overflow-hidden pt-10">
         <Outlet />
       </div>
+      <LiveChatDrawer showId={typedShowId} />
     </React.Fragment>
   );
 }
