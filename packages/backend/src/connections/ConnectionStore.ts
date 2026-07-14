@@ -40,7 +40,12 @@ const nextDefaultClientName = (names: Iterable<string>) => {
   let highest = 0;
   for (const name of names) {
     const match = defaultClientNamePattern.exec(name);
-    if (match) highest = Math.max(highest, Number(match[1]));
+    if (match) {
+      const suffix = Number(match[1]);
+      if (Number.isSafeInteger(suffix) && suffix < Number.MAX_SAFE_INTEGER) {
+        highest = Math.max(highest, suffix);
+      }
+    }
   }
   return `Client ${highest + 1}`;
 };

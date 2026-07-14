@@ -39,6 +39,34 @@ describe("ConnectionStore session admission", () => {
     expect(names).toEqual(["Client 1", "Monitor iPad", "Client 2"]);
   });
 
+  it("ignores numeric suffixes whose successor cannot be represented safely", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
+    tempHomes.add(homeDirectory);
+    const directory = path.join(homeDirectory, ".showtime");
+    const filePath = path.join(directory, "connections.json");
+    const clients = [
+      "Client 4",
+      `Client ${Number.MAX_SAFE_INTEGER}`,
+      "Client 9007199254740992",
+    ].map((name, index) => ({
+      clientId: `00000000000000000000${index}`,
+      name,
+      capability: `000000000000000000000000000000000000000000${index}`,
+      createdAt: "2026-07-12T20:10:10.266Z",
+    }));
+    await mkdir(directory);
+    await writeFile(filePath, JSON.stringify({ version: 1, clients, invitations: [] }));
+
+    const name = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        return (yield* store.createInvitation()).name;
+      }).pipe(Effect.provide(testLayer(homeDirectory))),
+    );
+
+    expect(name).toBe("Client 5");
+  });
+
   it("loads version 1 connection data without rewriting it", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
     tempHomes.add(homeDirectory);
