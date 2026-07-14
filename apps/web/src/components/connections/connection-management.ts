@@ -12,7 +12,7 @@ export interface ConnectionManagementClient {
   readonly canDelete: boolean;
   readonly connectionsState: () => Promise<ShowtimeConnectionsState>;
   readonly createInvitation: (
-    name: string,
+    name: string | undefined,
     scopes: ReadonlyArray<ShowtimeConnectionScope>,
   ) => Promise<ShowtimeConnectionsState>;
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;

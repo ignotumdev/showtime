@@ -149,7 +149,7 @@ if (gotSingleInstanceLock) {
         );
         ipcMain.handle(
           desktopCreateInvitationChannel,
-          (_event, name: string, scopes: ReadonlyArray<ShowtimeConnectionScope>) =>
+          (_event, name: string | undefined, scopes: ReadonlyArray<ShowtimeConnectionScope>) =>
             backendRuntime.runPromise(
               Effect.flatMap(ConnectionManager, (_) => _.createInvitation(name, scopes)),
             ),

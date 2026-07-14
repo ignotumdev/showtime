@@ -9,19 +9,22 @@ import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.j
 const NanoId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{21}$/));
 const Capability = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
 const ClientName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80));
+const StoredConnectionScopes = ShowtimeConnectionScopes.pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed([])),
+);
 const Client = Schema.Struct({
   clientId: NanoId,
   name: ClientName,
   capability: Capability,
   createdAt: Schema.String,
-  scopes: ShowtimeConnectionScopes,
+  scopes: StoredConnectionScopes,
 });
 const Invitation = Schema.Struct({
   invitationId: NanoId,
   name: ClientName,
   token: Capability,
   expiresAt: Schema.String,
-  scopes: ShowtimeConnectionScopes,
+  scopes: StoredConnectionScopes,
 });
 const ConnectionsFile = Schema.Struct({
   version: Schema.Literal(1),
@@ -39,6 +42,20 @@ export interface PairingCredentials {
 
 const pairingLifetimeMs = 5 * 60 * 1_000;
 const makeToken = () => randomBytes(32).toString("base64url");
+const defaultClientNamePattern = /^Client (\d+)$/;
+const nextDefaultClientName = (names: Iterable<string>) => {
+  let highest = 0;
+  for (const name of names) {
+    const match = defaultClientNamePattern.exec(name);
+    if (match) {
+      const suffix = Number(match[1]);
+      if (Number.isSafeInteger(suffix) && suffix < Number.MAX_SAFE_INTEGER) {
+        highest = Math.max(highest, suffix);
+      }
+    }
+  }
+  return `Client ${highest + 1}`;
+};
 const makeInvitation = (
   name: string,
   scopes: ReadonlyArray<ShowtimeConnectionScope>,
@@ -58,8 +75,8 @@ export class ConnectionStore extends Context.Service<
     readonly invitations: Effect.Effect<ReadonlyArray<StoredInvitation>>;
     readonly connectedClientIds: Effect.Effect<ReadonlySet<string>>;
     readonly createInvitation: (
-      name: string,
-      scopes: ReadonlyArray<ShowtimeConnectionScope>,
+      name?: string,
+      scopes?: ReadonlyArray<ShowtimeConnectionScope>,
     ) => Effect.Effect<StoredInvitation>;
     readonly pairingInvitation: (
       invitationId: string,
@@ -107,12 +124,20 @@ const make = Effect.gen(function* () {
     );
 
   const createInvitation = (
-    name: string,
-    requestedScopes: ReadonlyArray<ShowtimeConnectionScope>,
+    name?: string,
+    requestedScopes: ReadonlyArray<ShowtimeConnectionScope> = [],
   ) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
-        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(name.trim()).pipe(
+        const current = yield* Ref.get(state);
+        const trimmedName = name?.trim();
+        const resolvedName =
+          trimmedName ||
+          nextDefaultClientName([
+            ...current.clients.map((client) => client.name),
+            ...current.invitations.map((invitation) => invitation.name),
+          ]);
+        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName).pipe(
           Effect.orDie,
         );
         const scopes = yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(
@@ -120,7 +145,6 @@ const make = Effect.gen(function* () {
         ).pipe(Effect.orDie);
         const now = yield* Clock.currentTimeMillis;
         const invitation = makeInvitation(validatedName, scopes, now);
-        const current = yield* Ref.get(state);
         yield* persist({
           ...current,
           invitations: [...current.invitations, invitation],

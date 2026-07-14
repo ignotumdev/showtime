@@ -63,7 +63,7 @@ export class ConnectionManager extends Context.Service<
     readonly rpcWebSocketUrl: Effect.Effect<string>;
     readonly connectionsState: Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly createInvitation: (
-      name: string,
+      name: string | undefined,
       scopes: ReadonlyArray<ShowtimeConnectionScope>,
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
@@ -88,7 +88,7 @@ const makePlatformLayer = (options: BackendOptions) =>
   );
 
 const CreateInvitationRequest = Schema.Struct({
-  name: Schema.String,
+  name: Schema.optional(Schema.String),
   scopes: ShowtimeConnectionScopes,
 });
 
@@ -215,10 +215,10 @@ const makeRpcProtocol = (desktopCapability: string) =>
               { status: 400 },
             );
           }
-          const name = decoded.value.name.trim();
-          if (name.length === 0 || name.length > 80) {
+          const name = decoded.value.name?.trim() || undefined;
+          if (name !== undefined && name.length > 80) {
             return HttpServerResponse.jsonUnsafe(
-              { error: "The client name must be between 1 and 80 characters." },
+              { error: "The client name must be at most 80 characters." },
               { status: 400 },
             );
           }

@@ -40,7 +40,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   canLoadPairingInfo,
-  pairingCandidateCaption,
   pairingInfoPollDelay,
   pairingInfoRetryDelay,
   pairingInfoRetryWait,
@@ -290,14 +289,14 @@ function CreateClientDialog({
   const creatingRef = React.useRef(false);
   const [error, setError] = React.useState<string>();
   const create = async () => {
-    if (creatingRef.current || !name.trim()) return;
+    if (creatingRef.current) return;
     creatingRef.current = true;
     setCreating(true);
     setError(undefined);
     try {
       onCreated(
         await manager.createInvitation(
-          name.trim(),
+          name.trim() || undefined,
           canManageConnections ? showtimeConnectionManagementScopes : [],
         ),
       );
@@ -316,7 +315,10 @@ function CreateClientDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a new client</DialogTitle>
-          <DialogDescription>Name this device so it is easy to recognize later.</DialogDescription>
+          <DialogDescription>
+            Add a label to make this device easy to recognize, or leave it blank to use the next
+            client number.
+          </DialogDescription>
         </DialogHeader>
         <Input
           autoFocus
@@ -340,7 +342,7 @@ function CreateClientDialog({
             />
           </ItemActions>
         </Item>
-        <Button type="button" disabled={creating || !name.trim()} onClick={create}>
+        <Button type="button" disabled={creating} onClick={create}>
           {creating ? "Creating…" : "Create client"}
         </Button>
         {error && (
@@ -482,15 +484,12 @@ function PairClientDialog({
           </Select>
         )}
         {qrCode && (
-          <div className="grid justify-items-center gap-3">
+          <div className="grid justify-items-center">
             <img
               src={qrCode}
               alt={`QR code for connecting ${client?.name ?? "client"}`}
               className="w-full max-w-72"
             />
-            <p className="text-xs text-muted-foreground">
-              {selected && pairingCandidateCaption(selected)}
-            </p>
           </div>
         )}
         {discovery.kind === "probing" && (

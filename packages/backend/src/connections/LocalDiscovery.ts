@@ -207,7 +207,7 @@ const make = (options: LocalDiscoveryOptions) =>
             );
             return {
               kind: "hostname" as const,
-              label: "Showtime local address",
+              label: `Recommended — ${state.hostname}`,
               host: state.hostname,
               hostnameLabel,
               url: showtimeHostnamePairingUrl(hostnameLabel, pairingToken, options.port),
