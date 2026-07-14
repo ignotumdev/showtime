@@ -1,42 +1,15 @@
 import * as React from "react";
 import { Toast } from "@base-ui/react/toast";
-import { Effect, Fiber, Stream } from "effect";
 import { XIcon } from "lucide-react";
-import { notificationStream, type AppNotification } from "./NotificationCenter";
+import { notificationManager, type AppNotification } from "./NotificationCenter";
 
 export function NotificationProvider({ children }: { readonly children: React.ReactNode }) {
   return (
-    <Toast.Provider limit={5} timeout={6_000}>
+    <Toast.Provider limit={5} timeout={6_000} toastManager={notificationManager}>
       {children}
-      <NotificationStreamBridge />
       <NotificationViewport />
     </Toast.Provider>
   );
-}
-
-function NotificationStreamBridge() {
-  const manager = Toast.useToastManager<AppNotification>();
-  React.useEffect(() => {
-    const fiber = Effect.runFork(
-      Stream.runForEach(notificationStream, (notification) =>
-        Effect.sync(() => {
-          manager.add({
-            id: notification.id,
-            title: notification.title,
-            description: notification.description,
-            priority: notification.priority,
-            timeout: notification.timeout,
-            type: notification.kind,
-            data: notification,
-          });
-        }),
-      ),
-    );
-    return () => {
-      Effect.runFork(Fiber.interrupt(fiber));
-    };
-  }, [manager]);
-  return null;
 }
 
 function NotificationViewport() {

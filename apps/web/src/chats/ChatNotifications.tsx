@@ -11,7 +11,7 @@ import type {
 } from "@showtime/contracts";
 import { chatAtoms, profileAtoms, showsAtom } from "@/client";
 import { useSelectedProfile } from "@/profiles";
-import { publishNotificationUnsafe } from "@/notifications/NotificationCenter";
+import { publishNotification } from "@/notifications/NotificationCenter";
 import { isChatVisibleAtBottom } from "./ChatPresence";
 import {
   planChatNotifications,
@@ -95,7 +95,7 @@ function processChannel(
   });
   for (const notification of planned.notifications) {
     if (notification.kind === "summary") {
-      publishNotificationUnsafe({
+      publishNotification({
         id: `chat-summary:${show.id}:${profile.id}:${channel.id}:${channel.newestSequence}`,
         kind: "chat",
         title: `${notification.count} new messages in ${channel.name}`,
@@ -110,7 +110,7 @@ function processChannel(
 }
 
 function publishMessageNotification(show: ShowSummary, channel: ChatChannel, message: ChatMessage) {
-  publishNotificationUnsafe({
+  publishNotification({
     id: `chat:${message.id}`,
     kind: "chat",
     title: `${show.name} · ${channel.name}`,

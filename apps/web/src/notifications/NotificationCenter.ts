@@ -1,4 +1,4 @@
-import { Effect, PubSub, Stream } from "effect";
+import { Toast } from "@base-ui/react/toast";
 
 export interface AppNotification {
   readonly id: string;
@@ -9,13 +9,16 @@ export interface AppNotification {
   readonly kind: "chat" | "system";
 }
 
-const pubsub = Effect.runSync(PubSub.unbounded<AppNotification>({ replay: 64 }));
+export const notificationManager = Toast.createToastManager<AppNotification>();
 
-export const notificationStream = Stream.fromPubSub(pubsub);
-
-export const publishNotification = (notification: AppNotification) =>
-  PubSub.publish(pubsub, notification).pipe(Effect.asVoid);
-
-export const publishNotificationUnsafe = (notification: AppNotification) => {
-  PubSub.publishUnsafe(pubsub, notification);
+export const publishNotification = (notification: AppNotification) => {
+  notificationManager.add({
+    id: notification.id,
+    title: notification.title,
+    description: notification.description,
+    priority: notification.priority,
+    timeout: notification.timeout,
+    type: notification.kind,
+    data: notification,
+  });
 };
