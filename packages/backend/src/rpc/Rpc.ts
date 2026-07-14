@@ -12,6 +12,7 @@ import {
 import { MicrophoneService } from "../microphones/MicrophoneService.js";
 import { MixService } from "../mixes/MixService.js";
 import { ShowService } from "../shows/ShowService.js";
+import { ShowRepository } from "../shows/ShowRepository.js";
 import { SongService } from "../songs/SongService.js";
 import { SyncEngine } from "../sync/SyncEngine.js";
 import { ProfileService } from "../profiles/ProfileService.js";
@@ -20,6 +21,7 @@ import { ChatService } from "../chats/ChatService.js";
 const handlers = ShowtimeRpcs.toLayer(
   Effect.gen(function* () {
     const shows = yield* ShowService;
+    const showRepository = yield* ShowRepository;
     const microphones = yield* MicrophoneService;
     const mixes = yield* MixService;
     const songs = yield* SongService;
@@ -51,7 +53,10 @@ const handlers = ShowtimeRpcs.toLayer(
       "profiles.delete": ({ id }) => sync.mutation(profilesSyncKey, profiles.delete(id)),
       "profiles.setDefault": ({ id }) => sync.mutation(profilesSyncKey, profiles.setDefault(id)),
       "chats.state": ({ showId, profileId }) =>
-        sync.query(chatsSyncKey(showId), chats.state(showId, profileId)),
+        sync.query(
+          chatsSyncKey(showId),
+          showRepository.findById(showId).pipe(Effect.andThen(chats.state(showId, profileId))),
+        ),
       "chats.createChannel": ({ showId, name }) =>
         sync.mutation(chatsSyncKey(showId), chats.createChannel({ showId, name })),
       "chats.send": ({ showId, channelId, senderProfileId, body }) =>

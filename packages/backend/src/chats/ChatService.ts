@@ -138,15 +138,27 @@ const make = Effect.gen(function* () {
         VALUES (${id}, ${showId}, ${"General"}, ${createdAt})`;
     }).pipe(sql.withTransaction);
 
-  const loadMessages = (channelId: ChatChannelId) =>
+  const loadMessages = (showId: ShowId) =>
     Effect.gen(function* () {
       const rows =
         (yield* sql`SELECT id, sequence, show_id, channel_id, sender_profile_id, body, sent_at
-        FROM chat_messages
-        WHERE channel_id = ${channelId}
-        ORDER BY sequence DESC
-        LIMIT ${replayLimit}`) as unknown as ReadonlyArray<MessageRow>;
-      return [...rows].reverse().map(toMessage);
+        FROM (
+          SELECT m.*,
+            ROW_NUMBER() OVER (PARTITION BY m.channel_id ORDER BY m.sequence DESC) AS replay_rank
+          FROM chat_channels c
+          INNER JOIN chat_messages m ON m.channel_id = c.id
+          WHERE c.show_id = ${showId}
+        )
+        WHERE replay_rank <= ${replayLimit}
+        ORDER BY sequence`) as unknown as ReadonlyArray<MessageRow>;
+      const byChannel = new Map<ChatChannelId, Array<ChatMessage>>();
+      for (const row of rows) {
+        const channelId = row.channel_id as ChatChannelId;
+        const messages = byChannel.get(channelId);
+        if (messages) messages.push(toMessage(row));
+        else byChannel.set(channelId, [toMessage(row)]);
+      }
+      return byChannel;
     });
 
   const state = (showId: ShowId, profileId: ProfileId) =>
@@ -171,30 +183,25 @@ const make = Effect.gen(function* () {
         WHERE c.show_id = ${showId}
         GROUP BY c.id
         ORDER BY c.created_at, c.id`) as unknown as ReadonlyArray<ChannelRow>;
-      const channels = yield* Effect.forEach(
-        rows,
-        (row) =>
-          loadMessages(row.id as ChatChannelId).pipe(
-            Effect.map((messages): ChatChannel => {
-              const newestSequence = (row.newest_sequence ?? 0) as ChatSequence;
-              return {
-                id: row.id as ChatChannelId,
-                showId,
-                name: row.name as ChatChannel["name"],
-                createdAt: DateTime.makeUnsafe(row.created_at),
-                messages,
-                messageCount: Number(row.message_count),
-                incomingMessageCount: Number(row.incoming_message_count),
-                unreadCount: Number(row.unread_count),
-                lastReadSequence: Number(row.last_read_sequence ?? 0) as ChatSequence,
-                earliestReplaySequence: (messages[0]?.sequence ?? newestSequence) as ChatSequence,
-                newestSequence,
-                notificationsEnabled: row.notifications_enabled !== 0,
-              };
-            }),
-          ),
-        { concurrency: 1 },
-      );
+      const messagesByChannel = yield* loadMessages(showId);
+      const channels = rows.map((row): ChatChannel => {
+        const messages = messagesByChannel.get(row.id as ChatChannelId) ?? [];
+        const newestSequence = (row.newest_sequence ?? 0) as ChatSequence;
+        return {
+          id: row.id as ChatChannelId,
+          showId,
+          name: row.name as ChatChannel["name"],
+          createdAt: DateTime.makeUnsafe(row.created_at),
+          messages,
+          messageCount: Number(row.message_count),
+          incomingMessageCount: Number(row.incoming_message_count),
+          unreadCount: Number(row.unread_count),
+          lastReadSequence: Number(row.last_read_sequence ?? 0) as ChatSequence,
+          earliestReplaySequence: (messages[0]?.sequence ?? newestSequence) as ChatSequence,
+          newestSequence,
+          notificationsEnabled: row.notifications_enabled !== 0,
+        };
+      });
       return { showId, profileId, channels } satisfies ChatSnapshot;
     }).pipe(
       Effect.mapError((cause) =>

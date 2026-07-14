@@ -331,16 +331,45 @@ function ReadTracker({
 
   React.useEffect(() => {
     if (!active || !atBottom || channel.newestSequence <= lastMarked.current) return;
-    lastMarked.current = channel.newestSequence;
-    void markRead({
-      payload: {
-        showId,
-        channelId: channel.id,
-        profileId,
-        sequence: channel.newestSequence,
-      },
-      reactivityKeys: chatsSyncKey(showId),
-    });
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelRetryWait: (() => void) | undefined;
+
+    const markNewestRead = async () => {
+      let retryDelay = 250;
+      while (!cancelled && channel.newestSequence > lastMarked.current) {
+        const exit = await markRead({
+          payload: {
+            showId,
+            channelId: channel.id,
+            profileId,
+            sequence: channel.newestSequence,
+          },
+          reactivityKeys: chatsSyncKey(showId),
+        });
+        if (Exit.isSuccess(exit)) {
+          if (channel.newestSequence > lastMarked.current)
+            lastMarked.current = channel.newestSequence;
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          cancelRetryWait = resolve;
+          retryTimer = setTimeout(() => {
+            retryTimer = undefined;
+            cancelRetryWait = undefined;
+            resolve();
+          }, retryDelay);
+        });
+        retryDelay = Math.min(retryDelay * 2, 5_000);
+      }
+    };
+
+    void markNewestRead();
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      cancelRetryWait?.();
+    };
   }, [active, atBottom, channel.id, channel.newestSequence, markRead, profileId, showId]);
   return null;
 }
@@ -360,7 +389,8 @@ function Composer({
   const [error, setError] = React.useState<string>();
 
   const submit = async () => {
-    const trimmed = body.trim();
+    const submittedDraft = body;
+    const trimmed = submittedDraft.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setError(undefined);
@@ -374,7 +404,7 @@ function Composer({
       reactivityKeys: chatsSyncKey(showId),
     });
     if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else setBody("");
+    else setBody((current) => (current === submittedDraft ? "" : current));
     setSending(false);
   };
 

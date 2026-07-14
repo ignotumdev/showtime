@@ -58,7 +58,7 @@ describe("ChatService", () => {
               senderProfileId,
               body: `Message ${index}` as ChatMessageBody,
             }),
-          { concurrency: "unbounded" },
+          { concurrency: 1 },
         );
         const unread = yield* chats.state(showId, profileId);
         const latest = unread.channels[0]!;
@@ -126,6 +126,18 @@ describe("ChatService", () => {
         );
         yield* profiles.setDefault(replacement.id);
         yield* profiles.delete(deletedProfileId);
+        const secondChannel = yield* chats.createChannel({ showId, name: "Production" });
+        yield* Effect.forEach(
+          Array.from({ length: 105 }, (_, index) => index),
+          (index) =>
+            chats.send({
+              showId,
+              channelId: secondChannel.id,
+              senderProfileId: replacement.id,
+              body: `Production replay ${index}` as ChatMessageBody,
+            }),
+          { concurrency: 1 },
+        );
         const snapshot = yield* chats.state(showId, replacement.id);
         yield* chats.deleteShow(showId);
         const cleared = yield* chats.state(showId, replacement.id);
@@ -141,6 +153,9 @@ describe("ChatService", () => {
       channel.messages.every((message) => message.senderProfileId === result.deletedProfileId),
     ).toBe(true);
     expect(result.deletedProfileId).toMatch(/^profile_/);
+    expect(result.snapshot.channels[1]!.messageCount).toBe(105);
+    expect(result.snapshot.channels[1]!.messages).toHaveLength(100);
+    expect(result.snapshot.channels[1]!.messages[0]!.body).toBe("Production replay 5");
     expect(result.cleared.channels).toMatchObject([
       { name: "General", messageCount: 0, messages: [] },
     ]);

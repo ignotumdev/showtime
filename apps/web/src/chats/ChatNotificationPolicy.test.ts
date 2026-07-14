@@ -65,10 +65,12 @@ describe("chat notification policy", () => {
   });
 
   it("emits each replayed incoming message while excluding the selected profile's messages", () => {
+    const incomingMessage5 = message(5);
+    const incomingMessage6 = message(6);
     const planned = planChatNotifications({
       previous: cursor(3, 1),
       channel: channel({
-        messages: [message(4, selectedProfileId), message(5), message(6)],
+        messages: [message(4, selectedProfileId), incomingMessage5, incomingMessage6],
         messageCount: 6,
         incomingMessageCount: 3,
         newestSequence: 6 as ChatSequence,
@@ -76,7 +78,11 @@ describe("chat notification policy", () => {
       profileId: selectedProfileId,
       visibleAtBottom: false,
     });
-    expect(planned.notifications.map((item) => item.kind)).toEqual(["message", "message"]);
+    expect(planned.notifications).toEqual([
+      { kind: "message", message: incomingMessage5 },
+      { kind: "message", message: incomingMessage6 },
+    ]);
+    expect(planned.cursor).toEqual({ sequence: 6, count: 3 });
   });
 
   it("summarizes an overflow gap with the exact incoming count", () => {
@@ -92,6 +98,7 @@ describe("chat notification policy", () => {
       visibleAtBottom: false,
     });
     expect(planned.notifications).toEqual([{ kind: "summary", count: 71 }]);
+    expect(planned.cursor).toEqual({ sequence: 110, count: 75 });
   });
 
   it("suppresses notifications while visible at bottom or when the channel is muted", () => {

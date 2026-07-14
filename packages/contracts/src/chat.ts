@@ -24,10 +24,9 @@ export const ChatMessageId = id(chatMessageIdPrefix, "chat message").pipe(
 );
 export type ChatMessageId = typeof ChatMessageId.Type;
 
-export const ChatSequence = Schema.Int.pipe(
-  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
-  Schema.brand("ChatSequence"),
-);
+const NonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
+
+export const ChatSequence = NonNegativeInt.pipe(Schema.brand("ChatSequence"));
 export type ChatSequence = typeof ChatSequence.Type;
 
 const NonBlankTrimmed = Schema.String.pipe(
@@ -65,9 +64,9 @@ export const ChatChannel = Schema.Struct({
   name: ChatChannelName,
   createdAt: Schema.DateTimeUtcFromString,
   messages: Schema.Array(ChatMessage),
-  messageCount: Schema.Int,
-  incomingMessageCount: Schema.Int,
-  unreadCount: Schema.Int,
+  messageCount: NonNegativeInt,
+  incomingMessageCount: NonNegativeInt,
+  unreadCount: NonNegativeInt,
   lastReadSequence: ChatSequence,
   earliestReplaySequence: ChatSequence,
   newestSequence: ChatSequence,
