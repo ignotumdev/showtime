@@ -10,6 +10,7 @@ import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { showColorClassNames } from "./shows/show-color";
 import { isDesktopHost } from "@/platform";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
+import { canManageConnections } from "@/components/connections/connection-management";
 import { ShowPageAction } from "@/components/shows/ShowPageAction";
 
 type TitleBarProps = {
@@ -102,7 +103,9 @@ export function TitleBar({
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
-        {desktopHost && !isLiveRoute && <ConnectionDialog />}
+        {!isLiveRoute && canManageConnections() && (
+          <ConnectionDialog className="hidden md:inline-flex" />
+        )}
         {isShowsRoute && (
           <Button size="sm" aria-label="New show" onClick={() => setDialog({ type: "create" })}>
             <PlusIcon />

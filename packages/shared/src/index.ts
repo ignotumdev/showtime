@@ -10,6 +10,29 @@ export * from "./local-endpoint.js";
 import { Schema } from "effect";
 import { ShowtimeHostnameLabel } from "./local-endpoint.js";
 
+export const showtimeConnectionScopes = [
+  "connections:read",
+  "connections:create",
+  "connections:delete",
+] as const;
+export const ShowtimeConnectionScope = Schema.Literals(showtimeConnectionScopes);
+export type ShowtimeConnectionScope = typeof ShowtimeConnectionScope.Type;
+export const ShowtimeConnectionScopes = Schema.Array(ShowtimeConnectionScope);
+export const showtimeConnectionManagementScopes: ReadonlyArray<ShowtimeConnectionScope> = [
+  "connections:read",
+  "connections:create",
+  "connections:delete",
+];
+
+export const hasShowtimeConnectionScope = (
+  scopes: ReadonlyArray<ShowtimeConnectionScope>,
+  required: ShowtimeConnectionScope,
+) => scopes.includes(required);
+
+export const hasShowtimeConnectionManagementScopes = (
+  scopes: ReadonlyArray<ShowtimeConnectionScope>,
+) => showtimeConnectionManagementScopes.every((scope) => scopes.includes(scope));
+
 export const ShowtimeLocalDiscoveryState = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("disabled") }),
   Schema.Struct({ kind: Schema.Literal("probing") }),
@@ -57,6 +80,7 @@ export interface ShowtimePendingClient {
   readonly invitationId: string;
   readonly name: string;
   readonly expiresAt: string;
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
 
 export interface ShowtimePairedClient {
@@ -65,6 +89,7 @@ export interface ShowtimePairedClient {
   readonly name: string;
   readonly createdAt: string;
   readonly connected: boolean;
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
 
 export type ShowtimeConnectionClient = ShowtimePendingClient | ShowtimePairedClient;
@@ -78,13 +103,17 @@ export interface ShowtimeStoredConnection {
   readonly version: 1;
   readonly clientId: string;
   readonly capability: string;
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
 
 /** Capabilities supplied by a native host. Browser clients run without this bridge. */
 export interface ShowtimeHostBridge {
   readonly rpcWebSocketUrl: () => Promise<string>;
   readonly connectionsState: () => Promise<ShowtimeConnectionsState>;
-  readonly createInvitation: (name: string) => Promise<ShowtimeConnectionsState>;
+  readonly createInvitation: (
+    name: string,
+    scopes: ReadonlyArray<ShowtimeConnectionScope>,
+  ) => Promise<ShowtimeConnectionsState>;
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;
   readonly removeConnection: (id: string) => Promise<ShowtimeConnectionsState>;
   readonly setConnectionsEnabled: (enabled: boolean) => Promise<ShowtimeConnectionsState>;

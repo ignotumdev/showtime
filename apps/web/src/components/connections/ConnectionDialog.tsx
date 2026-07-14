@@ -7,6 +7,10 @@ import type {
   ShowtimeLocalDiscoveryState,
   ShowtimePendingClient,
 } from "@showtime/shared";
+import {
+  hasShowtimeConnectionManagementScopes,
+  showtimeConnectionManagementScopes,
+} from "@showtime/shared";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,6 +47,11 @@ import {
   selectPairingCandidateUrl,
   shouldPollPairingInfo,
 } from "./pairing-dialog";
+import {
+  getConnectionManagementClient,
+  type ConnectionManagementClient,
+} from "./connection-management";
+import { cn } from "@/lib/utils";
 
 const emptyState: ShowtimeConnectionsState = { enabled: false, clients: [] };
 
@@ -54,7 +63,14 @@ const timeUntil = (expiresAt: string, now: number) => {
   return `Link expires in ${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export function ConnectionDialog() {
+export function ConnectionDialog({
+  className,
+  compact = false,
+}: {
+  readonly className?: string;
+  readonly compact?: boolean;
+}) {
+  const [manager] = React.useState(getConnectionManagementClient);
   const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -71,7 +87,8 @@ export function ConnectionDialog() {
     refreshInFlight.current = true;
     const generation = refreshGeneration.current;
     try {
-      const value = await window.showtime!.connectionsState();
+      if (!manager) return;
+      const value = await manager.connectionsState();
       if (generation !== refreshGeneration.current) return;
       setState(value);
       setLoadError(undefined);
@@ -81,7 +98,7 @@ export function ConnectionDialog() {
     } finally {
       refreshInFlight.current = false;
     }
-  }, []);
+  }, [manager]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -102,7 +119,8 @@ export function ConnectionDialog() {
     setLoading(true);
     setError(undefined);
     try {
-      setState(await window.showtime!.setConnectionsEnabled(enabled));
+      if (!manager?.setConnectionsEnabled) return;
+      setState(await manager.setConnectionsEnabled(enabled));
     } catch {
       setError("Showtime could not update connection settings.");
     } finally {
@@ -114,7 +132,8 @@ export function ConnectionDialog() {
     setLoading(true);
     setError(undefined);
     try {
-      setState(await window.showtime!.removeConnection(id));
+      if (!manager) return;
+      setState(await manager.removeConnection(id));
       if (pairingClient?.invitationId === id) setPairingClient(undefined);
     } catch {
       setError("Showtime could not remove this client.");
@@ -123,33 +142,48 @@ export function ConnectionDialog() {
     }
   };
 
+  if (!manager) return null;
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger render={<Button size="sm" variant="ghost" />}>
-          <WifiIcon /> Connections
+        <DialogTrigger
+          render={
+            <Button
+              size={compact ? "icon-sm" : "sm"}
+              variant="ghost"
+              className={cn(className)}
+              aria-label="Connections"
+            />
+          }
+        >
+          <WifiIcon /> {!compact && "Connections"}
         </DialogTrigger>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Connections</DialogTitle>
             <DialogDescription>
               Manage access to Showtime from devices on this network.
             </DialogDescription>
           </DialogHeader>
-          <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
-            <ItemContent>
-              <ItemTitle>Allow connections</ItemTitle>
-              <ItemDescription>Host the web app and let approved devices connect.</ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <Switch
-                id="showtime-connections-enabled"
-                checked={state.enabled}
-                disabled={loading}
-                onCheckedChange={updateEnabled}
-              />
-            </ItemActions>
-          </Item>
+          {manager.isOwner && (
+            <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
+              <ItemContent>
+                <ItemTitle>Allow connections</ItemTitle>
+                <ItemDescription>
+                  Host the web app and let approved devices connect.
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch
+                  id="showtime-connections-enabled"
+                  checked={state.enabled}
+                  disabled={loading}
+                  onCheckedChange={updateEnabled}
+                />
+              </ItemActions>
+            </Item>
+          )}
           <ItemGroup>
             {state.clients.map((client) => {
               const id = client.kind === "pending" ? client.invitationId : client.clientId;
@@ -170,6 +204,9 @@ export function ConnectionDialog() {
                         : connected
                           ? "Connected now"
                           : "Not currently connected"}
+                      {hasShowtimeConnectionManagementScopes(client.scopes)
+                        ? " · Can manage connections"
+                        : ""}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -183,22 +220,24 @@ export function ConnectionDialog() {
                         Connect
                       </Button>
                     )}
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      disabled={loading}
-                      aria-label={`Remove ${client.name}`}
-                      onClick={() => remove(id)}
-                    >
-                      <Trash2Icon />
-                    </Button>
+                    {manager.canDelete && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled={loading}
+                        aria-label={`Remove ${client.name}`}
+                        onClick={() => remove(id)}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    )}
                   </ItemActions>
                 </Item>
               );
             })}
           </ItemGroup>
-          {state.enabled && (
+          {state.enabled && manager.canCreate && (
             <Button
               type="button"
               variant="outline"
@@ -218,8 +257,14 @@ export function ConnectionDialog() {
           )}
         </DialogContent>
       </Dialog>
-      <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setState} />
+      <CreateClientDialog
+        manager={manager}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={setState}
+      />
       <PairClientDialog
+        manager={manager}
         key={pairingClient?.invitationId ?? "closed"}
         client={pairingClient}
         onOpenChange={(next) => !next && setPairingClient(undefined)}
@@ -229,15 +274,18 @@ export function ConnectionDialog() {
 }
 
 function CreateClientDialog({
+  manager,
   open,
   onOpenChange,
   onCreated,
 }: {
+  readonly manager: ConnectionManagementClient;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreated: (state: ShowtimeConnectionsState) => void;
 }) {
   const [name, setName] = React.useState("");
+  const [canManageConnections, setCanManageConnections] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const creatingRef = React.useRef(false);
   const [error, setError] = React.useState<string>();
@@ -247,8 +295,14 @@ function CreateClientDialog({
     setCreating(true);
     setError(undefined);
     try {
-      onCreated(await window.showtime!.createInvitation(name.trim()));
+      onCreated(
+        await manager.createInvitation(
+          name.trim(),
+          canManageConnections ? showtimeConnectionManagementScopes : [],
+        ),
+      );
       setName("");
+      setCanManageConnections(false);
       onOpenChange(false);
     } catch {
       setError("Showtime could not add this client.");
@@ -272,6 +326,20 @@ function CreateClientDialog({
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => event.key === "Enter" && !creating && void create()}
         />
+        <Item variant="outline" render={<label htmlFor="showtime-client-can-manage" />}>
+          <ItemContent>
+            <ItemTitle>Allow this client to manage connections</ItemTitle>
+            <ItemDescription>Let it view, add, connect, and remove other clients.</ItemDescription>
+          </ItemContent>
+          <ItemActions>
+            <Switch
+              id="showtime-client-can-manage"
+              checked={canManageConnections}
+              disabled={creating}
+              onCheckedChange={setCanManageConnections}
+            />
+          </ItemActions>
+        </Item>
         <Button type="button" disabled={creating || !name.trim()} onClick={create}>
           {creating ? "Creating…" : "Create client"}
         </Button>
@@ -286,9 +354,11 @@ function CreateClientDialog({
 }
 
 function PairClientDialog({
+  manager,
   client,
   onOpenChange,
 }: {
+  readonly manager: ConnectionManagementClient;
   readonly client: ShowtimePendingClient | undefined;
   readonly onOpenChange: (open: boolean) => void;
 }) {
@@ -332,7 +402,7 @@ function PairClientDialog({
         return;
       }
       hasRequestedPairingInfo = true;
-      void window.showtime!.pairingInfo(client.invitationId).then(
+      void manager.pairingInfo(client.invitationId).then(
         (info) => {
           if (!active) return;
           if (info.expiresAt === null) {
@@ -374,7 +444,7 @@ function PairClientDialog({
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [client]);
+  }, [client, manager]);
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
@@ -390,7 +460,7 @@ function PairClientDialog({
   const selected = candidates.find((candidate) => candidate.url === selectedUrl);
   return (
     <Dialog open={client !== undefined} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Connect {client?.name}</DialogTitle>
           <DialogDescription>

@@ -200,7 +200,7 @@ describe("Showtime WebSocket RPC", () => {
     try {
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Monitor iPad"),
+          connections.createInvitation("Monitor iPad", []),
         ),
       );
       expect(pending.clients[0]).toMatchObject({ kind: "pending", name: "Monitor iPad" });
@@ -293,7 +293,7 @@ describe("Showtime WebSocket RPC", () => {
     try {
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Restarted iPad"),
+          connections.createInvitation("Restarted iPad", []),
         ),
       );
       const invitation = pending.clients[0];
@@ -330,6 +330,90 @@ describe("Showtime WebSocket RPC", () => {
     }
   });
 
+  it("enforces narrow connection-management scopes and prevents delegated escalation", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-scopes-home-"));
+    tempHomes.add(homeDirectory);
+    const port = await findAvailablePort();
+    const runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+    const origin = `http://127.0.0.1:${port}`;
+
+    await runtime.runPromise(Effect.void);
+    try {
+      const pair = async (
+        name: string,
+        scopes: ReadonlyArray<"connections:read" | "connections:create" | "connections:delete">,
+      ) => {
+        await runtime.runPromise(
+          Effect.flatMap(ConnectionManager, (connections) =>
+            connections.createInvitation(name, scopes),
+          ),
+        );
+        const persisted = JSON.parse(
+          await readFile(path.join(homeDirectory, ".showtime", "connections.json"), "utf8"),
+        ) as { invitations: Array<{ name: string; token: string }> };
+        const token = persisted.invitations.find((invitation) => invitation.name === name)!.token;
+        return (await (await fetch(`${origin}/pair/${token}`, { method: "POST" })).json()) as {
+          clientId: string;
+          capability: string;
+          scopes: ReadonlyArray<string>;
+        };
+      };
+      const managementUrl = (credentials: { clientId: string; capability: string }) =>
+        `${origin}/connection-management/${credentials.clientId}/${credentials.capability}`;
+      const create = (url: string, name: string, scopes: ReadonlyArray<string>) =>
+        fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, scopes }),
+        });
+
+      const unscoped = await pair("Unscoped iPad", []);
+      expect(unscoped.scopes).toEqual([]);
+      expect((await fetch(managementUrl(unscoped))).status).toBe(403);
+      expect((await create(managementUrl(unscoped), "Denied client", [])).status).toBe(403);
+
+      const manager = await pair("Manager iPad", [
+        "connections:read",
+        "connections:create",
+        "connections:delete",
+      ]);
+      const managerUrl = managementUrl(manager);
+      const stateResponse = await fetch(managerUrl);
+      expect(stateResponse.status).toBe(200);
+      const state = (await stateResponse.json()) as { clients: Array<{ name: string }> };
+      expect(state.clients.map((client) => client.name)).toContain("Manager iPad");
+
+      const createdResponse = await create(managerUrl, "Managed client", ["connections:read"]);
+      expect(createdResponse.status).toBe(200);
+      const createdState = (await createdResponse.json()) as {
+        clients: Array<{
+          kind: string;
+          name: string;
+          invitationId?: string;
+          scopes: ReadonlyArray<string>;
+        }>;
+      };
+      const managed = createdState.clients.find((client) => client.name === "Managed client")!;
+      expect(managed.scopes).toEqual(["connections:read"]);
+      const pairingInfo = await fetch(`${managerUrl}/pairing/${managed.invitationId}`);
+      expect(pairingInfo.status).toBe(200);
+      expect(await pairingInfo.json()).toMatchObject({ expiresAt: expect.any(String) });
+      expect(
+        (await fetch(`${managerUrl}/${managed.invitationId}`, { method: "DELETE" })).status,
+      ).toBe(200);
+
+      const creator = await pair("Creator only", ["connections:create"]);
+      expect(
+        (await create(managementUrl(creator), "Escalated client", ["connections:read"])).status,
+      ).toBe(403);
+      expect(
+        (await fetch(`${origin}/connection-management/${creator.clientId}/invalid`)).status,
+      ).toBe(401);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("keeps expired invitations and renews them when Connect is opened", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-expired-home-"));
     tempHomes.add(homeDirectory);
@@ -347,6 +431,7 @@ describe("Showtime WebSocket RPC", () => {
             name: "Expired iPad",
             token: expiredToken,
             expiresAt: "2000-01-01T00:00:00.000Z",
+            scopes: [],
           },
         ],
       }),

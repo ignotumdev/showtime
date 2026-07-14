@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime connection scopes implementation plan</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
+      body { max-width: 68rem; margin: 0 auto; padding: 2rem; }
+      h1, h2 { line-height: 1.2; }
+      code { font-family: ui-monospace, monospace; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid currentColor; padding: .55rem; text-align: left; vertical-align: top; }
+      .decision { border-left: .3rem solid #4f8cff; padding-left: 1rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Connection scopes</h1>
+      <p>
+        Add least-privilege, extensible connection-management scopes while keeping every persisted
+        and exchanged payload at <code>version: 1</code>. This is intentionally a breaking shape
+        change because Showtime is prerelease and migrations are not required.
+      </p>
+
+      <section>
+        <h2>Scope model</h2>
+        <p class="decision">
+          The user-facing “Allow this client to manage connections” switch maps to three small
+          permissions. It is off by default. Keeping the individual values in a shared, typed list
+          lets later UI expose more granular choices without changing the authorization model.
+        </p>
+        <table>
+          <thead><tr><th>Scope</th><th>Allows</th><th>Does not allow</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>connections:read</code></td>
+              <td>List paired/pending clients and load pairing information/QR links.</td>
+              <td>Create or revoke anything.</td>
+            </tr>
+            <tr>
+              <td><code>connections:create</code></td>
+              <td>Create a new single-use invitation with an explicit scope set.</td>
+              <td>Read the list or revoke access by itself.</td>
+            </tr>
+            <tr>
+              <td><code>connections:delete</code></td>
+              <td>Delete pending invitations and revoke paired clients.</td>
+              <td>Create invitations or read state by itself.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          The management switch grants all three scopes. A delegated manager may only grant scopes
+          it already holds, preventing privilege escalation if more scopes or granular UI are added
+          later.
+        </p>
+      </section>
+
+      <section>
+        <h2>Data and transport changes</h2>
+        <ol>
+          <li>
+            Define the scope literals, scope schema, management bundle, validation helpers, and
+            scope-bearing shared connection types in <code>@showtime/shared</code>.
+          </li>
+          <li>
+            Store <code>scopes</code> on both pending invitations and paired clients. Copy the exact
+            invitation scopes into the client record when the invitation is consumed, and include
+            them in the version-1 pairing response/browser credential record.
+          </li>
+          <li>
+            Extend the connection store with an atomic authorization check for a client capability
+            plus required scope, and retain the existing session admission/revocation locking.
+          </li>
+          <li>
+            Add authenticated HTTP management functions for state, invitation creation, pairing
+            info, and deletion. Each function checks its own narrow scope on the authoritative
+            server-side client record. Invalid credentials return 401; valid credentials lacking a
+            scope return 403. Request validation rejects unknown scopes and delegated scope
+            escalation.
+          </li>
+          <li>
+            Keep the native desktop bridge as the trusted owner path. Adapt its invitation call to
+            accept scopes and reuse the same manager functions.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Interface and responsive behavior</h2>
+        <ol>
+          <li>
+            Add the off-by-default management switch immediately below the client-name input. Its
+            copy explains that it permits viewing, adding, connecting, and removing clients.
+          </li>
+          <li>
+            Introduce one browser/desktop connection-management client so the dialog does not
+            duplicate host bridge and authenticated HTTP behavior.
+          </li>
+          <li>
+            Show the Connections trigger to scoped browser clients on desktop widths in the normal
+            header. Keep it off the live route, matching the existing host behavior.
+          </li>
+          <li>
+            On mobile widths, show the trigger only in the show route’s mobile header, where there
+            is room for an action. Do not put it in the compact app title bar or live UI.
+          </li>
+          <li>
+            Make the management, creation, and QR dialogs fit small viewports, respect safe areas,
+            scroll internally, use compact/icon triggers where necessary, and keep tap targets and
+            labels accessible.
+          </li>
+          <li>
+            Hide the host-only “Allow connections” setting from delegated clients. Delegated
+            managers can perform only the read/create/delete operations represented by their
+            scopes.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <ul>
+          <li>Store tests cover default-empty scopes, propagation on pairing, and scope checks.</li>
+          <li>
+            Backend integration tests prove each endpoint rejects missing permissions, accepts the
+            required scope, prevents delegated privilege escalation, and preserves version 1.
+          </li>
+          <li>Browser tests cover scope validation/persistence and management request behavior.</li>
+          <li>Run repository type checks, unit/integration tests, and production builds.</li>
+          <li>Inspect desktop and mobile layouts in the collaborative browser when available.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

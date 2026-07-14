@@ -11,6 +11,7 @@ import {
 const capability = "a".repeat(43);
 const clientId = "Abcdefghijklmnopqrstu";
 const pairingToken = "p".repeat(43);
+const scopes = ["connections:read", "connections:create", "connections:delete"] as const;
 
 describe("browser connection persistence", () => {
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
@@ -18,7 +19,7 @@ describe("browser connection persistence", () => {
     const removeItem = vi.fn();
     const replaceState = vi.fn();
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -34,7 +35,7 @@ describe("browser connection persistence", () => {
     expect(request).toHaveBeenCalledWith(`/pair/${pairingToken}`, { method: "POST" });
     expect(setItem).toHaveBeenCalledWith(
       showtimeConnectionStorageKey,
-      JSON.stringify({ version: 1, clientId, capability }),
+      JSON.stringify({ version: 1, clientId, capability, scopes }),
     );
     expect(replaceState).toHaveBeenCalledWith(null, "", "/#/");
   });
@@ -94,7 +95,7 @@ describe("browser connection persistence", () => {
       }
     });
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -118,9 +119,9 @@ describe("browser connection persistence", () => {
 
   it("restores a validated record and creates its authenticated socket URL", () => {
     const connection = readStoredConnection({
-      getItem: () => JSON.stringify({ version: 1, clientId, capability }),
+      getItem: () => JSON.stringify({ version: 1, clientId, capability, scopes }),
     });
-    expect(connection).toEqual({ version: 1, clientId, capability });
+    expect(connection).toEqual({ version: 1, clientId, capability, scopes });
     expect(
       storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
     ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
@@ -156,7 +157,7 @@ describe("browser connection persistence", () => {
   ] as const)("maps connection probe status %s to %s", async (status, expected) => {
     const request = vi.fn().mockResolvedValue(new Response(null, { status }));
     await expect(
-      probeStoredConnection({ version: 1, clientId, capability }, request),
+      probeStoredConnection({ version: 1, clientId, capability, scopes }, request),
     ).resolves.toBe(expected);
     expect(request).toHaveBeenCalledWith(`/connection-status/${clientId}/${capability}`, {
       cache: "no-store",
@@ -172,7 +173,7 @@ describe("browser connection persistence", () => {
         return new Promise<Response>(() => undefined);
       });
       const result = probeStoredConnection(
-        { version: 1, clientId, capability },
+        { version: 1, clientId, capability, scopes },
         request as typeof fetch,
         1_000,
       );
