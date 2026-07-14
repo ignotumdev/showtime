@@ -37,7 +37,4 @@ export const canLoadPairingInfo = (
   now = Date.now(),
 ) => !hasRequestedPairingInfo || pairingInfoRetryWait(expiresAt, 0, now) !== undefined;
 
-export const pairingCandidateCaption = (candidate: ShowtimeConnectionCandidate) =>
-  candidate.kind === "ip-address" ? candidate.label : `${candidate.label} · ${candidate.host}`;
-
 export const pairingInfoPollDelay = pairingInfoPollInterval;

@@ -36,7 +36,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   canLoadPairingInfo,
-  pairingCandidateCaption,
   pairingInfoPollDelay,
   pairingInfoRetryDelay,
   pairingInfoRetryWait,
@@ -412,15 +411,12 @@ function PairClientDialog({
           </Select>
         )}
         {qrCode && (
-          <div className="grid justify-items-center gap-3">
+          <div className="grid justify-items-center">
             <img
               src={qrCode}
               alt={`QR code for connecting ${client?.name ?? "client"}`}
               className="w-full max-w-72"
             />
-            <p className="text-xs text-muted-foreground">
-              {selected && pairingCandidateCaption(selected)}
-            </p>
           </div>
         )}
         {discovery.kind === "probing" && (
