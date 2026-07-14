@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useAtomValue } from "@effect/atom-react";
 import QRCode from "qrcode";
 import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon } from "lucide-react";
 import type {
@@ -7,11 +8,13 @@ import type {
   ShowtimeLocalDiscoveryState,
   ShowtimePendingClient,
 } from "@showtime/shared";
+import type { Profile } from "@showtime/contracts";
 import {
   hasShowtimeConnectionManagementScopes,
   showtimeConnectionManagementScopes,
 } from "@showtime/shared";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +54,10 @@ import {
   type ConnectionManagementClient,
 } from "./connection-management";
 import { cn } from "@/lib/utils";
+import { profileAtoms } from "@/client";
+import { useSelectedProfile } from "@/profiles";
+import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
+import { showColorClassNames } from "@/components/shows/show-color";
 
 const emptyState: ShowtimeConnectionsState = { enabled: false, clients: [] };
 
@@ -70,6 +77,8 @@ export function ConnectionDialog({
   readonly compact?: boolean;
 }) {
   const [manager] = React.useState(getConnectionManagementClient);
+  const profilesResult = useAtomValue(profileAtoms.state);
+  const profilesState = currentProfilesState(profilesResult);
   const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -196,7 +205,14 @@ export function ConnectionDialog({
                     />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>{client.name}</ItemTitle>
+                    <ItemTitle className="flex items-center gap-2">
+                      <span className="truncate">{client.name}</span>
+                      <ClientProfileBadge
+                        profile={profilesState?.profiles.find(
+                          (profile) => profile.id === client.clientProfile,
+                        )}
+                      />
+                    </ItemTitle>
                     <ItemDescription>
                       {client.kind === "pending"
                         ? timeUntil(client.expiresAt, now)
@@ -261,6 +277,8 @@ export function ConnectionDialog({
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={setState}
+        profilesState={profilesState}
+        profilesResult={profilesResult}
       />
       <PairClientDialog
         manager={manager}
@@ -272,24 +290,49 @@ export function ConnectionDialog({
   );
 }
 
+function ClientProfileBadge({ profile }: { readonly profile: Profile | undefined }) {
+  return (
+    <Badge variant="outline">
+      <span
+        className={cn(
+          profile ? showColorClassNames[profile.color] : "bg-muted-foreground",
+          "size-2 rounded-full",
+        )}
+      />
+      {profile?.name ?? "Unknown profile"}
+    </Badge>
+  );
+}
+
 function CreateClientDialog({
   manager,
   open,
   onOpenChange,
   onCreated,
+  profilesState,
+  profilesResult,
 }: {
   readonly manager: ConnectionManagementClient;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreated: (state: ShowtimeConnectionsState) => void;
+  readonly profilesState: ReturnType<typeof currentProfilesState>;
+  readonly profilesResult: Parameters<typeof currentProfilesState>[0];
 }) {
+  const { selected: currentProfile } = useSelectedProfile(profilesState);
   const [name, setName] = React.useState("");
+  const [clientProfileId, setClientProfileId] = React.useState("");
   const [canManageConnections, setCanManageConnections] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const creatingRef = React.useRef(false);
   const [error, setError] = React.useState<string>();
+  const selectedProfile =
+    profilesState?.profiles.find((profile) => profile.id === clientProfileId) ?? currentProfile;
+  React.useEffect(() => {
+    if (open && currentProfile) setClientProfileId(currentProfile.id);
+  }, [currentProfile, open]);
   const create = async () => {
-    if (creatingRef.current) return;
+    if (creatingRef.current || !selectedProfile) return;
     creatingRef.current = true;
     setCreating(true);
     setError(undefined);
@@ -297,6 +340,7 @@ function CreateClientDialog({
       onCreated(
         await manager.createInvitation(
           name.trim() || undefined,
+          selectedProfile.id,
           canManageConnections ? showtimeConnectionManagementScopes : [],
         ),
       );
@@ -328,6 +372,14 @@ function CreateClientDialog({
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => event.key === "Enter" && !creating && void create()}
         />
+        <ProfileControl
+          className="w-full"
+          state={profilesState}
+          selected={selectedProfile}
+          onSelect={(profile) => setClientProfileId(profile.id)}
+          loadResult={profilesResult}
+          fullWidth
+        />
         <Item variant="outline" render={<label htmlFor="showtime-client-can-manage" />}>
           <ItemContent>
             <ItemTitle>Allow this client to manage connections</ItemTitle>
@@ -342,7 +394,7 @@ function CreateClientDialog({
             />
           </ItemActions>
         </Item>
-        <Button type="button" disabled={creating} onClick={create}>
+        <Button type="button" disabled={creating || !selectedProfile} onClick={create}>
           {creating ? "Creating…" : "Create client"}
         </Button>
         {error && (

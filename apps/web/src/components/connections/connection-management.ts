@@ -13,6 +13,7 @@ export interface ConnectionManagementClient {
   readonly connectionsState: () => Promise<ShowtimeConnectionsState>;
   readonly createInvitation: (
     name: string | undefined,
+    clientProfile: string,
     scopes: ReadonlyArray<ShowtimeConnectionScope>,
   ) => Promise<ShowtimeConnectionsState>;
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;
@@ -53,11 +54,11 @@ export const getConnectionManagementClient = (): ConnectionManagementClient | un
       fetch(base, { cache: "no-store" }).then((response) =>
         responseJson<ShowtimeConnectionsState>(response),
       ),
-    createInvitation: (name, scopes) =>
+    createInvitation: (name, clientProfile, scopes) =>
       fetch(base, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, scopes }),
+        body: JSON.stringify({ name, clientProfile, scopes }),
       }).then((response) => responseJson<ShowtimeConnectionsState>(response)),
     pairingInfo: (invitationId) =>
       fetch(`${base}/pairing/${encodeURIComponent(invitationId)}`, { cache: "no-store" }).then(

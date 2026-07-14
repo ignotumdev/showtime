@@ -34,6 +34,7 @@ import * as SongService from "./songs/SongService.js";
 import * as SyncEngine from "./sync/SyncEngine.js";
 import * as Settings from "./settings/Settings.js";
 import * as ProfileService from "./profiles/ProfileService.js";
+import { ProfileId } from "@showtime/contracts";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
@@ -64,6 +65,7 @@ export class ConnectionManager extends Context.Service<
     readonly connectionsState: Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly createInvitation: (
       name: string | undefined,
+      clientProfile: string,
       scopes: ReadonlyArray<ShowtimeConnectionScope>,
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
@@ -89,8 +91,14 @@ const makePlatformLayer = (options: BackendOptions) =>
 
 const CreateInvitationRequest = Schema.Struct({
   name: Schema.optional(Schema.String),
+  clientProfile: ProfileId,
   scopes: ShowtimeConnectionScopes,
 });
+
+const UpdateClientProfileRequest = Schema.Struct({ clientProfile: ProfileId });
+
+const pairingUrlWithProfile = (url: string, clientProfile: string) =>
+  `${url}&profile=${encodeURIComponent(clientProfile)}`;
 
 const makeRpcProtocol = (desktopCapability: string) =>
   Layer.effect(
@@ -229,8 +237,45 @@ const makeRpcProtocol = (desktopCapability: string) =>
             if (grant) return grant;
           }
           return HttpServerResponse.jsonUnsafe(
-            yield* connectionManager.createInvitation(name, decoded.value.scopes),
+            yield* connectionManager.createInvitation(
+              name,
+              decoded.value.clientProfile,
+              decoded.value.scopes,
+            ),
           );
+        }),
+      );
+      yield* router.add(
+        "PATCH",
+        "/connection-profile/:clientId/:capability",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          if (!params.clientId || !params.capability) return yield* notFound;
+          if (!(yield* settings.get).connectionsEnabled) {
+            return HttpServerResponse.jsonUnsafe(
+              { error: "Connections are disabled." },
+              { status: 503 },
+            );
+          }
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const decoded = yield* request.json.pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(UpdateClientProfileRequest)),
+            Effect.option,
+          );
+          if (decoded._tag === "None") {
+            return HttpServerResponse.jsonUnsafe({ error: "Invalid profile." }, { status: 400 });
+          }
+          const updated = yield* connections.updateClientProfile(
+            params.clientId,
+            params.capability,
+            decoded.value.clientProfile,
+          );
+          return updated
+            ? HttpServerResponse.jsonUnsafe({ updated: true })
+            : HttpServerResponse.jsonUnsafe(
+                { error: "Invalid connection credentials." },
+                { status: 401 },
+              );
         }),
       );
       yield* router.add(
@@ -335,18 +380,24 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
         Effect.map(({ settings, clients, invitations, connectedClientIds }) => ({
           enabled: settings.connectionsEnabled,
           clients: [
-            ...invitations.map(({ invitationId, name, expiresAt, scopes }) => ({
-              kind: "pending" as const,
-              invitationId,
-              name,
-              expiresAt,
-              scopes,
-            })),
-            ...clients.map(({ clientId, name, createdAt, scopes }) => ({
+            ...invitations.map(
+              ({ invitationId, name, expiresAt, clientProfile, updatedAt, scopes }) => ({
+                kind: "pending" as const,
+                invitationId,
+                name,
+                expiresAt,
+                clientProfile,
+                updatedAt,
+                scopes,
+              }),
+            ),
+            ...clients.map(({ clientId, name, createdAt, clientProfile, updatedAt, scopes }) => ({
               kind: "paired" as const,
               clientId,
               name,
               createdAt,
+              clientProfile,
+              updatedAt,
               connected: connectedClientIds.has(clientId),
               scopes,
             })),
@@ -358,8 +409,8 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
           `ws://${rpcWebSocketHost(options.host)}:${options.port}/rpc/desktop/${desktopCapability}`,
         ),
         connectionsState: state,
-        createInvitation: (name, scopes) =>
-          connections.createInvitation(name, scopes).pipe(Effect.andThen(state)),
+        createInvitation: (name, clientProfile, scopes) =>
+          connections.createInvitation(name, clientProfile, scopes).pipe(Effect.andThen(state)),
         pairingInfo: (invitationId) =>
           connections.pairingInvitation(invitationId).pipe(
             Effect.flatMap((invitation): Effect.Effect<ShowtimeConnectionInfo> => {
@@ -383,7 +434,13 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
                     hostname === undefined
                       ? discoveryState
                       : ({ kind: "announced", hostname: hostname.host } as const),
-                  candidates: hostname === undefined ? ipAddresses : [hostname, ...ipAddresses],
+                  candidates: (hostname === undefined
+                    ? ipAddresses
+                    : [hostname, ...ipAddresses]
+                  ).map((candidate) => ({
+                    ...candidate,
+                    url: pairingUrlWithProfile(candidate.url, invitation.clientProfile),
+                  })),
                   expiresAt: invitation.expiresAt,
                 })),
               );

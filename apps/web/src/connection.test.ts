@@ -6,12 +6,14 @@ import {
   probeStoredConnection,
   readStoredConnection,
   storedRpcWebSocketUrl,
+  updateConnectionProfile,
 } from "./connection";
 
 const capability = "a".repeat(43);
 const clientId = "Abcdefghijklmnopqrstu";
 const pairingToken = "p".repeat(43);
 const scopes = ["connections:read", "connections:create", "connections:delete"] as const;
+const clientProfile = "profile_0000000000000000";
 
 describe("browser connection persistence", () => {
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
@@ -19,14 +21,18 @@ describe("browser connection persistence", () => {
     const removeItem = vi.fn();
     const replaceState = vi.fn();
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
     );
     await expect(
       capturePairingFragment(
-        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        {
+          hash: `#pair=${pairingToken}&profile=${clientProfile}`,
+          pathname: "/",
+          search: "",
+        },
         { setItem, removeItem },
         { replaceState },
         request,
@@ -35,7 +41,7 @@ describe("browser connection persistence", () => {
     expect(request).toHaveBeenCalledWith(`/pair/${pairingToken}`, { method: "POST" });
     expect(setItem).toHaveBeenCalledWith(
       showtimeConnectionStorageKey,
-      JSON.stringify({ version: 1, clientId, capability, scopes }),
+      JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }),
     );
     expect(replaceState).toHaveBeenCalledWith(null, "", "/#/");
   });
@@ -95,7 +101,7 @@ describe("browser connection persistence", () => {
       }
     });
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -119,12 +125,33 @@ describe("browser connection persistence", () => {
 
   it("restores a validated record and creates its authenticated socket URL", () => {
     const connection = readStoredConnection({
-      getItem: () => JSON.stringify({ version: 1, clientId, capability, scopes }),
+      getItem: () => JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }),
     });
-    expect(connection).toEqual({ version: 1, clientId, capability, scopes });
+    expect(connection).toEqual({ version: 1, clientId, capability, clientProfile, scopes });
     expect(
       storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
     ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
+  });
+
+  it("updates the authenticated client profile and then persists it locally", async () => {
+    let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ updated: true })));
+    const nextProfile = "profile_1111111111111111" as Parameters<typeof updateConnectionProfile>[0];
+
+    await updateConnectionProfile(nextProfile, storage, request);
+
+    expect(request).toHaveBeenCalledWith(`/connection-profile/${clientId}/${capability}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientProfile: nextProfile }),
+    });
+    expect(JSON.parse(stored)).toMatchObject({ clientProfile: nextProfile, version: 1 });
   });
 
   it("verifies that forgetting removed the credentials", () => {
@@ -157,7 +184,7 @@ describe("browser connection persistence", () => {
   ] as const)("maps connection probe status %s to %s", async (status, expected) => {
     const request = vi.fn().mockResolvedValue(new Response(null, { status }));
     await expect(
-      probeStoredConnection({ version: 1, clientId, capability, scopes }, request),
+      probeStoredConnection({ version: 1, clientId, capability, clientProfile, scopes }, request),
     ).resolves.toBe(expected);
     expect(request).toHaveBeenCalledWith(`/connection-status/${clientId}/${capability}`, {
       cache: "no-store",
@@ -173,7 +200,7 @@ describe("browser connection persistence", () => {
         return new Promise<Response>(() => undefined);
       });
       const result = probeStoredConnection(
-        { version: 1, clientId, capability, scopes },
+        { version: 1, clientId, capability, clientProfile, scopes },
         request as typeof fetch,
         1_000,
       );

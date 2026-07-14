@@ -48,7 +48,9 @@ const invitationId = (state: ShowtimeConnectionsState) => {
 
 const createInvitation = (runtime: ReturnType<typeof makeBackendRuntime>) =>
   runtime.runPromise(
-    Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Discovery test client", [])),
+    Effect.flatMap(ConnectionManager, (_) =>
+      _.createInvitation("Discovery test client", "profile_0000000000000000", []),
+    ),
   );
 
 describe("LocalDiscovery", () => {
@@ -86,7 +88,9 @@ describe("LocalDiscovery", () => {
       host: "showtime.local",
     });
     expect(info.candidates[0]?.url).toMatch(
-      new RegExp(`^http://showtime\\.local:${port}/#pair=[A-Za-z0-9_-]{43}$`),
+      new RegExp(
+        `^http://showtime\\.local:${port}/#pair=[A-Za-z0-9_-]{43}&profile=profile_0000000000000000$`,
+      ),
     );
     expect(preferred).toEqual(["showtime"]);
 

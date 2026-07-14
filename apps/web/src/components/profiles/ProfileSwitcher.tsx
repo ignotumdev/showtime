@@ -44,7 +44,7 @@ const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 const isPendingProfile = (profile: Profile): boolean =>
   "pending" in profile && profile.pending === true;
 
-const currentState = (
+export const currentProfilesState = (
   result: AsyncResult.AsyncResult<ProfilesState, unknown>,
 ): ProfilesState | undefined =>
   AsyncResult.isSuccess(result)
@@ -55,8 +55,35 @@ const currentState = (
 
 export function ProfileSwitcher({ className }: { readonly className?: string }) {
   const result = useAtomValue(profileAtoms.state);
-  const state = currentState(result);
+  const state = currentProfilesState(result);
   const { selected, select } = useSelectedProfile(state);
+
+  return (
+    <ProfileControl
+      className={className}
+      state={state}
+      selected={selected}
+      onSelect={select}
+      loadResult={result}
+    />
+  );
+}
+
+export function ProfileControl({
+  className,
+  state,
+  selected,
+  onSelect,
+  loadResult,
+  fullWidth = false,
+}: {
+  readonly className?: string;
+  readonly state: ProfilesState | undefined;
+  readonly selected: Profile | undefined;
+  readonly onSelect: (profile: Profile) => void;
+  readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
+  readonly fullWidth?: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -67,10 +94,13 @@ export function ProfileSwitcher({ className }: { readonly className?: string }) 
           disabled={!state}
           onValueChange={(id) => {
             const profile = state?.profiles.find((item) => item.id === id);
-            if (profile) select(profile);
+            if (profile) onSelect(profile);
           }}
         >
-          <SelectTrigger aria-label="Selected profile" className="w-44">
+          <SelectTrigger
+            aria-label="Selected profile"
+            className={fullWidth ? "min-w-0 flex-1" : "w-44"}
+          >
             <SelectValue>
               {selected ? <ProfileLabel profile={selected} /> : "Loading profiles…"}
             </SelectValue>
@@ -93,12 +123,12 @@ export function ProfileSwitcher({ className }: { readonly className?: string }) 
           <PencilIcon />
         </Button>
       </ButtonGroup>
-      <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={result} />
+      <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={loadResult} />
     </>
   );
 }
 
-function ProfileLabel({ profile }: { readonly profile: Profile }) {
+export function ProfileLabel({ profile }: { readonly profile: Profile }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span className={cn(showColorClassNames[profile.color], "size-3 shrink-0 rounded-full")} />

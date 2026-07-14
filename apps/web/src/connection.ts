@@ -5,6 +5,13 @@ import {
   type ShowtimeConnectionScope,
   type ShowtimeStoredConnection,
 } from "@showtime/shared";
+import { ProfileId, type ProfileId as ProfileIdType } from "@showtime/contracts";
+import {
+  profileSelectionChangedEvent,
+  profileSelectionStorageKey,
+  writeProfileSelection,
+} from "./profile-selection";
+import { Schema } from "effect";
 
 const capabilityPattern = /^[A-Za-z0-9_-]{43}$/;
 const clientIdPattern = /^[A-Za-z0-9_-]{21}$/;
@@ -60,7 +67,9 @@ export const readStoredConnection = (
       typeof parsed.capability === "string" &&
       capabilityPattern.test(parsed.capability) &&
       "scopes" in parsed &&
-      validScopes(parsed.scopes)
+      validScopes(parsed.scopes) &&
+      "clientProfile" in parsed &&
+      Schema.is(ProfileId)(parsed.clientProfile)
     ) {
       return parsed as ShowtimeStoredConnection;
     }
@@ -77,7 +86,8 @@ export const capturePairingFragment = async (
   request: typeof fetch = fetch,
 ): Promise<PairingResult> => {
   if (!location.hash.startsWith(fragmentPrefix)) return { status: "none" };
-  const token = location.hash.slice(fragmentPrefix.length);
+  const pairingParameters = new URLSearchParams(location.hash.slice(1));
+  const token = pairingParameters.get("pair") ?? "";
   const removePairingFragment = () =>
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);
   if (!pairingTokenPattern.test(token)) {
@@ -96,6 +106,7 @@ export const capturePairingFragment = async (
   // Invitations are single-use. Reserve enough storage for the fixed-size
   // credentials before asking the server to consume one.
   const probeKey = `${showtimeConnectionStorageKey}.probe`;
+  const profileProbeKey = `${profileSelectionStorageKey}.probe`;
   try {
     storage.setItem(
       probeKey,
@@ -103,10 +114,21 @@ export const capturePairingFragment = async (
         version: 1,
         clientId: "c".repeat(21),
         capability: "c".repeat(43),
+        clientProfile: "profile_0000000000000000",
         scopes: showtimeConnectionManagementScopes,
       }),
     );
+    storage.setItem(
+      profileProbeKey,
+      JSON.stringify({ version: 1, profileId: "profile_0000000000000000" }),
+    );
   } catch {
+    try {
+      storage.removeItem(probeKey);
+      storage.removeItem(profileProbeKey);
+    } catch {
+      // The actionable storage error is reported below.
+    }
     return {
       status: "failed",
       message:
@@ -117,6 +139,7 @@ export const capturePairingFragment = async (
   const releaseReservation = () => {
     try {
       storage.removeItem(probeKey);
+      storage.removeItem(profileProbeKey);
     } catch {
       // A later operation reports the actionable failure.
     }
@@ -164,7 +187,9 @@ export const capturePairingFragment = async (
     typeof parsed.capability !== "string" ||
     !capabilityPattern.test(parsed.capability) ||
     !("scopes" in parsed) ||
-    !validScopes(parsed.scopes)
+    !validScopes(parsed.scopes) ||
+    !("clientProfile" in parsed) ||
+    !Schema.is(ProfileId)(parsed.clientProfile)
   ) {
     releaseReservation();
     removePairingFragment();
@@ -173,7 +198,10 @@ export const capturePairingFragment = async (
 
   releaseReservation();
   try {
+    writeProfileSelection(parsed.clientProfile, storage);
     storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event(profileSelectionChangedEvent));
   } catch {
     removePairingFragment();
     return {
@@ -184,6 +212,25 @@ export const capturePairingFragment = async (
   }
   removePairingFragment();
   return { status: "paired" };
+};
+
+export const updateConnectionProfile = async (
+  clientProfile: ProfileIdType,
+  storage: Pick<Storage, "getItem" | "setItem"> | undefined = browserLocalStorage(),
+  request: typeof fetch = fetch,
+): Promise<void> => {
+  const connection = readStoredConnection(storage);
+  if (!connection || connection.clientProfile === clientProfile) return;
+  const response = await request(
+    `/connection-profile/${encodeURIComponent(connection.clientId)}/${encodeURIComponent(connection.capability)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientProfile }),
+    },
+  );
+  if (!response.ok) throw new Error(`Profile update failed (${response.status})`);
+  storage?.setItem(showtimeConnectionStorageKey, JSON.stringify({ ...connection, clientProfile }));
 };
 
 export const storedRpcWebSocketUrl = (
