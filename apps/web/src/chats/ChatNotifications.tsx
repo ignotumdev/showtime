@@ -10,7 +10,7 @@ import type {
   ShowSummary,
 } from "@showtime/contracts";
 import { chatAtoms, profileAtoms, showsAtom } from "@/client";
-import { publishNotification } from "@/notifications/NotificationCenter";
+import { publishNotification, publishNotificationBlink } from "@/notifications/NotificationCenter";
 import { useSelectedProfile } from "@/profiles";
 import { isChatVisibleAtBottom } from "./ChatPresence";
 import {
@@ -101,6 +101,17 @@ function processChannel(
     profileId: profile.id,
     visibleAtBottom: isChatVisibleAtBottom(show.id, channel.id, profile.id),
   });
+  if (planned.blink) {
+    const latestIncomingMessage = findLatestIncomingMessage(
+      channel,
+      profile.id,
+      previous?.sequence,
+    );
+    const sender = profiles.find(
+      (candidate) => candidate.id === latestIncomingMessage?.senderProfileId,
+    );
+    publishNotificationBlink(sender?.color);
+  }
   for (const notification of planned.notifications) {
     if (notification.kind === "summary") {
       publishNotification({
@@ -108,6 +119,12 @@ function processChannel(
         kind: "chat",
         title: `${notification.count} new messages in ${channel.name}`,
         description: show.name,
+        chat: {
+          showId: show.id,
+          channelId: channel.id,
+          channelName: channel.name,
+          showName: show.name,
+        },
       });
     } else {
       publishMessageNotification(show, profiles, channel, notification.message);
@@ -115,6 +132,23 @@ function processChannel(
   }
   memory.set(key, planned.cursor);
   writeCursor(key, planned.cursor);
+}
+
+function findLatestIncomingMessage(
+  channel: ChatChannel,
+  profileId: ProfileId,
+  afterSequence: number | undefined,
+) {
+  for (let index = channel.messages.length - 1; index >= 0; index -= 1) {
+    const message = channel.messages[index];
+    if (
+      message &&
+      message.senderProfileId !== profileId &&
+      (afterSequence === undefined || message.sequence > afterSequence)
+    )
+      return message;
+  }
+  return undefined;
 }
 
 function publishMessageNotification(
@@ -131,6 +165,8 @@ function publishMessageNotification(
     title: senderName,
     description: message.body,
     chat: {
+      showId: show.id,
+      channelId: channel.id,
       senderName,
       senderColor: sender?.color,
       channelName: channel.name,

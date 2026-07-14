@@ -70,10 +70,14 @@ export function ChatWorkspace({
   showId,
   active = true,
   compact = false,
+  requestedChannelId,
+  onSelectedChannelChange,
 }: {
   readonly showId: ShowId;
   readonly active?: boolean;
   readonly compact?: boolean;
+  readonly requestedChannelId?: ChatChannelId;
+  readonly onSelectedChannelChange?: (channelId: ChatChannelId) => void;
 }) {
   const profilesResult = useAtomValue(profileAtoms.state);
   const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
@@ -95,6 +99,8 @@ export function ChatWorkspace({
       compact={compact}
       profile={selected}
       profiles={profileState.profiles}
+      requestedChannelId={requestedChannelId}
+      onSelectedChannelChange={onSelectedChannelChange}
     />
   );
 }
@@ -105,24 +111,45 @@ function ProfileChatWorkspace({
   compact,
   profile,
   profiles,
+  requestedChannelId,
+  onSelectedChannelChange,
 }: {
   readonly showId: ShowId;
   readonly active: boolean;
   readonly compact: boolean;
   readonly profile: Profile;
   readonly profiles: ReadonlyArray<Profile>;
+  readonly requestedChannelId?: ChatChannelId;
+  readonly onSelectedChannelChange?: (channelId: ChatChannelId) => void;
 }) {
   const atoms = chatAtoms(showId, profile.id);
   const result = useAtomValue(atoms.state);
-  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
+  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId | undefined>(
+    requestedChannelId,
+  );
   const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
   const selectedChannel =
     snapshot?.channels.find((channel) => channel.id === selectedChannelId) ?? snapshot?.channels[0];
+  const selectChannel = React.useCallback(
+    (channelId: ChatChannelId) => {
+      setSelectedChannelId(channelId);
+      onSelectedChannelChange?.(channelId);
+    },
+    [onSelectedChannelChange],
+  );
 
   React.useEffect(() => {
     if (selectedChannel && selectedChannel.id !== selectedChannelId)
-      setSelectedChannelId(selectedChannel.id);
-  }, [selectedChannel, selectedChannelId]);
+      selectChannel(selectedChannel.id);
+  }, [selectChannel, selectedChannel, selectedChannelId]);
+
+  React.useEffect(() => {
+    if (
+      requestedChannelId &&
+      snapshot?.channels.some((channel) => channel.id === requestedChannelId)
+    )
+      selectChannel(requestedChannelId);
+  }, [requestedChannelId, selectChannel, snapshot?.channels]);
 
   if (!snapshot || !selectedChannel) {
     return (
@@ -139,7 +166,7 @@ function ProfileChatWorkspace({
         profileId={profile.id}
         channels={snapshot.channels}
         selectedChannel={selectedChannel}
-        onSelect={setSelectedChannelId}
+        onSelect={selectChannel}
         trailing={compact ? null : <ProfileSwitcher variant="avatar" className="md:hidden" />}
       />
       <Conversation
@@ -258,23 +285,70 @@ function ChannelTabs({
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
         <div className="min-w-0 flex-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <ButtonGroup aria-label="Chat channels" className="min-w-max">
-            {channels.map((channel) => (
-              <Button
-                key={channel.id}
-                type="button"
-                variant="outline"
-                className={cn(
-                  channel.id === selectedChannel.id &&
-                    "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
-                )}
-                onClick={() => onSelect(channel.id)}
-              >
-                <HashIcon />
-                <span className="max-w-40 truncate">{channel.name}</span>
-                {!channel.notificationsEnabled && <BellOffIcon className="text-muted-foreground" />}
-                {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
-              </Button>
-            ))}
+            {channels.map((channel, index) => {
+              const selected = channel.id === selectedChannel.id;
+              return (
+                <div key={channel.id} className="relative flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "rounded-none border-l-0 pr-9",
+                      index === 0 && "rounded-l-lg border-l",
+                      selected &&
+                        "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
+                    )}
+                    onClick={() => onSelect(channel.id)}
+                  >
+                    <HashIcon />
+                    <span className="max-w-40 truncate">{channel.name}</span>
+                    {!channel.notificationsEnabled && (
+                      <BellOffIcon className="text-muted-foreground" />
+                    )}
+                    {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
+                  </Button>
+                  {selected && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="absolute top-0 right-0 rounded-none"
+                            aria-label={`Options for ${selectedChannel.name}`}
+                          />
+                        }
+                      >
+                        <MoreHorizontalIcon />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={openRenameDialog}>
+                          <PencilIcon />
+                          Rename channel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={toggleNotifications}>
+                          {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
+                          {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={channels.length === 1}
+                          onClick={() => {
+                            setError(undefined);
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2Icon />
+                          Delete channel
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              );
+            })}
             <Button
               type="button"
               size="icon"
@@ -287,42 +361,6 @@ function ChannelTabs({
             >
               <PlusIcon />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    aria-label={`Options for ${selectedChannel.name}`}
-                  />
-                }
-              >
-                <MoreHorizontalIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={openRenameDialog}>
-                  <PencilIcon />
-                  Rename channel
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={toggleNotifications}>
-                  {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
-                  {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  disabled={channels.length === 1}
-                  onClick={() => {
-                    setError(undefined);
-                    setDeleteDialogOpen(true);
-                  }}
-                >
-                  <Trash2Icon />
-                  Delete channel
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </ButtonGroup>
         </div>
         {trailing}
@@ -454,7 +492,7 @@ function Conversation({
               const sender = profiles.find((item) => item.id === message.senderProfileId);
               const mine = message.senderProfileId === profile.id;
               return (
-                <MessageScroller.Item key={message.id} messageId={message.id} scrollAnchor>
+                <MessageScroller.Item key={message.id} messageId={message.id}>
                   <Message align={mine ? "end" : "start"}>
                     <MessageAvatar>
                       <ProfileAvatar
@@ -623,7 +661,7 @@ function Composer({
         />
         <InputGroupAddon align="inline-end">
           <InputGroupButton
-            size="icon-xs"
+            size="icon-sm"
             variant="default"
             className="rounded-full"
             aria-label="Send message"

@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { RouterProvider, createHashHistory, createRouter } from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { RegistryProvider as AtomProvider } from "@effect/atom-react";
-import { routeTree } from "./routeTree.gen";
+import { router } from "./router";
 import "./styles.css";
 import { capturePairingFragment, probeStoredConnection, readStoredConnection } from "./connection";
 import { connectionState, type ConnectionStatus, useConnectionSnapshot } from "./connection-state";
@@ -18,14 +18,6 @@ import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");
-
-const router = createRouter({ routeTree, history: createHashHistory() });
-
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

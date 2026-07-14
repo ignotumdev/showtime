@@ -1,8 +1,9 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import type { ProfileId, ShowId } from "@showtime/contracts";
+import type { ChatChannelId, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
+import { consumeChatOpenRequest, subscribeChatOpenRequests } from "@/chats/ChatNavigation";
 import { ChatWorkspace } from "@/components/chats/ChatWorkspace";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ function ChatDrawerView({
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
+  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
   const [isMobile, setIsMobile] = React.useState(() =>
     typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches,
   );
@@ -67,8 +69,19 @@ function ChatDrawerView({
     return () => query.removeEventListener("change", update);
   }, []);
 
+  React.useEffect(() => {
+    const openRequestedChat = () => {
+      const request = consumeChatOpenRequest(showId);
+      if (!request) return;
+      setSelectedChannelId(request.channelId);
+      setOpen(true);
+    };
+    openRequestedChat();
+    return subscribeChatOpenRequests(openRequestedChat);
+  }, [setOpen, showId]);
+
   return (
-    <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "left"}>
+    <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>
       {trigger && <DrawerTrigger render={trigger(unreadCount)} />}
       <DrawerContent
         className={
@@ -79,10 +92,16 @@ function ChatDrawerView({
       >
         <DrawerHeader className="flex-row items-center justify-between pb-3 text-left">
           <DrawerTitle>Chat</DrawerTitle>
-          <ProfileSwitcher variant="avatar" />
+          {isMobile && <ProfileSwitcher variant="avatar" />}
         </DrawerHeader>
         <div className="min-h-0 flex-1 px-2 pb-2">
-          <ChatWorkspace showId={showId} active={open} compact />
+          <ChatWorkspace
+            showId={showId}
+            active={open}
+            compact
+            requestedChannelId={selectedChannelId}
+            onSelectedChannelChange={setSelectedChannelId}
+          />
         </div>
       </DrawerContent>
     </Drawer>

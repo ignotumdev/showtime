@@ -1,6 +1,7 @@
 import type { Color } from "@showtime/contracts";
-import { showContrastColorClassNames } from "@/components/show-contrast-color";
+import { Avatar } from "@base-ui/react/avatar";
 import { cn } from "@/lib/utils";
+import { profileColorClassNames } from "./profile-color";
 
 export function ProfileAvatar({
   name,
@@ -11,21 +12,22 @@ export function ProfileAvatar({
   readonly color?: Color;
   readonly className?: string;
 }) {
-  const colors = showContrastColorClassNames[color];
+  const colors = profileColorClassNames[color];
   const initial = Array.from(name.trim())[0]?.toLocaleUpperCase() ?? "?";
 
   return (
-    <span
+    <Avatar.Root
       aria-hidden="true"
       className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+        "inline-grid size-8 shrink-0 place-items-center overflow-hidden rounded-full text-xs",
         colors.background,
-        colors.border,
         colors.text,
         className,
       )}
     >
-      {initial}
-    </span>
+      <Avatar.Fallback className="flex size-full items-center justify-center font-bold leading-none">
+        {initial}
+      </Avatar.Fallback>
+    </Avatar.Root>
   );
 }

@@ -61,6 +61,7 @@ describe("chat notification policy", () => {
       visibleAtBottom: false,
     });
     expect(planned.notifications).toEqual([]);
+    expect(planned.blink).toBe(false);
     expect(planned.cursor).toEqual({ sequence: 1, count: 1 });
   });
 
@@ -82,6 +83,7 @@ describe("chat notification policy", () => {
       { kind: "message", message: incomingMessage5 },
       { kind: "message", message: incomingMessage6 },
     ]);
+    expect(planned.blink).toBe(true);
     expect(planned.cursor).toEqual({ sequence: 6, count: 3 });
   });
 
@@ -98,6 +100,7 @@ describe("chat notification policy", () => {
       visibleAtBottom: false,
     });
     expect(planned.notifications).toEqual([{ kind: "summary", count: 71 }]);
+    expect(planned.blink).toBe(true);
     expect(planned.cursor).toEqual({ sequence: 110, count: 75 });
   });
 
@@ -119,6 +122,7 @@ describe("chat notification policy", () => {
         visibleAtBottom: candidate.visibleAtBottom,
       });
       expect(planned.notifications).toEqual([]);
+      expect(planned.blink).toBe(candidate.notificationsEnabled);
       expect(planned.cursor).toEqual({ sequence: 2, count: 2 });
     }
   });

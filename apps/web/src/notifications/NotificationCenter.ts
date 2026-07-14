@@ -1,5 +1,5 @@
 import { Toast } from "@base-ui/react/toast";
-import type { Color } from "@showtime/contracts";
+import type { ChatChannelId, Color, ShowId } from "@showtime/contracts";
 
 export interface AppNotification {
   readonly id: string;
@@ -9,7 +9,9 @@ export interface AppNotification {
   readonly timeout?: number;
   readonly kind: "chat" | "system";
   readonly chat?: {
-    readonly senderName: string;
+    readonly showId: ShowId;
+    readonly channelId: ChatChannelId;
+    readonly senderName?: string;
     readonly senderColor?: Color;
     readonly channelName: string;
     readonly showName: string;
@@ -18,12 +20,24 @@ export interface AppNotification {
 
 export const notificationManager = Toast.createToastManager<AppNotification>();
 const listeners = new Set<(notification: AppNotification) => void>();
+const blinkListeners = new Set<(color: Color | undefined) => void>();
 
 export const subscribeNotifications = (listener: (notification: AppNotification) => void) => {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
+};
+
+export const subscribeNotificationBlinks = (listener: (color: Color | undefined) => void) => {
+  blinkListeners.add(listener);
+  return () => {
+    blinkListeners.delete(listener);
+  };
+};
+
+export const publishNotificationBlink = (color?: Color) => {
+  for (const listener of blinkListeners) listener(color);
 };
 
 export const publishNotification = (notification: AppNotification) => {

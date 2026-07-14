@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { notificationManager, publishNotification } from "./NotificationCenter";
+import {
+  notificationManager,
+  publishNotification,
+  publishNotificationBlink,
+  subscribeNotificationBlinks,
+} from "./NotificationCenter";
 
 describe("notification center", () => {
   it("publishes each notification to the toast manager once", () => {
@@ -24,5 +29,16 @@ describe("notification center", () => {
         description: "Check one two",
       },
     });
+  });
+
+  it("publishes border blinks independently from toast notifications", () => {
+    const colors: Array<string | undefined> = [];
+    const unsubscribe = subscribeNotificationBlinks((color) => colors.push(color));
+
+    publishNotificationBlink("blue");
+    unsubscribe();
+    publishNotificationBlink("red");
+
+    expect(colors).toEqual(["blue"]);
   });
 });
