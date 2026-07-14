@@ -34,6 +34,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  pairingCandidateCaption,
+  pairingInfoPollDelay,
+  pairingInfoRetryDelay,
+  pairingInfoRetryWait,
+  selectPairingCandidateUrl,
+  shouldPollPairingInfo,
+} from "./pairing-dialog";
 
 const emptyState: ShowtimeConnectionsState = { enabled: false, clients: [] };
 
@@ -303,24 +311,56 @@ function PairClientDialog({
     setCopied(false);
     setError(undefined);
     let timer: number | undefined;
-    const load = () =>
+    let consecutiveFailures = 0;
+    const expiresAt = Date.parse(client.expiresAt);
+    const setExpiredError = () => setError("This connection link has expired.");
+    const hasExpired = () => pairingInfoRetryWait(expiresAt, 0) === undefined;
+    const scheduleLoad = (delay: number) => {
+      const wait = pairingInfoRetryWait(expiresAt, delay);
+      if (wait === undefined) {
+        setExpiredError();
+        return;
+      }
+      timer = window.setTimeout(load, wait);
+    };
+    const load = () => {
+      if (!active) return;
+      if (hasExpired()) {
+        setExpiredError();
+        return;
+      }
       void window.showtime!.pairingInfo(client.invitationId).then(
         (info) => {
           if (!active) return;
+          if (hasExpired()) {
+            setExpiredError();
+            return;
+          }
+          consecutiveFailures = 0;
           setDiscovery(info.discovery);
           setCandidates(info.candidates);
-          setSelectedUrl(info.candidates[0]?.url ?? "");
+          setSelectedUrl((currentUrl) => selectPairingCandidateUrl(info.candidates, currentUrl));
           if (info.discovery.kind === "probing") {
             setError(undefined);
-            timer = window.setTimeout(load, 750);
           } else if (info.candidates.length === 0) {
             setError("No local network was found on this computer.");
           } else {
             setError(undefined);
           }
+          if (shouldPollPairingInfo(info.discovery)) scheduleLoad(pairingInfoPollDelay);
         },
-        () => active && setError("Showtime could not create a connection link."),
+        () => {
+          if (!active) return;
+          if (hasExpired()) {
+            setExpiredError();
+            return;
+          }
+          consecutiveFailures += 1;
+          setError("Showtime could not refresh the connection link. Retrying…");
+          scheduleLoad(pairingInfoRetryDelay(consecutiveFailures));
+        },
       );
+    };
     load();
     return () => {
       active = false;
@@ -371,7 +411,7 @@ function PairClientDialog({
               className="w-full max-w-72"
             />
             <p className="text-xs text-muted-foreground">
-              {selected?.label} · {selected?.host}
+              {selected && pairingCandidateCaption(selected)}
             </p>
           </div>
         )}
