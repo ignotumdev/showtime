@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
     "@homebridge/ciao": "catalog:",
     "@showtime/contracts": "workspace:*",
     "@showtime/shared": "workspace:*",

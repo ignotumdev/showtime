@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime Chat and Notifications Plan</title>
+    <style>
+      :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+      body { max-width: 980px; margin: 0 auto; padding: 48px 24px 96px; }
+      h1, h2 { line-height: 1.15; } h2 { margin-top: 2rem; }
+      code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .lede { font-size: 1.15rem; opacity: .82; }
+      .callout { border-inline-start: 4px solid currentColor; padding: .25rem 1rem; }
+      li + li { margin-top: .45rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid color-mix(in srgb, currentColor 24%, transparent); padding: .65rem; text-align: left; vertical-align: top; }
+      th { background: color-mix(in srgb, currentColor 7%, transparent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Per-show chat and global notifications</h1>
+      <p class="lede">Add reliable, profile-attributed, multi-channel show chat with persisted read state, reconnect catch-up, a normal show route, a live left drawer, and a reusable Effect-native toast bus.</p>
+
+      <section>
+        <h2>Storage and domain model</h2>
+        <ul>
+          <li>Store all chat data in <code>~/.showtime/chats.db</code>. No chat rows or chat metadata are written into <code>&lt;show-id&gt;.showtime</code> files.</li>
+          <li>Use SQLite foreign keys inside the chat domain, WAL mode, a busy timeout, explicit transactions, and monotonic integer message sequences for deterministic ordering and replay.</li>
+          <li>Model channels by show, messages by channel, and per-profile channel state with a last-read message sequence and a notifications-enabled flag.</li>
+          <li>Create a default <q>General</q> channel lazily for every show and allow users to add additional named channels. All profiles can read and write every channel.</li>
+          <li>Store the sender profile id on each message without a database foreign key to the profile file. Resolve the current profile name/color at render time; missing profiles render as <q>Deleted profile</q>.</li>
+          <li>Deleting a show removes its chat rows from <code>chats.db</code> in the same backend operation while keeping show files independent from chat storage.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Reliable synchronization and reconnect behavior</h2>
+        <ol>
+          <li>Expose a profile-specific, per-show streaming snapshot RPC through the existing Effect reactivity layer. Every mutation invalidates the same show chat key, so active clients receive a new authoritative snapshot.</li>
+          <li>Each snapshot carries channels, persisted unread counts/settings, the newest message sequence, and a bounded tail of messages per channel. A reconnect always receives current state even if transient live emissions were missed.</li>
+          <li>Keep a versioned per-client notification cursor in local storage for each profile/show/channel. Compare that cursor with the authoritative snapshot rather than assuming uninterrupted delivery.</li>
+          <li>If every missed message is present in the replay tail, publish one notification event for each eligible incoming message. If the cursor predates the replay tail, publish one summary event with the exact missed count for that channel.</li>
+          <li>Advance notification cursors only after events have been handed to the global notification stream. Never notify for messages sent by the selected profile or for channels whose notifications are disabled.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Read state and notification eligibility</h2>
+        <table>
+          <thead><tr><th>Situation</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Selected channel is visible and scrolled to the latest message</td><td>Persist the newest message sequence as read and suppress chat toasts for those visible messages.</td></tr>
+            <tr><td>Selected channel is visible but the operator has scrolled upward</td><td>Do not advance read state; incoming messages remain unread and create notifications.</td></tr>
+            <tr><td>Another channel or another route is visible</td><td>Incoming eligible messages increment unread state and create notifications.</td></tr>
+            <tr><td>Channel notifications are disabled for the selected profile</td><td>Unread tracking continues, but the global notification bus receives no toast event for that channel.</td></tr>
+            <tr><td>Connection resumes after a gap</td><td>Replay individual missed notifications when bounded; otherwise show an exact per-channel summary.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Effect-native backend and frontend structure</h2>
+        <ul>
+          <li>Add Effect Schema contracts for channel ids, message ids, channel state, chat snapshots, and RPC payloads.</li>
+          <li>Use <code>@effect/sql-sqlite-node</code> and Effect SQL for database setup and queries. Put all SQL and transaction boundaries behind one <code>ChatService</code>.</li>
+          <li>Add reusable frontend chat atoms beside the existing show/song/profile atoms, including streaming state and mutations for channel creation, sending, reading, and notification preferences.</li>
+          <li>Create a global notification center backed by an Effect <code>PubSub</code> exposed as an Effect <code>Stream</code>. Producers publish typed notification events; one React bridge consumes the stream and renders Base UI Toast components.</li>
+          <li>Keep chat eligibility/catch-up policy separate from toast rendering so future system-wide notification producers can reuse the same bus without depending on chat components.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>UI composition</h2>
+        <ul>
+          <li>Add <code>/shows/$showId/chat</code> as the full chat route and add Chat to the desktop show sidebar.</li>
+          <li>Add a Chat icon beside Songs in the mobile show bottom navigation while retaining the centered Live action.</li>
+          <li>In Live, open the same chat workspace from a left-side shadcn Base UI Drawer. Keep song navigation usable when the drawer is closed and make channel selection available inside the drawer.</li>
+          <li>Build the conversation with the shadcn Base UI Message, Bubble, and Message Scroller components. Use their default visual language and only add layout classes and existing Showtime CSS variables.</li>
+          <li>Show channels with unread badges, a small add-channel flow, and a per-channel notification switch. Keep profile switching reachable wherever messages can be sent.</li>
+          <li>Use an accessible multiline composer with explicit send status, stable optimistic behavior, and retryable errors. Empty or oversized messages are rejected consistently in schema and UI.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <ul>
+          <li>Unit-test SQLite initialization, default channel creation, ordering, concurrent sends, channel isolation, profile deletion rendering, read cursors, unread counts, notification settings, and show deletion cleanup.</li>
+          <li>Unit-test notification cursor catch-up, own-message exclusion, visible-at-bottom suppression, muted channels, replay-tail overflow summaries, and duplicate snapshot suppression.</li>
+          <li>Run formatting, type checks, package tests, and production builds.</li>
+          <li>Verify desktop and mobile chat routes, live drawer direction, channel switching, auto-scroll/read behavior, incoming Base UI toasts, profile attribution, and reconnect catch-up in the in-app browser.</li>
+        </ul>
+      </section>
+
+      <div class="callout"><p>This prerelease change intentionally initializes the current chat schema directly and includes no migration framework. Database failures remain explicit, while live delivery always recovers from the authoritative SQLite state.</p></div>
+    </main>
+  </body>
+</html>

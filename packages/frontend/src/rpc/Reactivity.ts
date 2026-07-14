@@ -4,4 +4,5 @@ export {
   showsSyncKey as showsRpcReactivityKey,
   songsSyncKey as songsRpcReactivityKey,
   profilesSyncKey as profilesRpcReactivityKey,
+  chatsSyncKey as chatsRpcReactivityKey,
 } from "@showtime/contracts";

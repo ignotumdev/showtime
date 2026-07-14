@@ -13,6 +13,7 @@
     "@base-ui/react": "catalog:",
     "@effect/atom-react": "catalog:",
     "@fontsource-variable/inter": "catalog:",
+    "@shadcn/react": "catalog:",
     "@showtime/contracts": "workspace:*",
     "@showtime/frontend": "workspace:*",
     "@showtime/shared": "workspace:*",

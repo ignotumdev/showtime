@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { RouterProvider, createHashHistory, createRouter } from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { RegistryProvider as AtomProvider } from "@effect/atom-react";
-import { routeTree } from "./routeTree.gen";
+import { router } from "./router";
 import "./styles.css";
 import { capturePairingFragment, probeStoredConnection, readStoredConnection } from "./connection";
 import { connectionState, type ConnectionStatus, useConnectionSnapshot } from "./connection-state";
@@ -13,17 +13,11 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { showsAtom } from "./client";
 import { useBrowserConnectionIdentity } from "./browser-connection-state";
+import { NotificationProvider } from "./notifications/NotificationProvider";
+import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");
-
-const router = createRouter({ routeTree, history: createHashHistory() });
-
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -46,31 +40,34 @@ function SynchronizedApp() {
     isDesktopHost() || pairedBrowser || Boolean(import.meta.env.VITE_SHOWTIME_RPC_WEBSOCKET_URL);
   const revoked = expectsConnection && connection.status === "revoked";
   return (
-    <AtomProvider>
-      <TooltipProvider>
-        {expectsConnection && !revoked && <ConnectionCoordinator attempt={connection.attempt} />}
-        {expectsConnection && (
-          <ConnectionRecovery
-            status={connection.status}
-            attempt={connection.attempt}
-            pairedBrowser={pairedBrowser}
-            browserConnectionIdentity={browserConnectionIdentity}
-          />
-        )}
-        {!revoked && (
-          <div
-            className="min-h-screen bg-[#0a0a0a]"
-            aria-hidden={expectsConnection && connection.status !== "connected"}
-            inert={expectsConnection && connection.status !== "connected" ? true : undefined}
-          >
-            <RouterProvider router={router} />
-          </div>
-        )}
-        {expectsConnection && connection.status !== "connected" && (
-          <ConnectionOverlay status={connection.status} />
-        )}
-      </TooltipProvider>
-    </AtomProvider>
+    <NotificationProvider>
+      <AtomProvider>
+        <TooltipProvider>
+          {expectsConnection && !revoked && <ConnectionCoordinator attempt={connection.attempt} />}
+          {expectsConnection && (
+            <ConnectionRecovery
+              status={connection.status}
+              attempt={connection.attempt}
+              pairedBrowser={pairedBrowser}
+              browserConnectionIdentity={browserConnectionIdentity}
+            />
+          )}
+          {!revoked && (
+            <div
+              className="min-h-screen bg-[#0a0a0a]"
+              aria-hidden={expectsConnection && connection.status !== "connected"}
+              inert={expectsConnection && connection.status !== "connected" ? true : undefined}
+            >
+              <RouterProvider router={router} />
+            </div>
+          )}
+          {expectsConnection && connection.status !== "connected" && (
+            <ConnectionOverlay status={connection.status} />
+          )}
+          {!revoked && <ChatNotificationCoordinator />}
+        </TooltipProvider>
+      </AtomProvider>
+    </NotificationProvider>
   );
 }
 
