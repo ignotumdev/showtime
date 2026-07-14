@@ -5,6 +5,7 @@ export interface AppNotification {
   readonly id: string;
   readonly title: string;
   readonly description?: string;
+  readonly timestamp?: number;
   readonly priority?: "low" | "high";
   readonly timeout?: number;
   readonly kind: "chat" | "system";
@@ -14,7 +15,7 @@ export interface AppNotification {
     readonly senderName?: string;
     readonly senderColor?: Color;
     readonly channelName: string;
-    readonly showName: string;
+    readonly summary?: boolean;
   };
 }
 

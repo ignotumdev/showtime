@@ -6,11 +6,21 @@ const absoluteDateFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
 });
 
+const clientTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  hourCycle: "h23",
+  minute: "2-digit",
+});
+
 const SECOND = 1_000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const MINIMUM_UPDATE_DELAY = SECOND;
+
+export function formatClientTime(value: string | number | Date): string {
+  return clientTimeFormatter.format(new Date(value));
+}
 
 export function formatRelativeDate(value: string | number | Date, now: Date = new Date()): string {
   const date = new Date(value);

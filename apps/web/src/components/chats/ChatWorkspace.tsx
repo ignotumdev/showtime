@@ -27,6 +27,7 @@ import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { setChatPresence } from "@/chats/ChatPresence";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
+import { formatClientTime } from "@/lib/dates";
 import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -508,7 +509,7 @@ function Conversation({
                         </BubbleContent>
                       </Bubble>
                       <MessageFooter>
-                        {DateTime.formatIso(message.sentAt).slice(11, 16)}
+                        {formatClientTime(DateTime.toDateUtc(message.sentAt))}
                       </MessageFooter>
                     </MessageContent>
                   </Message>

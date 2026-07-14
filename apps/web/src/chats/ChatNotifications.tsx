@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
+import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type {
   ChatChannel,
@@ -10,8 +11,9 @@ import type {
   ShowSummary,
 } from "@showtime/contracts";
 import { chatAtoms, profileAtoms, showsAtom } from "@/client";
-import { publishNotification, publishNotificationBlink } from "@/notifications/NotificationCenter";
+import { publishNotificationBlink } from "@/notifications/NotificationCenter";
 import { useSelectedProfile } from "@/profiles";
+import { enqueueChatNotification } from "./ChatNotificationBatcher";
 import { isChatVisibleAtBottom } from "./ChatPresence";
 import {
   planChatNotifications,
@@ -114,16 +116,19 @@ function processChannel(
   }
   for (const notification of planned.notifications) {
     if (notification.kind === "summary") {
-      publishNotification({
-        id: `chat-summary:${show.id}:${profile.id}:${channel.id}:${channel.newestSequence}`,
-        kind: "chat",
-        title: `${notification.count} new messages in ${channel.name}`,
-        description: show.name,
-        chat: {
-          showId: show.id,
-          channelId: channel.id,
-          channelName: channel.name,
-          showName: show.name,
+      const latestMessage = channel.messages[channel.messages.length - 1];
+      enqueueChatNotification({
+        messageCount: notification.count,
+        notification: {
+          id: `chat-summary:${show.id}:${profile.id}:${channel.id}:${channel.newestSequence}`,
+          kind: "chat",
+          title: `${notification.count} new messages in ${channel.name}`,
+          timestamp: latestMessage ? DateTime.toEpochMillis(latestMessage.sentAt) : undefined,
+          chat: {
+            showId: show.id,
+            channelId: channel.id,
+            channelName: channel.name,
+          },
         },
       });
     } else {
@@ -159,18 +164,21 @@ function publishMessageNotification(
 ) {
   const sender = profiles.find((profile) => profile.id === message.senderProfileId);
   const senderName = sender?.name ?? "Deleted profile";
-  publishNotification({
-    id: `chat:${message.id}`,
-    kind: "chat",
-    title: senderName,
-    description: message.body,
-    chat: {
-      showId: show.id,
-      channelId: channel.id,
-      senderName,
-      senderColor: sender?.color,
-      channelName: channel.name,
-      showName: show.name,
+  enqueueChatNotification({
+    messageCount: 1,
+    notification: {
+      id: `chat:${message.id}`,
+      kind: "chat",
+      title: senderName,
+      description: message.body,
+      timestamp: DateTime.toEpochMillis(message.sentAt),
+      chat: {
+        showId: show.id,
+        channelId: channel.id,
+        senderName,
+        senderColor: sender?.color,
+        channelName: channel.name,
+      },
     },
   });
 }

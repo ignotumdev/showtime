@@ -13,7 +13,7 @@ export function LiveChatDrawer({ showId }: { readonly showId: ShowId }) {
           type="button"
           variant="outline"
           size="icon"
-          className="fixed top-12 left-3 z-30 sm:left-4"
+          className="fixed top-12 right-3 z-30 sm:right-4"
           aria-label={`Open chat${unreadCount > 0 ? `, ${unreadCount} unread messages` : ""}`}
         >
           <MessageCircleIcon />

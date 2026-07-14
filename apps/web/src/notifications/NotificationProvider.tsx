@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react";
 import { openChat } from "@/chats/ChatNavigation";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { profileColorClassNames } from "@/components/profiles/profile-color";
+import { formatClientTime } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import {
   notificationManager,
@@ -56,6 +57,7 @@ function NotificationViewport() {
       <Toast.Viewport className="fixed top-3 left-1/2 z-[100] flex w-[min(26rem,calc(100vw-1.5rem))] -translate-x-1/2 flex-col gap-2 outline-none sm:top-4">
         {toasts.map((toast) => {
           const chat = toast.data?.chat;
+          const timestamp = toast.data?.timestamp;
           const openNotificationChat = async () => {
             if (!chat) return;
             await openChat({ showId: chat.showId, channelId: chat.channelId });
@@ -96,9 +98,14 @@ function NotificationViewport() {
                 <div className="min-w-0 flex-1">
                   <Toast.Title className="flex min-w-0 items-baseline gap-2 text-sm">
                     <span className="truncate font-semibold">{toast.title}</span>
-                    {chat && (
+                    {chat && !chat.summary && (
                       <span className="truncate text-xs text-muted-foreground">
-                        {chat.showName} · #{chat.channelName}
+                        #{chat.channelName}
+                      </span>
+                    )}
+                    {timestamp !== undefined && (
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {formatClientTime(timestamp)}
                       </span>
                     )}
                   </Toast.Title>
