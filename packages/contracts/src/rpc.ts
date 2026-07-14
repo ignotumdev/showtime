@@ -80,6 +80,16 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     success: ChatChannel,
     error: RpcError,
   }),
+  Rpc.make("chats.renameChannel", {
+    payload: { showId: ShowId, channelId: ChatChannelId, name: ChatChannelName },
+    success: Schema.Void,
+    error: RpcError,
+  }),
+  Rpc.make("chats.deleteChannel", {
+    payload: { showId: ShowId, channelId: ChatChannelId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
   Rpc.make("chats.send", {
     payload: {
       showId: ShowId,

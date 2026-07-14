@@ -48,6 +48,15 @@ export class ChatService extends Context.Service<
       readonly showId: ShowId;
       readonly name: string;
     }) => Effect.Effect<ChatChannel, RpcError>;
+    readonly renameChannel: (params: {
+      readonly showId: ShowId;
+      readonly channelId: ChatChannelId;
+      readonly name: string;
+    }) => Effect.Effect<void, RpcError>;
+    readonly deleteChannel: (params: {
+      readonly showId: ShowId;
+      readonly channelId: ChatChannelId;
+    }) => Effect.Effect<void, RpcError>;
     readonly send: (params: {
       readonly showId: ShowId;
       readonly channelId: ChatChannelId;
@@ -138,6 +147,11 @@ const make = Effect.gen(function* () {
         VALUES (${id}, ${showId}, ${"General"}, ${createdAt})`;
     }).pipe(sql.withTransaction);
 
+  const channelName = (input: string) =>
+    decodeChatChannelName(input.trim()).pipe(
+      Effect.mapError((cause) => rpcError("Channel names must be 1 to 60 characters.", cause)),
+    );
+
   const loadMessages = (showId: ShowId) =>
     Effect.gen(function* () {
       const rows =
@@ -217,9 +231,7 @@ const make = Effect.gen(function* () {
     readonly name: string;
   }) =>
     Effect.gen(function* () {
-      const name = yield* decodeChatChannelName(inputName.trim()).pipe(
-        Effect.mapError((cause) => rpcError("Channel names must be 1 to 60 characters.", cause)),
-      );
+      const name = yield* channelName(inputName);
       const id = yield* ids.makeChatChannelId;
       const createdAt = yield* DateTime.now;
       yield* sql`INSERT INTO chat_channels (id, show_id, name, created_at)
@@ -243,6 +255,51 @@ const make = Effect.gen(function* () {
         cause instanceof RpcError
           ? cause
           : rpcError("Could not create channel. Channel names must be unique.", cause),
+      ),
+    );
+
+  const renameChannel = (params: {
+    readonly showId: ShowId;
+    readonly channelId: ChatChannelId;
+    readonly name: string;
+  }) =>
+    Effect.gen(function* () {
+      const name = yield* channelName(params.name);
+      const renamed = (yield* sql`UPDATE chat_channels
+        SET name = ${name}
+        WHERE id = ${params.channelId} AND show_id = ${params.showId}
+        RETURNING id`) as unknown as ReadonlyArray<{ readonly id: string }>;
+      if (renamed.length === 0) return yield* Effect.fail(rpcError("Channel not found."));
+    }).pipe(
+      Effect.mapError((cause) =>
+        cause instanceof RpcError
+          ? cause
+          : rpcError("Could not rename channel. Channel names must be unique.", cause),
+      ),
+    );
+
+  const deleteChannel = (params: { readonly showId: ShowId; readonly channelId: ChatChannelId }) =>
+    Effect.gen(function* () {
+      const deleted = (yield* sql`DELETE FROM chat_channels
+        WHERE id = ${params.channelId}
+          AND show_id = ${params.showId}
+          AND EXISTS (
+            SELECT 1 FROM chat_channels remaining
+            WHERE remaining.show_id = ${params.showId}
+              AND remaining.id != ${params.channelId}
+          )
+        RETURNING id`) as unknown as ReadonlyArray<{ readonly id: string }>;
+      if (deleted.length > 0) return;
+      const channel = (yield* sql`SELECT id FROM chat_channels
+        WHERE id = ${params.channelId} AND show_id = ${params.showId}`) as unknown as ReadonlyArray<{
+        readonly id: string;
+      }>;
+      if (channel.length === 0) return yield* Effect.fail(rpcError("Channel not found."));
+      return yield* Effect.fail(rpcError("A show must have at least one channel."));
+    }).pipe(
+      sql.withTransaction,
+      Effect.mapError((cause) =>
+        cause instanceof RpcError ? cause : rpcError("Could not delete channel.", cause),
       ),
     );
 
@@ -340,7 +397,16 @@ const make = Effect.gen(function* () {
       Effect.mapError((cause) => rpcError("Could not remove the show's chat.", cause)),
     );
 
-  return ChatService.of({ state, createChannel, send, markRead, setNotifications, deleteShow });
+  return ChatService.of({
+    state,
+    createChannel,
+    renameChannel,
+    deleteChannel,
+    send,
+    markRead,
+    setNotifications,
+    deleteShow,
+  });
 });
 
 export const layer = Layer.effect(ChatService, make);

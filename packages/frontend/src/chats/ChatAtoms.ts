@@ -6,6 +6,8 @@ import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export const makeChatAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
   const createChannel = RpcClient.mutation("chats.createChannel");
+  const renameChannel = RpcClient.mutation("chats.renameChannel");
+  const deleteChannel = RpcClient.mutation("chats.deleteChannel");
   const send = RpcClient.mutation("chats.send");
   const markRead = RpcClient.mutation("chats.markRead");
   const setNotifications = RpcClient.mutation("chats.setNotifications");
@@ -13,6 +15,8 @@ export const makeChatAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
     Atom.family((profileId: ProfileId) => ({
       state: latestSnapshot(RpcClient.query("chats.state", { showId, profileId }), options),
       createChannel,
+      renameChannel,
+      deleteChannel,
       send,
       markRead,
       setNotifications,

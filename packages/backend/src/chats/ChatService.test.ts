@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, Exit, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -159,5 +159,60 @@ describe("ChatService", () => {
     expect(result.cleared.channels).toMatchObject([
       { name: "General", messageCount: 0, messages: [] },
     ]);
+  });
+
+  it("renames channels, deletes their related data, and preserves the final channel", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const result = await withService(
+      home,
+      Effect.gen(function* () {
+        const ids = yield* Ids.Ids;
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* ids.makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const general = (yield* chats.state(showId, profileId)).channels[0]!;
+        const production = yield* chats.createChannel({ showId, name: "Production" });
+        yield* chats.send({
+          showId,
+          channelId: production.id,
+          senderProfileId: profileId,
+          body: "Delete this history",
+        });
+        yield* chats.setNotifications({
+          showId,
+          channelId: production.id,
+          profileId,
+          enabled: false,
+        });
+        yield* chats.renameChannel({ showId, channelId: production.id, name: "  Crew  " });
+        const renamed = yield* chats.state(showId, profileId);
+        yield* chats.deleteChannel({ showId, channelId: production.id });
+        const afterDelete = yield* chats.state(showId, profileId);
+        const finalChannelDelete = yield* Effect.exit(
+          chats.deleteChannel({ showId, channelId: general.id }),
+        );
+        return { showId, profileId, renamed, afterDelete, finalChannelDelete };
+      }),
+    );
+
+    expect(result.renamed.channels[1]).toMatchObject({
+      name: "Crew",
+      messageCount: 1,
+      notificationsEnabled: false,
+    });
+    expect(result.afterDelete.channels.map((channel) => channel.name)).toEqual(["General"]);
+    expect(Exit.isFailure(result.finalChannelDelete)).toBe(true);
+
+    const reloaded = await withService(
+      home,
+      Effect.gen(function* () {
+        const chats = yield* ChatService;
+        return yield* chats.state(result.showId, result.profileId);
+      }),
+    );
+    expect(reloaded.channels.map((channel) => channel.name)).toEqual(["General"]);
   });
 });

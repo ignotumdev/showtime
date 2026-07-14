@@ -19,7 +19,9 @@ import {
   BellOffIcon,
   HashIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { setChatPresence } from "@/chats/ChatPresence";
@@ -31,8 +33,10 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -40,6 +44,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -166,10 +171,17 @@ function ChannelTabs({
 }) {
   const atoms = chatAtoms(showId, profileId);
   const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
+  const renameChannel = useAtomSet(atoms.renameChannel, { mode: "promiseExit" });
+  const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
   const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [name, setName] = React.useState("");
+  const [renameName, setRenameName] = React.useState<string>(selectedChannel.name);
   const [adding, setAdding] = React.useState(false);
+  const [renaming, setRenaming] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   const [error, setError] = React.useState<string>();
   const mutationOptions = { reactivityKeys: chatsSyncKey(showId) } as const;
 
@@ -207,6 +219,40 @@ function ChannelTabs({
     });
   };
 
+  const openRenameDialog = () => {
+    setRenameName(selectedChannel.name);
+    setError(undefined);
+    setRenameDialogOpen(true);
+  };
+
+  const rename = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = renameName.trim();
+    if (!trimmed || renaming || trimmed === selectedChannel.name) return;
+    setRenaming(true);
+    setError(undefined);
+    const exit = await renameChannel({
+      payload: { showId, channelId: selectedChannel.id, name: trimmed as ChatChannelName },
+      ...mutationOptions,
+    });
+    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+    else setRenameDialogOpen(false);
+    setRenaming(false);
+  };
+
+  const remove = async () => {
+    if (deleting || channels.length === 1) return;
+    setDeleting(true);
+    setError(undefined);
+    const exit = await deleteChannel({
+      payload: { showId, channelId: selectedChannel.id },
+      ...mutationOptions,
+    });
+    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+    else setDeleteDialogOpen(false);
+    setDeleting(false);
+  };
+
   return (
     <>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
@@ -234,7 +280,10 @@ function ChannelTabs({
               size="icon"
               variant="outline"
               aria-label="Add channel"
-              onClick={() => setDialogOpen(true)}
+              onClick={() => {
+                setError(undefined);
+                setDialogOpen(true);
+              }}
             >
               <PlusIcon />
             </Button>
@@ -252,9 +301,25 @@ function ChannelTabs({
                 <MoreHorizontalIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={openRenameDialog}>
+                  <PencilIcon />
+                  Rename channel
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={toggleNotifications}>
                   {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
                   {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={channels.length === 1}
+                  onClick={() => {
+                    setError(undefined);
+                    setDeleteDialogOpen(true);
+                  }}
+                >
+                  <Trash2Icon />
+                  Delete channel
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -262,7 +327,7 @@ function ChannelTabs({
         </div>
         {trailing}
       </header>
-      {error && !dialogOpen && (
+      {error && !dialogOpen && !renameDialogOpen && !deleteDialogOpen && (
         <p role="alert" className="shrink-0 border-b px-3 py-2 text-xs text-destructive">
           {error}
         </p>
@@ -291,6 +356,66 @@ function ChannelTabs({
               {error}
             </p>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename channel</DialogTitle>
+            <DialogDescription>Choose a new name for #{selectedChannel.name}.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={rename}>
+            <Input
+              autoFocus
+              value={renameName}
+              maxLength={60}
+              aria-label="Channel name"
+              onChange={(event) => setRenameName(event.currentTarget.value)}
+            />
+            {error && (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" disabled={renaming} />}>
+                Cancel
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={
+                  renaming || !renameName.trim() || renameName.trim() === selectedChannel.name
+                }
+              >
+                {renaming ? <Spinner /> : "Rename"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete channel?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete #{selectedChannel.name} and all of its messages. This
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" disabled={deleting} />}>
+              Cancel
+            </DialogClose>
+            <Button type="button" variant="destructive" disabled={deleting} onClick={remove}>
+              <Trash2Icon />
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
