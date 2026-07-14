@@ -308,7 +308,7 @@ function ShowSidebarLink({ to, params, label, badge, number, icon: Icon }: ShowS
           </div>
         )}
         {Icon ? <Icon /> : null}
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="min-w-0 flex-1 truncate" title={label}>{label}</span>
         {badge && <Badge variant="outline">{badge}</Badge>}
       </SidebarMenuButton>
     </SidebarMenuItem>
