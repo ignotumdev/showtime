@@ -10,6 +10,7 @@ const notification = (
   id: string,
   channelId = "channel_0000000000000001",
   channelName = "General",
+  showId = "show_0000000000000001",
 ) =>
   ({
     id,
@@ -18,7 +19,7 @@ const notification = (
     description: "Message body",
     timestamp: id === "second" ? 2 : 1,
     chat: {
-      showId: "show_0000000000000001" as ShowId,
+      showId: showId as ShowId,
       channelId: channelId as ChatChannelId,
       channelName,
     },
@@ -32,12 +33,12 @@ describe("chat notification batching", () => {
     );
   });
 
-  it("collapses simultaneous deliveries and targets the first channel", () => {
+  it("collapses simultaneous deliveries for the same navigation target", () => {
     const first = notification("first");
     const collapsed = collapseChatNotificationDeliveries([
       { notification: first, messageCount: 2 },
       {
-        notification: notification("second", "channel_0000000000000002", "Stage"),
+        notification: notification("second"),
         messageCount: 3,
       },
     ]);
@@ -45,7 +46,7 @@ describe("chat notification batching", () => {
     expect(collapsed).toMatchObject({
       kind: "chat",
       title: "5 new messages",
-      description: "#General, #Stage",
+      description: "#General",
       timestamp: 2,
       chat: { ...first.chat, summary: true },
     });
@@ -68,5 +69,37 @@ describe("chat notification batching", () => {
     scheduled.shift()?.();
 
     expect(published.map((item) => item.title)).toEqual(["2 new messages", "A message"]);
+  });
+
+  it("publishes separate notifications for simultaneous deliveries with different targets", () => {
+    const scheduled: Array<() => void> = [];
+    const published: Array<AppNotification> = [];
+    const enqueue = makeChatNotificationBatcher(
+      (item) => published.push(item),
+      (flush) => scheduled.push(flush),
+    );
+
+    enqueue({ notification: notification("first"), messageCount: 1 });
+    enqueue({
+      notification: notification("second", "channel_0000000000000002", "Stage"),
+      messageCount: 1,
+    });
+    enqueue({
+      notification: notification(
+        "third",
+        "channel_0000000000000001",
+        "General",
+        "show_0000000000000002",
+      ),
+      messageCount: 1,
+    });
+    scheduled.shift()?.();
+
+    expect(published.map((item) => item.id)).toEqual(["first", "second", "third"]);
+    expect(published.map((item) => item.chat)).toMatchObject([
+      { showId: "show_0000000000000001", channelId: "channel_0000000000000001" },
+      { showId: "show_0000000000000001", channelId: "channel_0000000000000002" },
+      { showId: "show_0000000000000002", channelId: "channel_0000000000000001" },
+    ]);
   });
 });

@@ -22,6 +22,7 @@ export const planChatNotifications = ({
 }): {
   readonly cursor: ChatNotificationCursor;
   readonly blink: boolean;
+  readonly latestIncomingMessage?: ChatMessage;
   readonly notifications: ReadonlyArray<PlannedChatNotification>;
 } => {
   const cursor = {
@@ -37,16 +38,24 @@ export const planChatNotifications = ({
 
   const missedCount = Math.max(0, channel.incomingMessageCount - previous.count);
   const blink = channel.notificationsEnabled && missedCount > 0;
-  if (!blink || visibleAtBottom) return { cursor, blink, notifications: [] };
+  if (!blink) return { cursor, blink, notifications: [] };
 
   const messages = channel.messages.filter(
     (message) => message.sequence > previous.sequence && message.senderProfileId !== profileId,
   );
+  const latestIncomingMessage = messages[messages.length - 1];
+  if (visibleAtBottom) return { cursor, blink, latestIncomingMessage, notifications: [] };
   return missedCount > messages.length
-    ? { cursor, blink, notifications: [{ kind: "summary", count: missedCount }] }
+    ? {
+        cursor,
+        blink,
+        latestIncomingMessage,
+        notifications: [{ kind: "summary", count: missedCount }],
+      }
     : {
         cursor,
         blink,
+        latestIncomingMessage,
         notifications: messages.map((message) => ({ kind: "message" as const, message })),
       };
 };

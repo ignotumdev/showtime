@@ -19,7 +19,9 @@ export function NotificationProvider({ children }: { readonly children: React.Re
     color: profileColorClassNames.neutral.border,
   });
 
-  React.useEffect(
+  // Descendant notification coordinators publish from passive effects. Subscribe
+  // during layout so their initial catch-up blinks cannot be missed.
+  React.useLayoutEffect(
     () =>
       subscribeNotificationBlinks((color) => {
         setBlink((current) => ({

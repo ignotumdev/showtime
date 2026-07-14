@@ -9,6 +9,8 @@ import {
 describe("notification center", () => {
   it("publishes each notification to the toast manager once", () => {
     const events: Array<unknown> = [];
+    // Base UI intentionally exposes its manager subscription hook under this
+    // leading-space key; there is no public `subscribe` property.
     const unsubscribe = notificationManager[" subscribe"]((event) => events.push(event));
 
     publishNotification({

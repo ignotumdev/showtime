@@ -103,12 +103,8 @@ function processChannel(
     profileId: profile.id,
     visibleAtBottom: isChatVisibleAtBottom(show.id, channel.id, profile.id),
   });
+  const latestIncomingMessage = planned.latestIncomingMessage;
   if (planned.blink) {
-    const latestIncomingMessage = findLatestIncomingMessage(
-      channel,
-      profile.id,
-      previous?.sequence,
-    );
     const sender = profiles.find(
       (candidate) => candidate.id === latestIncomingMessage?.senderProfileId,
     );
@@ -116,14 +112,15 @@ function processChannel(
   }
   for (const notification of planned.notifications) {
     if (notification.kind === "summary") {
-      const latestMessage = channel.messages[channel.messages.length - 1];
       enqueueChatNotification({
         messageCount: notification.count,
         notification: {
           id: `chat-summary:${show.id}:${profile.id}:${channel.id}:${channel.newestSequence}`,
           kind: "chat",
           title: `${notification.count} new messages in ${channel.name}`,
-          timestamp: latestMessage ? DateTime.toEpochMillis(latestMessage.sentAt) : undefined,
+          timestamp: latestIncomingMessage
+            ? DateTime.toEpochMillis(latestIncomingMessage.sentAt)
+            : undefined,
           chat: {
             showId: show.id,
             channelId: channel.id,
@@ -137,23 +134,6 @@ function processChannel(
   }
   memory.set(key, planned.cursor);
   writeCursor(key, planned.cursor);
-}
-
-function findLatestIncomingMessage(
-  channel: ChatChannel,
-  profileId: ProfileId,
-  afterSequence: number | undefined,
-) {
-  for (let index = channel.messages.length - 1; index >= 0; index -= 1) {
-    const message = channel.messages[index];
-    if (
-      message &&
-      message.senderProfileId !== profileId &&
-      (afterSequence === undefined || message.sequence > afterSequence)
-    )
-      return message;
-  }
-  return undefined;
 }
 
 function publishMessageNotification(

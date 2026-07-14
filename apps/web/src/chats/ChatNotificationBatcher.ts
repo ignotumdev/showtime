@@ -39,10 +39,25 @@ export const collapseChatNotificationDeliveries = (
   };
 };
 
+const groupByNavigationTarget = (deliveries: ReadonlyArray<ChatNotificationDelivery>) => {
+  const groups = new Map<string, Array<ChatNotificationDelivery>>();
+  for (const delivery of deliveries) {
+    const chat = delivery.notification.chat;
+    const key = chat
+      ? `${chat.showId}:${chat.channelId}`
+      : `notification:${delivery.notification.id}`;
+    const group = groups.get(key);
+    if (group) group.push(delivery);
+    else groups.set(key, [delivery]);
+  }
+  return groups.values();
+};
+
 /**
- * Notifications queued during one browser update turn are catch-up peers. A
- * later stream update gets a new turn, so ordinary messages sent in sequence
- * continue to produce individual notifications.
+ * Notifications for the same navigation target queued during one browser
+ * update turn are catch-up peers. A later stream update gets a new turn, so
+ * ordinary messages sent in sequence continue to produce individual
+ * notifications.
  */
 export const makeChatNotificationBatcher = (
   publish: (notification: AppNotification) => void,
@@ -57,8 +72,10 @@ export const makeChatNotificationBatcher = (
     flushScheduled = true;
     schedule(() => {
       flushScheduled = false;
-      const notification = collapseChatNotificationDeliveries(pending.splice(0));
-      if (notification) publish(notification);
+      for (const deliveries of groupByNavigationTarget(pending.splice(0))) {
+        const notification = collapseChatNotificationDeliveries(deliveries);
+        if (notification) publish(notification);
+      }
     });
   };
 };

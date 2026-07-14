@@ -88,20 +88,38 @@ describe("chat notification policy", () => {
   });
 
   it("summarizes an overflow gap with the exact incoming count", () => {
+    const latestIncomingMessage = message(110);
     const planned = planChatNotifications({
       previous: cursor(10, 4),
       channel: channel({
-        messages: [message(109), message(110)],
-        messageCount: 110,
+        messages: [message(109), latestIncomingMessage, message(111, selectedProfileId)],
+        messageCount: 111,
         incomingMessageCount: 75,
-        newestSequence: 110 as ChatSequence,
+        newestSequence: 111 as ChatSequence,
       }),
       profileId: selectedProfileId,
       visibleAtBottom: false,
     });
     expect(planned.notifications).toEqual([{ kind: "summary", count: 71 }]);
     expect(planned.blink).toBe(true);
-    expect(planned.cursor).toEqual({ sequence: 110, count: 75 });
+    expect(planned.latestIncomingMessage).toBe(latestIncomingMessage);
+    expect(planned.cursor).toEqual({ sequence: 111, count: 75 });
+  });
+
+  it("omits the latest incoming message when none remains in the replay", () => {
+    const planned = planChatNotifications({
+      previous: cursor(10, 4),
+      channel: channel({
+        messages: [message(110, selectedProfileId)],
+        incomingMessageCount: 75,
+        newestSequence: 110 as ChatSequence,
+      }),
+      profileId: selectedProfileId,
+      visibleAtBottom: false,
+    });
+
+    expect(planned.notifications).toEqual([{ kind: "summary", count: 71 }]);
+    expect(planned.latestIncomingMessage).toBeUndefined();
   });
 
   it("suppresses notifications while visible at bottom or when the channel is muted", () => {

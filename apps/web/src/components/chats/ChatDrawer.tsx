@@ -29,7 +29,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const { selected } = useSelectedProfile(profileState);
 
   return selected ? (
-    <ProfileChatDrawer key={selected.id} {...props} profileId={selected.id} />
+    <ProfileChatDrawer {...props} profileId={selected.id} />
   ) : (
     <ChatDrawerView {...props} unreadCount={0} />
   );

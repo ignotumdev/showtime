@@ -203,8 +203,12 @@ function ChannelTabs({
   const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
   const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [renameTarget, setRenameTarget] = React.useState<
+    Pick<ChatChannel, "id" | "name"> | undefined
+  >();
+  const [deleteTarget, setDeleteTarget] = React.useState<
+    Pick<ChatChannel, "id" | "name"> | undefined
+  >();
   const [name, setName] = React.useState("");
   const [renameName, setRenameName] = React.useState<string>(selectedChannel.name);
   const [adding, setAdding] = React.useState(false);
@@ -249,35 +253,37 @@ function ChannelTabs({
 
   const openRenameDialog = () => {
     setRenameName(selectedChannel.name);
+    setRenameTarget({ id: selectedChannel.id, name: selectedChannel.name });
     setError(undefined);
-    setRenameDialogOpen(true);
   };
 
   const rename = async (event: React.FormEvent) => {
     event.preventDefault();
+    const target = renameTarget;
     const trimmed = renameName.trim();
-    if (!trimmed || renaming || trimmed === selectedChannel.name) return;
+    if (!target || !trimmed || renaming || trimmed === target.name) return;
     setRenaming(true);
     setError(undefined);
     const exit = await renameChannel({
-      payload: { showId, channelId: selectedChannel.id, name: trimmed as ChatChannelName },
+      payload: { showId, channelId: target.id, name: trimmed as ChatChannelName },
       ...mutationOptions,
     });
     if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else setRenameDialogOpen(false);
+    else setRenameTarget(undefined);
     setRenaming(false);
   };
 
   const remove = async () => {
-    if (deleting || channels.length === 1) return;
+    const target = deleteTarget;
+    if (!target || deleting || channels.length === 1) return;
     setDeleting(true);
     setError(undefined);
     const exit = await deleteChannel({
-      payload: { showId, channelId: selectedChannel.id },
+      payload: { showId, channelId: target.id },
       ...mutationOptions,
     });
     if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else setDeleteDialogOpen(false);
+    else setDeleteTarget(undefined);
     setDeleting(false);
   };
 
@@ -338,7 +344,10 @@ function ChannelTabs({
                           disabled={channels.length === 1}
                           onClick={() => {
                             setError(undefined);
-                            setDeleteDialogOpen(true);
+                            setDeleteTarget({
+                              id: selectedChannel.id,
+                              name: selectedChannel.name,
+                            });
                           }}
                         >
                           <Trash2Icon />
@@ -366,7 +375,7 @@ function ChannelTabs({
         </div>
         {trailing}
       </header>
-      {error && !dialogOpen && !renameDialogOpen && !deleteDialogOpen && (
+      {error && !dialogOpen && !renameTarget && !deleteTarget && (
         <p role="alert" className="shrink-0 border-b px-3 py-2 text-xs text-destructive">
           {error}
         </p>
@@ -397,11 +406,16 @@ function ChannelTabs({
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+      <Dialog
+        open={renameTarget !== undefined}
+        onOpenChange={(open) => {
+          if (!open && !renaming) setRenameTarget(undefined);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename channel</DialogTitle>
-            <DialogDescription>Choose a new name for #{selectedChannel.name}.</DialogDescription>
+            <DialogDescription>Choose a new name for #{renameTarget?.name}.</DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={rename}>
             <Input
@@ -423,7 +437,7 @@ function ChannelTabs({
               <Button
                 type="submit"
                 disabled={
-                  renaming || !renameName.trim() || renameName.trim() === selectedChannel.name
+                  renaming || !renameName.trim() || renameName.trim() === renameTarget?.name
                 }
               >
                 {renaming ? <Spinner /> : "Rename"}
@@ -432,12 +446,17 @@ function ChannelTabs({
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog
+        open={deleteTarget !== undefined}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(undefined);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete channel?</DialogTitle>
             <DialogDescription>
-              This will permanently delete #{selectedChannel.name} and all of its messages. This
+              This will permanently delete #{deleteTarget?.name} and all of its messages. This
               cannot be undone.
             </DialogDescription>
           </DialogHeader>
