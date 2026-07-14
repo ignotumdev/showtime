@@ -122,8 +122,8 @@ describe("browser connection persistence", () => {
     });
     expect(connection).toEqual({ version: 1, clientId, capability });
     expect(
-      storedRpcWebSocketUrl({ protocol: "http:", host: "192.168.1.2:34987" }, connection!),
-    ).toBe(`ws://192.168.1.2:34987/rpc/${clientId}/${capability}`);
+      storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
+    ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
   });
 
   it("verifies that forgetting removed the credentials", () => {

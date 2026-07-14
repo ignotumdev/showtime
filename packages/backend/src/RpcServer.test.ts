@@ -359,7 +359,7 @@ describe("Showtime WebSocket RPC", () => {
         Effect.flatMap(ConnectionManager, (connections) => connections.connectionsState),
       );
       expect(before.clients[0]).toMatchObject({ kind: "pending", name: "Expired iPad" });
-      await runtime.runPromise(
+      const pairingInfo = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
           connections.pairingInfo("expiredInvitation1234"),
         ),
@@ -369,6 +369,7 @@ describe("Showtime WebSocket RPC", () => {
       ) as { invitations: Array<{ token: string; expiresAt: string }> };
       expect(persisted.invitations[0]!.token).not.toBe(expiredToken);
       expect(Date.parse(persisted.invitations[0]!.expiresAt)).toBeGreaterThan(Date.now());
+      expect(pairingInfo.expiresAt).toBe(persisted.invitations[0]!.expiresAt);
       expect(
         (await fetch(`http://127.0.0.1:${port}/pair/${expiredToken}`, { method: "POST" })).status,
       ).toBe(410);

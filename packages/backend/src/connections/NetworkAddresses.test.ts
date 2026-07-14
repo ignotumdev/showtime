@@ -20,17 +20,23 @@ describe("discoverCandidates", () => {
 
     expect(discoverCandidates(interfaces, 4010, "pairing-token")).toEqual([
       {
-        address: "192.168.1.20",
+        kind: "ip-address",
+        label: "ethernet — 192.168.1.20",
+        host: "192.168.1.20",
         interfaceName: "ethernet",
         url: "http://192.168.1.20:4010/#pair=pairing-token",
       },
       {
-        address: "10.0.0.8",
+        kind: "ip-address",
+        label: "wifi — 10.0.0.8",
+        host: "10.0.0.8",
         interfaceName: "wifi",
         url: "http://10.0.0.8:4010/#pair=pairing-token",
       },
       {
-        address: "172.31.4.5",
+        kind: "ip-address",
+        label: "wifi — 172.31.4.5",
+        host: "172.31.4.5",
         interfaceName: "wifi",
         url: "http://172.31.4.5:4010/#pair=pairing-token",
       },

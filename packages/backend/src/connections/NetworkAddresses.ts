@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import { networkInterfaces } from "node:os";
 import type { ShowtimeConnectionCandidate } from "@showtime/shared";
+import { showtimePairingUrl } from "@showtime/shared";
 
 export class NetworkAddresses extends Context.Service<
   NetworkAddresses,
@@ -30,9 +31,11 @@ export const discoverCandidates = (
             address.family === "IPv4" && !address.internal && isPrivateIpv4(address.address),
         )
         .map((address) => ({
-          address: address.address,
+          kind: "ip-address" as const,
+          label: `${interfaceName} — ${address.address}`,
+          host: address.address,
           interfaceName,
-          url: `http://${address.address}:${port}/#pair=${pairingToken}`,
+          url: showtimePairingUrl(address.address, pairingToken, port),
         })),
     )
     .sort((left, right) => left.interfaceName.localeCompare(right.interfaceName));
