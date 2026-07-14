@@ -3,6 +3,10 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
+body {
+  position: relative;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -152,6 +156,25 @@
 
 @utility no-drag-region {
   -webkit-app-region: no-drag;
+}
+
+@keyframes notification-border-blink {
+  0%,
+  26%,
+  52%,
+  78%,
+  100% {
+    opacity: 0;
+  }
+  13%,
+  39%,
+  65% {
+    opacity: 1;
+  }
+}
+
+@utility animate-notification-border-blink {
+  animation: notification-border-blink 1200ms ease-in-out both;
 }
 
 ::selection {

@@ -5,3 +5,4 @@ export const microphonesSyncKey = (showId: ShowId) => [`microphones:${showId}`] 
 export const mixesSyncKey = (showId: ShowId) => [`mixes:${showId}`] as const;
 export const songsSyncKey = (showId: ShowId) => [`songs:${showId}`] as const;
 export const profilesSyncKey = ["profiles"] as const;
+export const chatsSyncKey = (showId: ShowId) => [`chats:${showId}`] as const;

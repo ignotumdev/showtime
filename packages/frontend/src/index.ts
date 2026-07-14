@@ -5,6 +5,7 @@ import { makeRpcClient, type RpcClientOptions } from "./rpc/RpcClient.js";
 import type { StreamingRpcOptions } from "./rpc/StreamingRpcOptions.js";
 import { makeShowAtoms } from "./shows/ShowAtoms.js";
 import { makeSongAtoms } from "./songs/SongAtoms.js";
+import { makeChatAtoms } from "./chats/ChatAtoms.js";
 
 export interface ShowtimeFrontendOptions extends RpcClientOptions, StreamingRpcOptions {}
 
@@ -19,6 +20,7 @@ export const makeShowtimeFrontend = (options: ShowtimeFrontendOptions) => {
     ...makeMixAtoms(RpcClient, atomOptions),
     ...makeSongAtoms(RpcClient, atomOptions),
     ...makeProfileAtoms(RpcClient, atomOptions),
+    ...makeChatAtoms(RpcClient, atomOptions),
   } as const;
 };
 
@@ -34,3 +36,4 @@ export * from "./rpc/RpcClient.js";
 export * from "./rpc/StreamingRpcOptions.js";
 export * from "./shows/ShowAtoms.js";
 export * from "./songs/SongAtoms.js";
+export * from "./chats/ChatAtoms.js";

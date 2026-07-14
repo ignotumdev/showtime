@@ -23,6 +23,7 @@ type TitleBarProps = {
     readonly color: Color;
   };
   onLiveBack?: () => void;
+  actions?: React.ReactNode;
   stack?: "default" | "above-content" | "below-content";
 };
 
@@ -33,6 +34,7 @@ export function TitleBar({
   liveStatus,
   liveShow,
   onLiveBack,
+  actions,
   stack = "default",
 }: TitleBarProps) {
   const pathname = useRouterState({
@@ -102,6 +104,7 @@ export function TitleBar({
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
+        {actions}
         {!isLiveRoute && (
           <>
             <ConnectionDialog compact className="md:hidden" />
