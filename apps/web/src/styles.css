@@ -158,6 +158,23 @@ body {
   -webkit-app-region: no-drag;
 }
 
+@keyframes notification-border-blink {
+  0%,
+  40%,
+  80%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  60% {
+    opacity: 1;
+  }
+}
+
+@utility animate-notification-border-blink {
+  animation: notification-border-blink 900ms ease-in-out both;
+}
+
 ::selection {
   background: #082f49;
   color: #7dd3fc;

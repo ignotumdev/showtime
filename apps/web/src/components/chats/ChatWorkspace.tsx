@@ -13,16 +13,42 @@ import {
   type ProfileId,
   type ShowId,
 } from "@showtime/contracts";
-import { BellIcon, BellOffIcon, HashIcon, PlusIcon, SendIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  BellIcon,
+  BellOffIcon,
+  HashIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+} from "lucide-react";
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
-import { useSelectedProfile } from "@/profiles";
-import { showColorClassNames } from "@/components/shows/show-color";
-import { cn } from "@/lib/utils";
+import { setChatPresence } from "@/chats/ChatPresence";
+import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 import {
   Message,
   MessageAvatar,
@@ -30,10 +56,10 @@ import {
   MessageFooter,
   MessageHeader,
 } from "@/components/ui/message";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { setChatPresence } from "@/chats/ChatPresence";
+import { cn } from "@/lib/utils";
+import { useSelectedProfile } from "@/profiles";
 
 export function ChatWorkspace({
   showId,
@@ -50,11 +76,12 @@ export function ChatWorkspace({
 
   if (!selected || !profileState) {
     return (
-      <div className="grid min-h-72 place-content-center">
+      <div className="grid h-full min-h-72 place-content-center">
         <Spinner />
       </div>
     );
   }
+
   return (
     <ProfileChatWorkspace
       key={selected.id}
@@ -94,76 +121,62 @@ function ProfileChatWorkspace({
 
   if (!snapshot || !selectedChannel) {
     return (
-      <div className="grid min-h-72 place-content-center gap-2 text-center text-sm text-muted-foreground">
+      <div className="grid h-full min-h-72 place-content-center gap-2 text-center text-sm text-muted-foreground">
         {AsyncResult.isFailure(result) ? "Chat could not be loaded." : <Spinner />}
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "grid min-h-[32rem] overflow-hidden rounded-lg border bg-background",
-        compact ? "h-full grid-cols-1" : "h-full grid-cols-1 lg:grid-cols-[15rem_minmax(0,1fr)]",
-      )}
-    >
-      <ChannelPanel
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border bg-background">
+      <ChannelTabs
         showId={showId}
         profileId={profile.id}
         channels={snapshot.channels}
-        selectedChannelId={selectedChannel.id}
+        selectedChannel={selectedChannel}
         onSelect={setSelectedChannelId}
-        compact={compact}
+        trailing={compact ? null : <ProfileSwitcher variant="avatar" className="md:hidden" />}
       />
-      <section className="flex min-h-0 min-w-0 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-3">
-          <HashIcon className="size-4 text-muted-foreground" />
-          <h2 className="min-w-0 flex-1 truncate font-semibold">{selectedChannel.name}</h2>
-          {selectedChannel.unreadCount > 0 && (
-            <Badge variant="secondary">{selectedChannel.unreadCount} unread</Badge>
-          )}
-          <ProfileSwitcher className="hidden sm:flex [&>*:first-child]:flex-1" />
-        </header>
-        <Conversation
-          key={selectedChannel.id}
-          showId={showId}
-          profile={profile}
-          profiles={profiles}
-          channel={selectedChannel}
-          active={active}
-        />
-      </section>
-    </div>
+      <Conversation
+        key={selectedChannel.id}
+        showId={showId}
+        profile={profile}
+        profiles={profiles}
+        channel={selectedChannel}
+        active={active}
+      />
+    </section>
   );
 }
 
-function ChannelPanel({
+function ChannelTabs({
   showId,
   profileId,
   channels,
-  selectedChannelId,
+  selectedChannel,
   onSelect,
-  compact,
+  trailing,
 }: {
   readonly showId: ShowId;
   readonly profileId: ProfileId;
   readonly channels: ReadonlyArray<ChatChannel>;
-  readonly selectedChannelId: ChatChannelId;
+  readonly selectedChannel: ChatChannel;
   readonly onSelect: (id: ChatChannelId) => void;
-  readonly compact: boolean;
+  readonly trailing: React.ReactNode;
 }) {
   const atoms = chatAtoms(showId, profileId);
   const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
   const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
-  const [adding, setAdding] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
   const [name, setName] = React.useState("");
+  const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string>();
   const mutationOptions = { reactivityKeys: chatsSyncKey(showId) } as const;
 
   const add = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || adding) return;
     setAdding(true);
     setError(undefined);
     const exit = await createChannel({
@@ -173,77 +186,114 @@ function ChannelPanel({
     if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
     else {
       setName("");
+      setDialogOpen(false);
       onSelect(exit.value.id);
     }
     setAdding(false);
   };
 
+  const toggleNotifications = () => {
+    setError(undefined);
+    void setNotifications({
+      payload: {
+        showId,
+        channelId: selectedChannel.id,
+        profileId,
+        enabled: !selectedChannel.notificationsEnabled,
+      },
+      ...mutationOptions,
+    }).then((exit) => {
+      if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+    });
+  };
+
   return (
-    <aside
-      className={cn(
-        "min-w-0 border-b bg-muted/20 lg:border-r lg:border-b-0",
-        compact && "lg:border-r-0 lg:border-b",
-      )}
-    >
-      <div
-        className={cn(
-          "flex gap-1 overflow-x-auto p-2",
-          !compact && "lg:flex-col lg:overflow-visible",
-        )}
-      >
-        {channels.map((channel) => (
-          <div
-            key={channel.id}
-            className={cn("flex shrink-0 items-center gap-1", !compact && "lg:w-full")}
-          >
+    <>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
+        <div className="min-w-0 flex-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <ButtonGroup aria-label="Chat channels" className="min-w-max">
+            {channels.map((channel) => (
+              <Button
+                key={channel.id}
+                type="button"
+                variant="outline"
+                className={cn(
+                  channel.id === selectedChannel.id &&
+                    "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
+                )}
+                onClick={() => onSelect(channel.id)}
+              >
+                <HashIcon />
+                <span className="max-w-40 truncate">{channel.name}</span>
+                {!channel.notificationsEnabled && <BellOffIcon className="text-muted-foreground" />}
+                {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
+              </Button>
+            ))}
             <Button
               type="button"
-              variant={channel.id === selectedChannelId ? "secondary" : "ghost"}
-              className="min-w-28 flex-1 justify-start"
-              onClick={() => onSelect(channel.id)}
+              size="icon"
+              variant="outline"
+              aria-label="Add channel"
+              onClick={() => setDialogOpen(true)}
             >
-              <HashIcon />
-              <span className="truncate">{channel.name}</span>
-              {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
+              <PlusIcon />
             </Button>
-            <Switch
-              aria-label={`${channel.notificationsEnabled ? "Disable" : "Enable"} notifications for ${channel.name}`}
-              checked={channel.notificationsEnabled}
-              onCheckedChange={(enabled) => {
-                setError(undefined);
-                void setNotifications({
-                  payload: { showId, channelId: channel.id, profileId, enabled },
-                  ...mutationOptions,
-                }).then((exit) => {
-                  if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-                });
-              }}
-            />
-            <span className="sr-only">
-              {channel.notificationsEnabled ? <BellIcon /> : <BellOffIcon />}
-            </span>
-          </div>
-        ))}
-      </div>
-      <form className="flex gap-1 border-t p-2" onSubmit={add}>
-        <Input
-          value={name}
-          maxLength={60}
-          placeholder="New channel"
-          aria-label="New channel name"
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Button type="submit" size="icon" variant="outline" disabled={adding || !name.trim()}>
-          {adding ? <Spinner /> : <PlusIcon />}
-          <span className="sr-only">Add channel</span>
-        </Button>
-      </form>
-      {error && (
-        <p role="alert" className="px-2 pb-2 text-xs text-destructive">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    aria-label={`Options for ${selectedChannel.name}`}
+                  />
+                }
+              >
+                <MoreHorizontalIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={toggleNotifications}>
+                  {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
+                  {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </ButtonGroup>
+        </div>
+        {trailing}
+      </header>
+      {error && !dialogOpen && (
+        <p role="alert" className="shrink-0 border-b px-3 py-2 text-xs text-destructive">
           {error}
         </p>
       )}
-    </aside>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New channel</DialogTitle>
+            <DialogDescription>Create another conversation for this show.</DialogDescription>
+          </DialogHeader>
+          <form className="flex gap-2" onSubmit={add}>
+            <Input
+              autoFocus
+              value={name}
+              maxLength={60}
+              placeholder="Channel name"
+              aria-label="New channel name"
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+            <Button type="submit" disabled={adding || !name.trim()}>
+              {adding ? <Spinner /> : "Create"}
+            </Button>
+          </form>
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -263,7 +313,12 @@ function Conversation({
   return (
     <MessageScroller.Provider autoScroll defaultScrollPosition="end" scrollEdgeThreshold={24}>
       <MessageScroller.Root className="relative flex min-h-0 flex-1 flex-col">
-        <MessageScroller.Viewport className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportRender={
+            <MessageScroller.Viewport className="min-h-0 flex-1 overflow-y-auto overscroll-contain" />
+          }
+        >
           <MessageScroller.Content className="flex min-h-full flex-col justify-end gap-4 p-3 sm:p-4">
             {channel.messages.length === 0 && (
               <div className="my-auto text-center text-sm text-muted-foreground">
@@ -277,11 +332,9 @@ function Conversation({
                 <MessageScroller.Item key={message.id} messageId={message.id} scrollAnchor>
                   <Message align={mine ? "end" : "start"}>
                     <MessageAvatar>
-                      <span
-                        className={cn(
-                          "size-8 rounded-full",
-                          sender ? showColorClassNames[sender.color] : "bg-muted-foreground/30",
-                        )}
+                      <ProfileAvatar
+                        name={sender?.name ?? "Deleted profile"}
+                        color={sender?.color}
                       />
                     </MessageAvatar>
                     <MessageContent>
@@ -300,7 +353,7 @@ function Conversation({
               );
             })}
           </MessageScroller.Content>
-        </MessageScroller.Viewport>
+        </ScrollArea>
         <ReadTracker showId={showId} profileId={profile.id} channel={channel} active={active} />
         <Composer showId={showId} profileId={profile.id} channelId={channel.id} />
       </MessageScroller.Root>
@@ -374,6 +427,14 @@ function ReadTracker({
   return null;
 }
 
+function resizeComposer(textarea: HTMLTextAreaElement) {
+  textarea.style.height = "auto";
+  const style = window.getComputedStyle(textarea);
+  const lineHeight = Number.parseFloat(style.lineHeight) || 20;
+  const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+  textarea.style.height = `${Math.min(textarea.scrollHeight, lineHeight * 5 + padding)}px`;
+}
+
 function Composer({
   showId,
   profileId,
@@ -384,9 +445,14 @@ function Composer({
   readonly channelId: ChatChannelId;
 }) {
   const send = useAtomSet(chatAtoms(showId, profileId).send, { mode: "promiseExit" });
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string>();
+
+  React.useLayoutEffect(() => {
+    if (textareaRef.current) resizeComposer(textareaRef.current);
+  }, [body]);
 
   const submit = async () => {
     const submittedDraft = body;
@@ -410,14 +476,19 @@ function Composer({
 
   return (
     <div className="shrink-0 border-t p-2 sm:p-3">
-      <div className="flex items-end gap-2">
-        <Textarea
+      <InputGroup>
+        <InputGroupTextarea
+          ref={textareaRef}
           value={body}
           maxLength={4_000}
-          rows={2}
+          rows={1}
           placeholder="Write a message"
           aria-label="Message"
-          onChange={(event) => setBody(event.currentTarget.value)}
+          className="min-h-8 overflow-y-auto"
+          onChange={(event) => {
+            setBody(event.currentTarget.value);
+            resizeComposer(event.currentTarget);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -425,11 +496,19 @@ function Composer({
             }
           }}
         />
-        <Button type="button" size="icon" disabled={sending || !body.trim()} onClick={submit}>
-          {sending ? <Spinner /> : <SendIcon />}
-          <span className="sr-only">Send message</span>
-        </Button>
-      </div>
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            size="icon-xs"
+            variant="default"
+            className="rounded-full"
+            aria-label="Send message"
+            disabled={sending || !body.trim()}
+            onClick={submit}
+          >
+            {sending ? <Spinner /> : <ArrowUpIcon />}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
       {error && (
         <p role="alert" className="pt-2 text-xs text-destructive">
           {error}

@@ -10,8 +10,8 @@ import type {
   ShowSummary,
 } from "@showtime/contracts";
 import { chatAtoms, profileAtoms, showsAtom } from "@/client";
-import { useSelectedProfile } from "@/profiles";
 import { publishNotification } from "@/notifications/NotificationCenter";
+import { useSelectedProfile } from "@/profiles";
 import { isChatVisibleAtBottom } from "./ChatPresence";
 import {
   planChatNotifications,
@@ -56,16 +56,23 @@ export function ChatNotificationCoordinator() {
   const shows = AsyncResult.isSuccess(showsResult) ? showsResult.value : [];
   if (!selected) return null;
   return shows.map((show) => (
-    <ShowChatNotifications key={show.id} show={show} profile={selected} />
+    <ShowChatNotifications
+      key={show.id}
+      show={show}
+      profile={selected}
+      profiles={profileState?.profiles ?? []}
+    />
   ));
 }
 
 function ShowChatNotifications({
   show,
   profile,
+  profiles,
 }: {
   readonly show: ShowSummary;
   readonly profile: Profile;
+  readonly profiles: ReadonlyArray<Profile>;
 }) {
   const result = useAtomValue(chatAtoms(show.id, profile.id).state);
   const memory = React.useRef(new Map<string, Cursor>());
@@ -73,15 +80,16 @@ function ShowChatNotifications({
   React.useEffect(() => {
     if (!AsyncResult.isSuccess(result)) return;
     for (const channel of result.value.channels) {
-      processChannel(show, profile, channel, memory.current);
+      processChannel(show, profile, profiles, channel, memory.current);
     }
-  }, [profile, result, show]);
+  }, [profile, profiles, result, show]);
   return null;
 }
 
 function processChannel(
   show: ShowSummary,
   profile: Profile,
+  profiles: ReadonlyArray<Profile>,
   channel: ChatChannel,
   memory: Map<string, Cursor>,
 ) {
@@ -102,18 +110,31 @@ function processChannel(
         description: show.name,
       });
     } else {
-      publishMessageNotification(show, channel, notification.message);
+      publishMessageNotification(show, profiles, channel, notification.message);
     }
   }
   memory.set(key, planned.cursor);
   writeCursor(key, planned.cursor);
 }
 
-function publishMessageNotification(show: ShowSummary, channel: ChatChannel, message: ChatMessage) {
+function publishMessageNotification(
+  show: ShowSummary,
+  profiles: ReadonlyArray<Profile>,
+  channel: ChatChannel,
+  message: ChatMessage,
+) {
+  const sender = profiles.find((profile) => profile.id === message.senderProfileId);
+  const senderName = sender?.name ?? "Deleted profile";
   publishNotification({
     id: `chat:${message.id}`,
     kind: "chat",
-    title: `${show.name} · ${channel.name}`,
+    title: senderName,
     description: message.body,
+    chat: {
+      senderName,
+      senderColor: sender?.color,
+      channelName: channel.name,
+      showName: show.name,
+    },
   });
 }

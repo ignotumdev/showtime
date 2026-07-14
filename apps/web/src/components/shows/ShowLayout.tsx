@@ -37,8 +37,10 @@ import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
+import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
 
 export function ShowLayout() {
+  const [chatOpen, setChatOpen] = React.useState(false);
   const { showId = "", show } = useShowFromParams();
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
@@ -54,7 +56,26 @@ export function ShowLayout() {
   const songCreator = useCreateSong(typedShowId);
   return (
     <React.Fragment>
-      <TitleBar hideName stack="above-content" className="hidden md:flex" />
+      <TitleBar
+        hideName
+        stack="above-content"
+        className="hidden md:flex"
+        actions={
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="relative"
+            aria-label="Open chat"
+            onClick={() => setChatOpen(true)}
+          >
+            <MessageCircleIcon />
+            <span className="absolute -top-1 -right-1">
+              <ChatUnreadBadge showId={typedShowId} />
+            </span>
+          </Button>
+        }
+      />
       <SidebarProvider className="relative h-svh overflow-hidden bg-background">
         <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
@@ -82,12 +103,6 @@ export function ShowLayout() {
                   params={{ showId }}
                   label="Mixes"
                   icon={SpeakerIcon}
-                />
-                <ShowSidebarLink
-                  to="/shows/$showId/chat"
-                  params={{ showId }}
-                  label="Chat"
-                  icon={MessageCircleIcon}
                 />
               </SidebarMenu>
             </SidebarGroup>
@@ -157,9 +172,10 @@ export function ShowLayout() {
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4">
             <Outlet />
           </div>
-          <MobileBottomNavigation showId={showId} />
+          <MobileBottomNavigation showId={showId} onChatOpen={() => setChatOpen(true)} />
         </SidebarInset>
       </SidebarProvider>
+      <ChatDrawer showId={typedShowId} open={chatOpen} onOpenChange={setChatOpen} />
     </React.Fragment>
   );
 }
@@ -204,7 +220,13 @@ function ShowHeader({
   );
 }
 
-function MobileBottomNavigation({ showId }: { readonly showId: string }) {
+function MobileBottomNavigation({
+  showId,
+  onChatOpen,
+}: {
+  readonly showId: string;
+  readonly onChatOpen: () => void;
+}) {
   return (
     <nav
       aria-label="Show navigation"
@@ -238,12 +260,17 @@ function MobileBottomNavigation({ showId }: { readonly showId: string }) {
         label="Songs"
         icon={ListMusicIcon}
       />
-      <MobileNavigationLink
-        to="/shows/$showId/chat"
-        showId={showId}
-        label="Chat"
-        icon={MessageCircleIcon}
-      />
+      <button
+        type="button"
+        className="relative flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50"
+        onClick={onChatOpen}
+      >
+        <MessageCircleIcon className="size-5" />
+        Chat
+        <span className="absolute top-2 right-[calc(50%-1.5rem)]">
+          <ChatUnreadBadge showId={showId as ShowId} />
+        </span>
+      </button>
     </nav>
   );
 }
@@ -254,11 +281,7 @@ function MobileNavigationLink({
   label,
   icon: Icon,
 }: {
-  readonly to:
-    | "/shows/$showId/microphones"
-    | "/shows/$showId/mixes"
-    | "/shows/$showId/setlist"
-    | "/shows/$showId/chat";
+  readonly to: "/shows/$showId/microphones" | "/shows/$showId/mixes" | "/shows/$showId/setlist";
   readonly showId: string;
   readonly label: string;
   readonly icon: React.ComponentType<{ className?: string }>;
@@ -283,7 +306,6 @@ type ShowSidebarLinkProps = (
         | "/shows/$showId"
         | "/shows/$showId/microphones"
         | "/shows/$showId/mixes"
-        | "/shows/$showId/chat"
         | "/shows/$showId/setlist";
       readonly params: { readonly showId: string };
     }

@@ -12,6 +12,7 @@ import {
 import { PencilIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react";
 import { profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { useSelectedProfile } from "@/profiles";
+import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -22,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Item, ItemActions, ItemContent, ItemGroup } from "@/components/ui/item";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -53,11 +55,32 @@ const currentState = (
       ? Option.getOrUndefined(result.previousSuccess)?.value
       : undefined;
 
-export function ProfileSwitcher({ className }: { readonly className?: string }) {
+export function ProfileSwitcher({
+  className,
+  variant = "full",
+}: {
+  readonly className?: string;
+  readonly variant?: "full" | "avatar";
+}) {
   const result = useAtomValue(profileAtoms.state);
   const state = currentState(result);
   const { selected, select } = useSelectedProfile(state);
   const [open, setOpen] = React.useState(false);
+
+  if (variant === "avatar") {
+    return (
+      <>
+        <ProfileAvatarPopover
+          className={className}
+          selected={selected}
+          state={state}
+          onSelect={select}
+          onEdit={() => setOpen(true)}
+        />
+        <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={result} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -98,10 +121,80 @@ export function ProfileSwitcher({ className }: { readonly className?: string }) 
   );
 }
 
+function ProfileAvatarPopover({
+  className,
+  selected,
+  state,
+  onSelect,
+  onEdit,
+}: {
+  readonly className?: string;
+  readonly selected: Profile | undefined;
+  readonly state: ProfilesState | undefined;
+  readonly onSelect: (profile: Profile) => void;
+  readonly onEdit: () => void;
+}) {
+  const [popoverOpen, setPopoverOpen] = React.useState(false);
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <PopoverTrigger
+        aria-label={selected ? `Profile: ${selected.name}` : "Select profile"}
+        disabled={!selected}
+        className={cn(
+          "rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          className,
+        )}
+      >
+        {selected ? (
+          <ProfileAvatar name={selected.name} color={selected.color} />
+        ) : (
+          <ProfileAvatar name="?" />
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-52 p-1">
+        <div className="flex flex-col">
+          {state?.profiles.map((profile) => (
+            <Button
+              key={profile.id}
+              type="button"
+              variant={profile.id === selected?.id ? "secondary" : "ghost"}
+              className="justify-start"
+              disabled={isPendingProfile(profile)}
+              onClick={() => {
+                onSelect(profile);
+                setPopoverOpen(false);
+              }}
+            >
+              <ProfileAvatar
+                name={profile.name}
+                color={profile.color}
+                className="size-5 text-[10px]"
+              />
+              <span className="truncate">{profile.name}</span>
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            className="justify-start"
+            onClick={() => {
+              setPopoverOpen(false);
+              onEdit();
+            }}
+          >
+            <PencilIcon className="size-4" /> Edit profiles
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ProfileLabel({ profile }: { readonly profile: Profile }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className={cn(showColorClassNames[profile.color], "size-3 shrink-0 rounded-full")} />
+      <ProfileAvatar name={profile.name} color={profile.color} className="size-5 text-[10px]" />
       <span className="truncate">{profile.name}</span>
     </span>
   );
