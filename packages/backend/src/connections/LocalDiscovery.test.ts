@@ -48,7 +48,7 @@ const invitationId = (state: ShowtimeConnectionsState) => {
 
 const createInvitation = (runtime: ReturnType<typeof makeBackendRuntime>) =>
   runtime.runPromise(
-    Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Discovery test client")),
+    Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Discovery test client", [])),
   );
 
 describe("LocalDiscovery", () => {
@@ -82,6 +82,7 @@ describe("LocalDiscovery", () => {
     expect(listeningStatus).toBe(404);
     expect(info.candidates[0]).toMatchObject({
       kind: "hostname",
+      label: "Recommended — showtime.local",
       host: "showtime.local",
     });
     expect(info.candidates[0]?.url).toMatch(

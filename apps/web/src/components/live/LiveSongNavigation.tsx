@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { liveSongNavigationDirection } from "./LiveSongNavigationState";
 
 export function LiveSongNavigation({
   previous,
@@ -15,18 +16,30 @@ export function LiveSongNavigation({
 }) {
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      )
+        return;
 
       const target = event.target;
       if (
         target instanceof Element &&
-        target.closest("a,button,input,select,textarea,[role='button']")
+        target.closest(
+          "a,button,input,select,textarea,[contenteditable],[role='button'],[role='textbox']",
+        )
       )
         return;
-      if (event.key === "ArrowLeft" && previous) {
+
+      const direction = liveSongNavigationDirection(event.key);
+      if (direction === "previous" && previous) {
         event.preventDefault();
         onPrevious();
-      } else if (event.key === "ArrowRight" && next) {
+      } else if (direction === "next" && next) {
         event.preventDefault();
         onNext();
       }
@@ -46,6 +59,7 @@ export function LiveSongNavigation({
           size="lg"
           disabled={!previous}
           aria-label={previous ? `Previous song: ${previous}` : "Start of setlist"}
+          aria-keyshortcuts="ArrowLeft ArrowDown"
           onClick={onPrevious}
           className="w-full min-w-0 sm:w-auto"
         >
@@ -59,6 +73,7 @@ export function LiveSongNavigation({
           size="lg"
           disabled={!next}
           aria-label={next ? `Next song: ${next}` : "End of setlist"}
+          aria-keyshortcuts="Space ArrowRight ArrowUp"
           onClick={onNext}
           className="w-full min-w-0 sm:w-auto"
         >

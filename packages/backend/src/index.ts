@@ -1,9 +1,19 @@
 import { NodeFileSystem, NodeHttpServer, NodePath } from "@effect/platform-node";
-import { Context, Effect, Layer, ManagedRuntime, Semaphore } from "effect";
-import { HttpRouter, HttpServerResponse, HttpStaticServer } from "effect/unstable/http";
+import { Context, Effect, Layer, ManagedRuntime, Schema, Semaphore } from "effect";
+import {
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+  HttpStaticServer,
+} from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { createServer } from "node:http";
-import { showtimeLocalPort, type ShowtimeConnectionInfo } from "@showtime/shared";
+import {
+  showtimeLocalPort,
+  ShowtimeConnectionScopes,
+  type ShowtimeConnectionInfo,
+  type ShowtimeConnectionScope,
+} from "@showtime/shared";
 import { randomBytes } from "node:crypto";
 import * as ConnectionStore from "./connections/ConnectionStore.js";
 import * as NetworkAddresses from "./connections/NetworkAddresses.js";
@@ -56,7 +66,8 @@ export class ConnectionManager extends Context.Service<
     readonly rpcWebSocketUrl: Effect.Effect<string>;
     readonly connectionsState: Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly createInvitation: (
-      name: string,
+      name: string | undefined,
+      scopes: ReadonlyArray<ShowtimeConnectionScope>,
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
     readonly removeConnection: (
@@ -79,6 +90,11 @@ const makePlatformLayer = (options: BackendOptions) =>
       : HomeDirectory.makeLayer(options.homeDirectory),
   );
 
+const CreateInvitationRequest = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  scopes: ShowtimeConnectionScopes,
+});
+
 const makeRpcProtocol = (desktopCapability: string) =>
   Layer.effect(
     RpcServer.Protocol,
@@ -86,8 +102,38 @@ const makeRpcProtocol = (desktopCapability: string) =>
       const { httpEffect, protocol } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
       const router = yield* HttpRouter.HttpRouter;
       const connections = yield* ConnectionStore.ConnectionStore;
+      const connectionManager = yield* ConnectionManager;
       const settings = yield* Settings.Settings;
       const notFound = Effect.succeed(HttpServerResponse.empty({ status: 404 }));
+      const authorizeManagement = (
+        clientId: string | undefined,
+        capability: string | undefined,
+        scope: ShowtimeConnectionScope,
+      ) =>
+        Effect.gen(function* () {
+          if (!clientId || !capability) return "revoked" as const;
+          if (!(yield* settings.get).connectionsEnabled) return "disabled" as const;
+          return yield* connections.scopeAuthorization(clientId, capability, scope);
+        });
+      const authorizationResponse = (
+        authorization: "authorized" | "disabled" | "forbidden" | "revoked",
+      ) =>
+        authorization === "revoked"
+          ? HttpServerResponse.jsonUnsafe(
+              { error: "Invalid connection credentials." },
+              { status: 401 },
+            )
+          : authorization === "forbidden"
+            ? HttpServerResponse.jsonUnsafe(
+                { error: "This connection does not have permission." },
+                { status: 403 },
+              )
+            : authorization === "disabled"
+              ? HttpServerResponse.jsonUnsafe(
+                  { error: "Connections are disabled." },
+                  { status: 503 },
+                )
+              : undefined;
       yield* router.add(
         "GET",
         "/rpc/:clientId/:capability",
@@ -138,6 +184,86 @@ const makeRpcProtocol = (desktopCapability: string) =>
             return HttpServerResponse.jsonUnsafe({ status: "disabled" }, { status: 503 });
           }
           return HttpServerResponse.jsonUnsafe({ status: "available" });
+        }),
+      );
+      yield* router.add(
+        "GET",
+        "/connection-management/:clientId/:capability",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          const denied = authorizationResponse(
+            yield* authorizeManagement(params.clientId, params.capability, "connections:read"),
+          );
+          if (denied) return denied;
+          return HttpServerResponse.jsonUnsafe(yield* connectionManager.connectionsState);
+        }),
+      );
+      yield* router.add(
+        "POST",
+        "/connection-management/:clientId/:capability",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          const denied = authorizationResponse(
+            yield* authorizeManagement(params.clientId, params.capability, "connections:create"),
+          );
+          if (denied) return denied;
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const decoded = yield* request.json.pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(CreateInvitationRequest)),
+            Effect.option,
+          );
+          if (decoded._tag === "None") {
+            return HttpServerResponse.jsonUnsafe(
+              { error: "Invalid invitation details." },
+              { status: 400 },
+            );
+          }
+          const name = decoded.value.name?.trim() || undefined;
+          if (name !== undefined && name.length > 80) {
+            return HttpServerResponse.jsonUnsafe(
+              { error: "The client name must be at most 80 characters." },
+              { status: 400 },
+            );
+          }
+          for (const scope of decoded.value.scopes) {
+            const grant = authorizationResponse(
+              yield* authorizeManagement(params.clientId, params.capability, scope),
+            );
+            if (grant) return grant;
+          }
+          return HttpServerResponse.jsonUnsafe(
+            yield* connectionManager.createInvitation(name, decoded.value.scopes),
+          );
+        }),
+      );
+      yield* router.add(
+        "GET",
+        "/connection-management/:clientId/:capability/pairing/:invitationId",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          const denied = authorizationResponse(
+            yield* authorizeManagement(params.clientId, params.capability, "connections:read"),
+          );
+          if (denied) return denied;
+          if (!params.invitationId) return yield* notFound;
+          return HttpServerResponse.jsonUnsafe(
+            yield* connectionManager.pairingInfo(params.invitationId),
+          );
+        }),
+      );
+      yield* router.add(
+        "DELETE",
+        "/connection-management/:clientId/:capability/:connectionId",
+        Effect.gen(function* () {
+          const params = yield* HttpRouter.params;
+          const denied = authorizationResponse(
+            yield* authorizeManagement(params.clientId, params.capability, "connections:delete"),
+          );
+          if (denied) return denied;
+          if (!params.connectionId) return yield* notFound;
+          return HttpServerResponse.jsonUnsafe(
+            yield* connectionManager.removeConnection(params.connectionId),
+          );
         }),
       );
       return protocol;
@@ -213,18 +339,20 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
         Effect.map(({ settings, clients, invitations, connectedClientIds }) => ({
           enabled: settings.connectionsEnabled,
           clients: [
-            ...invitations.map(({ invitationId, name, expiresAt }) => ({
+            ...invitations.map(({ invitationId, name, expiresAt, scopes }) => ({
               kind: "pending" as const,
               invitationId,
               name,
               expiresAt,
+              scopes,
             })),
-            ...clients.map(({ clientId, name, createdAt }) => ({
+            ...clients.map(({ clientId, name, createdAt, scopes }) => ({
               kind: "paired" as const,
               clientId,
               name,
               createdAt,
               connected: connectedClientIds.has(clientId),
+              scopes,
             })),
           ],
         })),
@@ -234,7 +362,8 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
           `ws://${rpcWebSocketHost(options.host)}:${options.port}/rpc/desktop/${desktopCapability}`,
         ),
         connectionsState: state,
-        createInvitation: (name) => connections.createInvitation(name).pipe(Effect.andThen(state)),
+        createInvitation: (name, scopes) =>
+          connections.createInvitation(name, scopes).pipe(Effect.andThen(state)),
         pairingInfo: (invitationId) =>
           connections.pairingInvitation(invitationId).pipe(
             Effect.flatMap((invitation): Effect.Effect<ShowtimeConnectionInfo> => {
@@ -298,11 +427,12 @@ export const makeBackendLayer = (
     port: options.port,
     runtimeEnabled: options.localDiscovery ?? options.port === showtimeLocalPort,
   }).pipe(Layer.provide(mdnsAdvertiserLayer));
+  const ConnectionManagerLive = makeConnectionManagerLayer(options, desktopCapability).pipe(
+    Layer.provideMerge(LocalDiscoveryLive),
+  );
   return Layer.mergeAll(
-    makeServerLive(options, desktopCapability),
-    makeConnectionManagerLayer(options, desktopCapability).pipe(
-      Layer.provideMerge(LocalDiscoveryLive),
-    ),
+    makeServerLive(options, desktopCapability).pipe(Layer.provide(ConnectionManagerLive)),
+    ConnectionManagerLive,
   ).pipe(
     Layer.provideMerge(HttpServerLive),
     Layer.provideMerge(makeConnectionLayers()),

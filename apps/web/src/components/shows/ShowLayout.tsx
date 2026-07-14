@@ -38,6 +38,8 @@ import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
+import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ShowLayout() {
   const [chatOpen, setChatOpen] = React.useState(false);
@@ -169,9 +171,11 @@ export function ShowLayout() {
             pathname={pathname}
             songCreator={songCreator}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4">
-            <Outlet />
-          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="h-full px-3 py-3 sm:px-4 sm:py-4">
+              <Outlet />
+            </div>
+          </ScrollArea>
           <MobileBottomNavigation showId={showId} onChatOpen={() => setChatOpen(true)} />
         </SidebarInset>
       </SidebarProvider>
@@ -208,7 +212,10 @@ function ShowHeader({
           <span className="truncate font-semibold">{showName}</span>
         </Link>
         <div className="ml-auto shrink-0">
-          <ShowPageAction showId={showId} pathname={pathname} />
+          <div className="flex items-center gap-1">
+            <ConnectionDialog compact />
+            <ShowPageAction showId={showId} pathname={pathname} />
+          </div>
         </div>
       </header>
       {isAllSongsRoute && songCreator.error && (
@@ -339,7 +346,9 @@ function ShowSidebarLink({ to, params, label, badge, number, icon: Icon }: ShowS
           </div>
         )}
         {Icon ? <Icon /> : null}
-        <span>{label}</span>
+        <span className="min-w-0 flex-1 truncate" title={label}>
+          {label}
+        </span>
         {badge && <Badge variant="outline">{badge}</Badge>}
       </SidebarMenuButton>
     </SidebarMenuItem>

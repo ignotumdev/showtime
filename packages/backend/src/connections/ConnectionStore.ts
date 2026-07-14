@@ -2,23 +2,29 @@ import { Clock, Context, Deferred, Effect, Layer, Path, Ref, Schema, Semaphore }
 import { FileSystem } from "effect/FileSystem";
 import { nanoid } from "nanoid";
 import { randomBytes } from "node:crypto";
+import { ShowtimeConnectionScopes, type ShowtimeConnectionScope } from "@showtime/shared";
 import * as HomeDirectory from "../platform/HomeDirectory.js";
 import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
 
 const NanoId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{21}$/));
 const Capability = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
 const ClientName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80));
+const StoredConnectionScopes = ShowtimeConnectionScopes.pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed([])),
+);
 const Client = Schema.Struct({
   clientId: NanoId,
   name: ClientName,
   capability: Capability,
   createdAt: Schema.String,
+  scopes: StoredConnectionScopes,
 });
 const Invitation = Schema.Struct({
   invitationId: NanoId,
   name: ClientName,
   token: Capability,
   expiresAt: Schema.String,
+  scopes: StoredConnectionScopes,
 });
 const ConnectionsFile = Schema.Struct({
   version: Schema.Literal(1),
@@ -31,15 +37,35 @@ export type StoredInvitation = typeof Invitation.Type;
 export interface PairingCredentials {
   readonly clientId: string;
   readonly capability: string;
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
 
 const pairingLifetimeMs = 5 * 60 * 1_000;
 const makeToken = () => randomBytes(32).toString("base64url");
-const makeInvitation = (name: string, now: number): StoredInvitation => ({
+const defaultClientNamePattern = /^Client (\d+)$/;
+const nextDefaultClientName = (names: Iterable<string>) => {
+  let highest = 0;
+  for (const name of names) {
+    const match = defaultClientNamePattern.exec(name);
+    if (match) {
+      const suffix = Number(match[1]);
+      if (Number.isSafeInteger(suffix) && suffix < Number.MAX_SAFE_INTEGER) {
+        highest = Math.max(highest, suffix);
+      }
+    }
+  }
+  return `Client ${highest + 1}`;
+};
+const makeInvitation = (
+  name: string,
+  scopes: ReadonlyArray<ShowtimeConnectionScope>,
+  now: number,
+): StoredInvitation => ({
   invitationId: nanoid(),
   name,
   token: makeToken(),
   expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
+  scopes: [...scopes],
 });
 
 export class ConnectionStore extends Context.Service<
@@ -48,7 +74,10 @@ export class ConnectionStore extends Context.Service<
     readonly clients: Effect.Effect<ReadonlyArray<StoredClient>>;
     readonly invitations: Effect.Effect<ReadonlyArray<StoredInvitation>>;
     readonly connectedClientIds: Effect.Effect<ReadonlySet<string>>;
-    readonly createInvitation: (name: string) => Effect.Effect<StoredInvitation>;
+    readonly createInvitation: (
+      name?: string,
+      scopes?: ReadonlyArray<ShowtimeConnectionScope>,
+    ) => Effect.Effect<StoredInvitation>;
     readonly pairingInvitation: (
       invitationId: string,
     ) => Effect.Effect<StoredInvitation | undefined>;
@@ -59,6 +88,11 @@ export class ConnectionStore extends Context.Service<
       clientId: string,
       capability: string,
     ) => Effect.Effect<"authorized" | "revoked">;
+    readonly scopeAuthorization: (
+      clientId: string,
+      capability: string,
+      scope: ShowtimeConnectionScope,
+    ) => Effect.Effect<"authorized" | "forbidden" | "revoked">;
     readonly withAuthorizedSession: <A, E, R, E2, R2>(
       clientId: string,
       capability: string,
@@ -89,15 +123,28 @@ const make = Effect.gen(function* () {
       Effect.andThen(Ref.set(state, next)),
     );
 
-  const createInvitation = (name: string) =>
+  const createInvitation = (
+    name?: string,
+    requestedScopes: ReadonlyArray<ShowtimeConnectionScope> = [],
+  ) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
-        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(name.trim()).pipe(
+        const current = yield* Ref.get(state);
+        const trimmedName = name?.trim();
+        const resolvedName =
+          trimmedName ||
+          nextDefaultClientName([
+            ...current.clients.map((client) => client.name),
+            ...current.invitations.map((invitation) => invitation.name),
+          ]);
+        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName).pipe(
           Effect.orDie,
         );
+        const scopes = yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(
+          requestedScopes,
+        ).pipe(Effect.orDie);
         const now = yield* Clock.currentTimeMillis;
-        const invitation = makeInvitation(validatedName, now);
-        const current = yield* Ref.get(state);
+        const invitation = makeInvitation(validatedName, scopes, now);
         yield* persist({
           ...current,
           invitations: [...current.invitations, invitation],
@@ -153,6 +200,7 @@ const make = Effect.gen(function* () {
           name: invitation.name,
           capability: makeToken(),
           createdAt: new Date(now).toISOString(),
+          scopes: invitation.scopes,
         };
         yield* persist({
           version: 1,
@@ -164,7 +212,11 @@ const make = Effect.gen(function* () {
         yield* Effect.logInfo("Paired client").pipe(
           Effect.annotateLogs({ clientId: client.clientId, clientName: client.name }),
         );
-        return { clientId: client.clientId, capability: client.capability };
+        return {
+          clientId: client.clientId,
+          capability: client.capability,
+          scopes: client.scopes,
+        };
       }),
     );
 
@@ -272,6 +324,18 @@ const make = Effect.gen(function* () {
               ? "authorized"
               : "revoked",
           ),
+        ),
+      ),
+    scopeAuthorization: (clientId, capability, scope) =>
+      lock.withPermits(1)(
+        Ref.get(state).pipe(
+          Effect.map((current) => {
+            const client = current.clients.find(
+              (candidate) => candidate.clientId === clientId && candidate.capability === capability,
+            );
+            if (!client) return "revoked" as const;
+            return client.scopes.includes(scope) ? ("authorized" as const) : ("forbidden" as const);
+          }),
         ),
       ),
     withAuthorizedSession,

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ShowtimeConnectionCandidate } from "@showtime/shared";
 import {
   canLoadPairingInfo,
-  pairingCandidateCaption,
   pairingInfoRetryDelay,
   pairingInfoRetryWait,
   selectPairingCandidateUrl,
@@ -49,18 +48,5 @@ describe("pairing dialog", () => {
   it("allows the first pairing-info request to renew an expired invitation", () => {
     expect(canLoadPairingInfo(false, 1_000, 1_000)).toBe(true);
     expect(canLoadPairingInfo(true, 1_000, 1_000)).toBe(false);
-  });
-
-  it("does not repeat the host in IP candidate captions", () => {
-    expect(pairingCandidateCaption(ipCandidate("http://ip"))).toBe("wifi — 192.168.1.20");
-    expect(
-      pairingCandidateCaption({
-        kind: "hostname",
-        label: "Showtime local address",
-        host: "showtime.local",
-        hostnameLabel: "showtime",
-        url: "http://showtime.local",
-      }),
-    ).toBe("Showtime local address · showtime.local");
   });
 });

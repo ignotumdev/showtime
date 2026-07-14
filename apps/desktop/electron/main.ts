@@ -11,6 +11,7 @@ import {
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
   showtimeLocalPort,
+  type ShowtimeConnectionScope,
 } from "@showtime/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -146,10 +147,12 @@ if (gotSingleInstanceLock) {
         ipcMain.handle(desktopConnectionsStateChannel, () =>
           backendRuntime.runPromise(Effect.flatMap(ConnectionManager, (_) => _.connectionsState)),
         );
-        ipcMain.handle(desktopCreateInvitationChannel, (_event, name: string) =>
-          backendRuntime.runPromise(
-            Effect.flatMap(ConnectionManager, (_) => _.createInvitation(name)),
-          ),
+        ipcMain.handle(
+          desktopCreateInvitationChannel,
+          (_event, name: string | undefined, scopes: ReadonlyArray<ShowtimeConnectionScope>) =>
+            backendRuntime.runPromise(
+              Effect.flatMap(ConnectionManager, (_) => _.createInvitation(name, scopes)),
+            ),
         );
         ipcMain.handle(desktopPairingInfoChannel, (_event, invitationId: string) =>
           backendRuntime.runPromise(
