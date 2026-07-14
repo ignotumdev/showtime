@@ -103,7 +103,7 @@ function RouteComponent() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-4">
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

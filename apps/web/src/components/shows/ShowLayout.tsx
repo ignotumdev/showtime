@@ -37,6 +37,7 @@ import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ShowLayout() {
   const { showId = "", show } = useShowFromParams();
@@ -148,9 +149,11 @@ export function ShowLayout() {
             pathname={pathname}
             songCreator={songCreator}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4">
-            <Outlet />
-          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="h-full px-3 py-3 sm:px-4 sm:py-4">
+              <Outlet />
+            </div>
+          </ScrollArea>
           <MobileBottomNavigation showId={showId} />
         </SidebarInset>
       </SidebarProvider>
