@@ -34,7 +34,7 @@ export function ConnectionOverlay({ status }: { readonly status: ConnectionStatu
   if (status === "reconnecting") {
     return (
       <ConnectionEmpty
-        icon={<RefreshCwIcon />}
+        icon={<RefreshCwIcon className="animate-spin" />}
         title="Reconnecting to Showtime"
         description="The connection was interrupted. Showtime will reload the latest data automatically."
       />
