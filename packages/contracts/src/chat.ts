@@ -219,23 +219,36 @@ export const resolveChatPresetTemplate = (
   return { body: chatMessagePartsText(parts), parts };
 };
 
-const storedChatMessagePrefix = "__showtime_chat_v1__:";
+const legacyStoredChatMessagePrefix = "__showtime_chat_v1__:";
+const storedChatMessagePrefix = "__showtime_chat_v2__:";
 const decodeChatMessageParts = Schema.decodeUnknownSync(Schema.Array(ChatMessagePart));
 
 export const encodeStoredChatMessage = (
   body: ChatMessageBody,
-  parts: ReadonlyArray<ChatMessagePart>,
-): string => `${storedChatMessagePrefix}${JSON.stringify({ body, parts })}`;
+  parts?: ReadonlyArray<ChatMessagePart>,
+): string =>
+  `${storedChatMessagePrefix}${JSON.stringify(
+    parts?.length ? { kind: "rich", body, parts } : { kind: "plain", body },
+  )}`;
 
 export const decodeStoredChatMessage = (
   stored: string,
 ): { readonly body: string; readonly parts?: ReadonlyArray<ChatMessagePart> } => {
-  if (!stored.startsWith(storedChatMessagePrefix)) return { body: stored };
+  const isCurrentEnvelope = stored.startsWith(storedChatMessagePrefix);
+  const isLegacyEnvelope = stored.startsWith(legacyStoredChatMessagePrefix);
+  if (!isCurrentEnvelope && !isLegacyEnvelope) return { body: stored };
   try {
-    const parsed = JSON.parse(stored.slice(storedChatMessagePrefix.length)) as unknown;
+    const prefix = isCurrentEnvelope ? storedChatMessagePrefix : legacyStoredChatMessagePrefix;
+    const parsed = JSON.parse(stored.slice(prefix.length)) as unknown;
     if (!parsed || typeof parsed !== "object") return { body: stored };
-    const value = parsed as { readonly body?: unknown; readonly parts?: unknown };
+    const value = parsed as {
+      readonly kind?: unknown;
+      readonly body?: unknown;
+      readonly parts?: unknown;
+    };
     if (typeof value.body !== "string") return { body: stored };
+    if (isCurrentEnvelope && value.kind === "plain") return { body: value.body };
+    if (isCurrentEnvelope && value.kind !== "rich") return { body: stored };
     const parts = decodeChatMessageParts(value.parts);
     if (parts.length === 0 || chatMessagePartsText(parts) !== value.body) return { body: stored };
     return { body: value.body, parts };

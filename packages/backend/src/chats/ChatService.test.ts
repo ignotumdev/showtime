@@ -313,4 +313,31 @@ describe("ChatService", () => {
     });
     expect(reloaded.afterDelete.presets).toEqual([]);
   });
+
+  it("treats an empty rich-parts array as a plain message", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const message = await withService(
+      home,
+      Effect.gen(function* () {
+        const ids = yield* Ids.Ids;
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* ids.makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const channel = (yield* chats.state(showId, profileId)).channels[0]!;
+        return yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Plain message",
+          parts: [],
+        });
+      }),
+    );
+
+    expect(message).toMatchObject({ body: "Plain message" });
+    expect(message).not.toHaveProperty("parts");
+  });
 });

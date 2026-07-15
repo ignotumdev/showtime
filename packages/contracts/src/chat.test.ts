@@ -86,4 +86,29 @@ describe("chat presets", () => {
     const malformed = '__showtime_chat_v1__:{"body":"Visible","parts":[]}';
     expect(decodeStoredChatMessage(malformed)).toEqual({ body: malformed });
   });
+
+  it("decodes legacy rich envelopes already stored in history", () => {
+    const legacy =
+      '__showtime_chat_v1__:{"body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
+
+    expect(decodeStoredChatMessage(legacy)).toEqual({
+      body: "Visible",
+      parts: [{ type: "text", text: "Visible" }],
+    });
+  });
+
+  it("round-trips plain messages that look like legacy rich envelopes", () => {
+    const body = ChatMessageBody.make(
+      '__showtime_chat_v1__:{"body":"Rewritten","parts":[{"type":"text","text":"Rewritten"}]}',
+    );
+
+    expect(decodeStoredChatMessage(encodeStoredChatMessage(body))).toEqual({ body });
+  });
+
+  it("rejects current envelopes without an explicit encoding kind", () => {
+    const ambiguous =
+      '__showtime_chat_v2__:{"body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
+
+    expect(decodeStoredChatMessage(ambiguous)).toEqual({ body: ambiguous });
+  });
 });

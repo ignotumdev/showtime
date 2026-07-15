@@ -135,22 +135,19 @@ const toMessage = (row: MessageRow): ChatMessage => {
   };
 };
 
-const toPreset = (row: PresetRow): ChatPreset | undefined => {
-  try {
-    const fields = decodeChatPresetFields(JSON.parse(row.fields_json));
-    if (validateChatPresetDefinition({ template: row.template, fields })) return undefined;
-    return {
-      id: row.id as ChatPresetId,
-      showId: row.show_id as ShowId,
-      name: row.name as ChatPreset["name"],
-      template: row.template as ChatPreset["template"],
-      fields,
-      createdAt: DateTime.makeUnsafe(row.created_at),
-      updatedAt: DateTime.makeUnsafe(row.updated_at),
-    };
-  } catch {
-    return undefined;
-  }
+const toPreset = (row: PresetRow): ChatPreset => {
+  const fields = decodeChatPresetFields(JSON.parse(row.fields_json));
+  const validationError = validateChatPresetDefinition({ template: row.template, fields });
+  if (validationError) throw new Error(validationError);
+  return {
+    id: row.id as ChatPresetId,
+    showId: row.show_id as ShowId,
+    name: row.name as ChatPreset["name"],
+    template: row.template as ChatPreset["template"],
+    fields,
+    createdAt: DateTime.makeUnsafe(row.created_at),
+    updatedAt: DateTime.makeUnsafe(row.updated_at),
+  };
 };
 
 const make = Effect.gen(function* () {
@@ -255,10 +252,24 @@ const make = Effect.gen(function* () {
         FROM chat_presets
         WHERE show_id = ${showId}
         ORDER BY name COLLATE NOCASE, created_at`) as unknown as ReadonlyArray<PresetRow>;
-      return rows.flatMap((row) => {
-        const preset = toPreset(row);
-        return preset === undefined ? [] : [preset];
-      });
+      const presets: Array<ChatPreset> = [];
+      for (const row of rows) {
+        const result = yield* Effect.result(
+          Effect.try({
+            try: () => toPreset(row),
+            catch: (cause) => cause,
+          }),
+        );
+        if (result._tag === "Success") presets.push(result.success);
+        else {
+          yield* Effect.logWarning("Skipping invalid chat preset", {
+            presetId: row.id,
+            showId: row.show_id,
+            cause: result.failure,
+          });
+        }
+      }
+      return presets;
     });
 
   const state = (showId: ShowId, profileId: ProfileId) =>
@@ -489,7 +500,7 @@ const make = Effect.gen(function* () {
       const body = yield* decodeChatMessageBody(params.body.trim()).pipe(
         Effect.mapError((cause) => rpcError("Messages must be 1 to 4000 characters.", cause)),
       );
-      if (params.parts && chatMessagePartsText(params.parts) !== body)
+      if (params.parts?.length && chatMessagePartsText(params.parts) !== body)
         return yield* Effect.fail(rpcError("The rich message content does not match its text."));
       const channel = (yield* sql`SELECT id FROM chat_channels
         WHERE id = ${params.channelId} AND show_id = ${params.showId}`) as unknown as ReadonlyArray<{
@@ -498,7 +509,7 @@ const make = Effect.gen(function* () {
       if (channel.length === 0) return yield* Effect.fail(rpcError("Channel not found."));
       const id = yield* ids.makeChatMessageId;
       const sentAt = yield* DateTime.now;
-      const storedBody = params.parts?.length ? encodeStoredChatMessage(body, params.parts) : body;
+      const storedBody = encodeStoredChatMessage(body, params.parts);
       const inserted = (yield* sql`INSERT INTO chat_messages
           (id, show_id, channel_id, sender_profile_id, body, sent_at)
         VALUES (${id}, ${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${storedBody}, ${DateTime.formatIso(sentAt)})

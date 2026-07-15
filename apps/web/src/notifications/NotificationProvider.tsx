@@ -123,7 +123,10 @@ function NotificationViewport() {
                         {toast.description}
                       </Toast.Description>
                       {toast.data?.descriptionParts?.length ? (
-                        <div className="mt-1 line-clamp-3 text-sm text-muted-foreground">
+                        <div
+                          aria-hidden="true"
+                          className="mt-1 line-clamp-3 text-sm text-muted-foreground"
+                        >
                           <ChatMessageBody
                             body={toast.data?.description ?? ""}
                             parts={toast.data.descriptionParts}
