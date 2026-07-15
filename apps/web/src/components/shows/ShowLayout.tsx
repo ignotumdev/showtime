@@ -7,6 +7,7 @@ import {
   PlusIcon,
   SpeakerIcon,
   MessageCircleIcon,
+  LibraryIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,18 +32,20 @@ import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Option } from "effect";
-import type { ShowId } from "@showtime/contracts";
+import type { ChatChannelId, ShowId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
+import { ChatPresetLauncher } from "@/components/chats/ChatPresetLauncher";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ShowLayout() {
   const [chatOpen, setChatOpen] = React.useState(false);
+  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
   const { showId = "", show } = useShowFromParams();
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
@@ -63,19 +66,37 @@ export function ShowLayout() {
         stack="above-content"
         className="hidden md:flex"
         actions={
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="relative"
-            aria-label="Open chat"
-            onClick={() => setChatOpen(true)}
-          >
-            <MessageCircleIcon />
-            <span className="absolute -top-1 -right-1">
-              <ChatUnreadBadge showId={typedShowId} />
-            </span>
-          </Button>
+          <>
+            <ChatPresetLauncher
+              showId={typedShowId}
+              channelId={selectedChannelId}
+              trigger={({ disabled, onClick }) => (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Open message presets"
+                  disabled={disabled}
+                  onClick={onClick}
+                >
+                  <LibraryIcon />
+                </Button>
+              )}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="relative"
+              aria-label="Open chat"
+              onClick={() => setChatOpen(true)}
+            >
+              <MessageCircleIcon />
+              <span className="absolute -top-1 -right-1">
+                <ChatUnreadBadge showId={typedShowId} />
+              </span>
+            </Button>
+          </>
         }
       />
       <SidebarProvider className="relative h-svh overflow-hidden bg-background">
@@ -179,7 +200,12 @@ export function ShowLayout() {
           <MobileBottomNavigation showId={showId} onChatOpen={() => setChatOpen(true)} />
         </SidebarInset>
       </SidebarProvider>
-      <ChatDrawer showId={typedShowId} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatDrawer
+        showId={typedShowId}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        onSelectedChannelChange={setSelectedChannelId}
+      />
     </React.Fragment>
   );
 }

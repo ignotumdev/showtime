@@ -4,7 +4,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChatMessageBody } from "@showtime/contracts";
+import {
+  MicrophoneNumber,
+  MixNumber,
+  type ChatMessageBody,
+  type ChatMessagePart,
+  type ChatPresetField,
+} from "@showtime/contracts";
 import * as HomeDirectory from "../platform/HomeDirectory.js";
 import * as Ids from "../ids/Ids.js";
 import * as ProfileService from "../profiles/ProfileService.js";
@@ -214,5 +220,97 @@ describe("ChatService", () => {
       }),
     );
     expect(reloaded.channels.map((channel) => channel.name)).toEqual(["General"]);
+  });
+
+  it("persists show-scoped presets and rich messages through create, update, and delete", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const initial = await withService(
+      home,
+      Effect.gen(function* () {
+        const ids = yield* Ids.Ids;
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* ids.makeShowId;
+        const otherShowId = yield* ids.makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const preset = yield* chats.createPreset({
+          showId,
+          name: "Monitor request",
+          template: "Put {{mic}} in {{mix}}",
+          fields: [
+            { name: "mic", type: "microphone" },
+            { name: "mix", type: "mix" },
+          ] satisfies ReadonlyArray<ChatPresetField>,
+        });
+        const channel = (yield* chats.state(showId, profileId)).channels[0]!;
+        const microphoneId = yield* ids.makeMicrophoneId;
+        const mixId = yield* ids.makeMixId;
+        const parts = [
+          { type: "text", text: "Put " },
+          {
+            type: "microphone",
+            id: microphoneId,
+            number: MicrophoneNumber.make("7"),
+            color: "violet",
+            name: "Lead",
+            text: "Mic 7 (Lead)",
+          },
+          { type: "text", text: " in " },
+          {
+            type: "mix",
+            id: mixId,
+            number: MixNumber.make("3"),
+            color: "blue",
+            text: "Mix 3",
+          },
+        ] as const satisfies ReadonlyArray<ChatMessagePart>;
+        yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Put Mic 7 (Lead) in Mix 3",
+          parts,
+        });
+        const updated = yield* chats.updatePreset({
+          showId,
+          presetId: preset.id,
+          name: "Monitor level",
+          template: "Set {{mix}} to {{level}}",
+          fields: [
+            { name: "mix", type: "mix" },
+            { name: "level", type: "number" },
+          ],
+        });
+        const otherShow = yield* chats.state(otherShowId, profileId);
+        return { showId, otherShowId, profileId, preset, updated, otherShow };
+      }),
+    );
+
+    expect(initial.updated).toMatchObject({ name: "Monitor level" });
+    expect(initial.otherShow.presets).toEqual([]);
+
+    const reloaded = await withService(
+      home,
+      Effect.gen(function* () {
+        const chats = yield* ChatService;
+        const snapshot = yield* chats.state(initial.showId, initial.profileId);
+        yield* chats.deletePreset({ showId: initial.showId, presetId: initial.preset.id });
+        const afterDelete = yield* chats.state(initial.showId, initial.profileId);
+        return { snapshot, afterDelete };
+      }),
+    );
+    expect(reloaded.snapshot.presets).toHaveLength(1);
+    expect(reloaded.snapshot.channels[0]!.messages[0]).toMatchObject({
+      body: "Put Mic 7 (Lead) in Mix 3",
+      parts: [
+        { type: "text", text: "Put " },
+        { type: "microphone", number: "7", color: "violet" },
+        { type: "text", text: " in " },
+        { type: "mix", number: "3", color: "blue" },
+      ],
+    });
+    expect(reloaded.afterDelete.presets).toEqual([]);
   });
 });
