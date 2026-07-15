@@ -15,14 +15,14 @@ function RouteComponent() {
   return (
     <React.Fragment>
       <TitleBar />
-      <div className="h-svh bg-background px-3 pt-10 sm:px-4">
+      <div className="app-height bg-background px-3 pt-[var(--title-bar-height)] sm:px-4">
         <main className="mx-auto flex h-full min-h-0 w-full max-w-xl items-center py-3 sm:py-8">
           <ShowList />
           <ShowFormDialog />
           <ShowDeleteDialog />
         </main>
       </div>
-      <div className="fixed right-4 bottom-4 z-40">
+      <div className="fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-40">
         <ProfileSwitcher />
       </div>
       <ShowMutationStatus />

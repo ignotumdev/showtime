@@ -3,10 +3,6 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-body {
-  position: relative;
-}
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -53,6 +49,10 @@ body {
 }
 
 :root {
+  --app-height: 100dvh;
+  --app-offset-top: 0px;
+  --app-offset-bottom: 0px;
+  --title-bar-height: calc(2.5rem + env(safe-area-inset-top, 0px));
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -133,10 +133,25 @@ body {
     text-rendering: optimizeLegibility;
   }
   html {
-    @apply font-sans;
+    @apply h-full overflow-hidden font-sans;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior: none;
   }
   body {
-    @apply m-0 min-h-screen min-w-80 overflow-hidden bg-[#0a0a0a] text-[#fafafa];
+    @apply m-0 h-full min-w-80 overflow-hidden bg-[#0a0a0a] text-[#fafafa];
+    position: relative;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #root {
+    position: fixed;
+    top: var(--app-offset-top);
+    left: 0;
+    width: 100%;
+    height: var(--app-height);
+    overflow: hidden;
+    transform: translateZ(0);
   }
   button,
   input,
@@ -145,8 +160,43 @@ body {
     font: inherit;
   }
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role="button"]:not(:disabled),
+  a {
     cursor: pointer;
+    touch-action: manipulation;
+  }
+}
+
+@utility app-height {
+  height: var(--app-height);
+}
+
+@utility min-h-app {
+  min-height: var(--app-height);
+}
+
+@utility title-bar-height {
+  height: var(--title-bar-height);
+}
+
+@utility title-bar-padding {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@layer components {
+  .visual-viewport-overlay {
+    top: var(--app-offset-top);
+    height: var(--app-height);
+  }
+
+  .visual-viewport-dialog {
+    top: calc(var(--app-offset-top) + (var(--app-height) / 2));
+    max-height: calc(var(--app-height) - 1rem);
+  }
+
+  .visual-viewport-container {
+    top: var(--app-offset-top);
+    height: var(--app-height);
   }
 }
 

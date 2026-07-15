@@ -78,7 +78,7 @@ export function ShowLayout() {
           </Button>
         }
       />
-      <SidebarProvider className="relative h-svh overflow-hidden bg-background">
+      <SidebarProvider className="app-height relative overflow-hidden bg-background">
         <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
             <Link
@@ -201,7 +201,7 @@ function ShowHeader({
 
   return (
     <React.Fragment>
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:hidden">
+      <header className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b bg-background px-3 pt-[env(safe-area-inset-top)] md:hidden">
         <Link
           to="/shows/$showId"
           params={{ showId }}

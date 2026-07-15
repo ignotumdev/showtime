@@ -3,6 +3,7 @@ import { showtimeConnectionStorageKey } from "@showtime/shared";
 import {
   capturePairingFragment,
   forgetBrowserConnection,
+  parseShowtimePairingUrl,
   probeStoredConnection,
   readStoredConnection,
   storedRpcWebSocketUrl,
@@ -14,6 +15,28 @@ const pairingToken = "p".repeat(43);
 const scopes = ["connections:read", "connections:create", "connections:delete"] as const;
 
 describe("browser connection persistence", () => {
+  it("accepts only safe Showtime connection links", () => {
+    expect(
+      parseShowtimePairingUrl(
+        `http://showtime.local:8585/#pair=${pairingToken}`,
+        "https://app.example/",
+      ),
+    ).toBe(`http://showtime.local:8585/#pair=${pairingToken}`);
+    expect(
+      parseShowtimePairingUrl(`/#pair=${pairingToken}`, "https://showtime.example/connect"),
+    ).toBe(`https://showtime.example/#pair=${pairingToken}`);
+    expect(parseShowtimePairingUrl("javascript:alert(1)", "https://app.example/")).toBeUndefined();
+    expect(
+      parseShowtimePairingUrl(
+        `https://user:password@showtime.example/#pair=${pairingToken}`,
+        "https://app.example/",
+      ),
+    ).toBeUndefined();
+    expect(
+      parseShowtimePairingUrl("https://showtime.example/#pair=not-a-token", "https://app.example/"),
+    ).toBeUndefined();
+  });
+
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
     const setItem = vi.fn();
     const removeItem = vi.fn();

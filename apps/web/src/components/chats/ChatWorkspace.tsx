@@ -658,7 +658,7 @@ function Composer({
   };
 
   return (
-    <div className="shrink-0 border-t p-2 sm:p-3">
+    <div className="shrink-0 border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-3">
       <InputGroup>
         <InputGroupTextarea
           ref={textareaRef}

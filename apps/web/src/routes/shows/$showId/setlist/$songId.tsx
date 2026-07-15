@@ -288,7 +288,7 @@ function SongDetail({
                   if (artist.trim() !== song.artist) void save({ artist });
                 }}
                 onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                className="h-auto min-w-0 max-w-full w-auto border-0 bg-transparent p-0 text-xs shadow-none [field-sizing:content] focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
+                className="h-auto min-w-0 max-w-full w-auto border-0 bg-transparent p-0 text-base leading-none shadow-none [field-sizing:content] focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
               />
             </Badge>
           </div>
@@ -509,7 +509,7 @@ function MicrophoneName({
         }
       }}
       onClick={(event) => event.stopPropagation()}
-      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-sm font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
+      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-base leading-none font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
     />
   );
 }
