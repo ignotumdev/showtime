@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime chat presets implementation plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      body {
+        max-width: 68rem;
+        margin: 0 auto;
+        padding: 2rem;
+        line-height: 1.55;
+      }
+      h1,
+      h2 {
+        line-height: 1.2;
+      }
+      section {
+        margin-block: 2rem;
+      }
+      code {
+        background: color-mix(in srgb, CanvasText 10%, transparent);
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.25rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+        padding: 0.6rem;
+        text-align: left;
+        vertical-align: top;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chat presets implementation plan</h1>
+    <p>
+      Add a fast, show-scoped preset workflow to the chat composer. A preset is a named template
+      such as
+      <code>Put {{mic}} in {{mix}} at {{level}}</code>. Each unique placeholder has one field
+      definition and can be filled as a microphone, mix, text, number, or predefined option before
+      sending.
+    </p>
+
+    <section>
+      <h2>User flow</h2>
+      <ol>
+        <li>
+          A presets button appears on the inline-start side of the existing message input group.
+        </li>
+        <li>
+          The dialog opens on a searchable/scannable preset list. Selecting one immediately shows
+          only its required fields.
+        </li>
+        <li>
+          Microphone and mix fields use the current show's live lists; text and number use focused
+          inputs; option fields use predefined choices.
+        </li>
+        <li>
+          The dialog shows a live message preview. “Send” resolves the fields, sends the rich
+          message, and closes the dialog on success.
+        </li>
+        <li>
+          “New preset” opens a compact builder: name, template, and one automatically generated
+          configuration row per <code>{{placeholder}}</code>.
+        </li>
+        <li>
+          Existing presets can be edited or deleted from the same dialog, with destructive actions
+          kept explicit.
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Data and contracts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Plan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Preset definitions</td>
+            <td>
+              Add a <code>chat_presets</code> table in <code>chats.db</code>, keyed by a typed
+              preset id and scoped to a show. Store the template and validated field definitions as
+              JSON. Use the existing startup table creation pattern; do not add a migration or
+              change versions.
+            </td>
+          </tr>
+          <tr>
+            <td>Messages</td>
+            <td>
+              Keep the existing <code>chat_messages.body</code> column. Normal messages remain plain
+              strings. Rich preset messages are stored in a versioned JSON envelope containing
+              fallback text and typed render parts.
+            </td>
+          </tr>
+          <tr>
+            <td>Compatibility</td>
+            <td>
+              Decode the envelope defensively. Invalid, unknown, or legacy rows render as ordinary
+              text, preserving replay and reconnect reliability.
+            </td>
+          </tr>
+          <tr>
+            <td>RPC</td>
+            <td>
+              Extend chat state with presets; add create/update/delete preset mutations; allow send
+              to accept optional validated message parts.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Shared logic</h2>
+      <ul>
+        <li>
+          Put placeholder extraction, preset validation, template resolution, envelope encoding, and
+          envelope decoding in the contracts package.
+        </li>
+        <li>
+          Require unique placeholder names and a matching field definition for every placeholder.
+        </li>
+        <li>
+          Resolve to both accessible fallback text and typed parts. Mic/mix parts carry a stable id
+          plus the sent label, name, and color so old messages do not visually change when show data
+          changes.
+        </li>
+        <li>
+          Enforce the existing 4,000-character visible-message limit on the resolved fallback text.
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Message rendering</h2>
+      <p>
+        Render text, number, and predefined-option values inline as normal text. Render microphone
+        and mix values as compact semantic badges with their saved color and number/label, plus a
+        visible mic or speaker icon. Preserve whitespace and wrap long messages safely.
+      </p>
+    </section>
+
+    <section>
+      <h2>Verification</h2>
+      <ul>
+        <li>
+          Contract tests for placeholder parsing, resolving repeated placeholders, validation, and
+          safe envelope fallback.
+        </li>
+        <li>
+          Backend service tests for preset CRUD, show isolation, rich-message round trips, and
+          deletion with the show.
+        </li>
+        <li>
+          Frontend tests for pure builder/selection helpers where practical, followed by repository
+          checks, tests, and builds.
+        </li>
+        <li>
+          Manual browser pass for creating a preset, filling every field type, sending,
+          reconnect/reload persistence, editing, deleting, empty states, and keyboard behavior.
+        </li>
+      </ul>
+    </section>
+  </body>
+</html>

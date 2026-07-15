@@ -18,6 +18,12 @@ import {
   ChatChannelName,
   ChatMessage,
   ChatMessageBody,
+  ChatMessagePart,
+  ChatPreset,
+  ChatPresetField,
+  ChatPresetId,
+  ChatPresetName,
+  ChatPresetTemplate,
   ChatSequence,
   ChatSnapshot,
 } from "./chat.js";
@@ -96,8 +102,35 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
       channelId: ChatChannelId,
       senderProfileId: ProfileId,
       body: ChatMessageBody,
+      parts: Schema.optional(Schema.Array(ChatMessagePart)),
     },
     success: ChatMessage,
+    error: RpcError,
+  }),
+  Rpc.make("chats.createPreset", {
+    payload: {
+      showId: ShowId,
+      name: ChatPresetName,
+      template: ChatPresetTemplate,
+      fields: Schema.Array(ChatPresetField),
+    },
+    success: ChatPreset,
+    error: RpcError,
+  }),
+  Rpc.make("chats.updatePreset", {
+    payload: {
+      showId: ShowId,
+      presetId: ChatPresetId,
+      name: ChatPresetName,
+      template: ChatPresetTemplate,
+      fields: Schema.Array(ChatPresetField),
+    },
+    success: ChatPreset,
+    error: RpcError,
+  }),
+  Rpc.make("chats.deletePreset", {
+    payload: { showId: ShowId, presetId: ChatPresetId },
+    success: Schema.Void,
     error: RpcError,
   }),
   Rpc.make("chats.markRead", {
