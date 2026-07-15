@@ -1,4 +1,5 @@
 import * as React from "react";
+import QRCode from "qrcode";
 import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon } from "lucide-react";
 import type {
   ShowtimeConnectionCandidate,
@@ -371,6 +372,7 @@ function PairClientDialog({
   const [discovery, setDiscovery] = React.useState<ShowtimeLocalDiscoveryState>({
     kind: "disabled",
   });
+  const [qrCode, setQrCode] = React.useState<string>();
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState<string>();
   React.useEffect(() => {
@@ -379,6 +381,7 @@ function PairClientDialog({
     setCandidates([]);
     setSelectedUrl("");
     setDiscovery({ kind: "probing" });
+    setQrCode(undefined);
     setCopied(false);
     setError(undefined);
     let timer: number | undefined;
@@ -445,7 +448,18 @@ function PairClientDialog({
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [client, manager]);
-  React.useEffect(() => setCopied(false), [selectedUrl]);
+  React.useEffect(() => {
+    setQrCode(undefined);
+    setCopied(false);
+    if (!selectedUrl) return;
+    let active = true;
+    void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(
+      (value) => active && setQrCode(value),
+    );
+    return () => {
+      active = false;
+    };
+  }, [selectedUrl]);
   const selected = candidates.find((candidate) => candidate.url === selectedUrl);
   return (
     <Dialog open={client !== undefined} onOpenChange={onOpenChange}>
@@ -481,6 +495,15 @@ function PairClientDialog({
               value={selectedUrl}
               readOnly
               onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+        )}
+        {qrCode && (
+          <div className="grid justify-items-center">
+            <img
+              src={qrCode}
+              alt={`QR code for connecting ${client?.name ?? "client"}`}
+              className="w-full max-w-72"
             />
           </div>
         )}

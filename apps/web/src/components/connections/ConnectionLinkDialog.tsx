@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { parseShowtimePairingUrl } from "@/connection";
+import { capturePairingFragment, showtimePairingNavigationUrl } from "@/connection";
+import { isStandalonePwa } from "@/pwa";
 
 type ConnectionState = "idle" | "connecting" | "error";
 
@@ -32,8 +33,9 @@ export function ConnectionLinkDialog({
     setMessage(undefined);
   }, [open]);
 
-  const connect = React.useCallback((value: string) => {
-    const pairingUrl = parseShowtimePairingUrl(value);
+  const connect = React.useCallback(async (value: string) => {
+    const standalone = isStandalonePwa();
+    const pairingUrl = showtimePairingNavigationUrl(value, window.location.href, standalone);
     if (!pairingUrl) {
       setState("error");
       setMessage(
@@ -46,6 +48,28 @@ export function ConnectionLinkDialog({
     setState("connecting");
     setMessage(undefined);
     navigator.vibrate?.(40);
+
+    if (standalone) {
+      const target = new URL(pairingUrl);
+      const result = await capturePairingFragment({
+        hash: target.hash,
+        pathname: window.location.pathname,
+        search: window.location.search,
+      });
+      if (result.status === "paired") {
+        window.location.reload();
+        return true;
+      }
+      handledRef.current = false;
+      setState("error");
+      setMessage(
+        result.status === "failed"
+          ? result.message
+          : "Showtime could not open this connection link.",
+      );
+      return false;
+    }
+
     window.location.assign(pairingUrl);
     return true;
   }, []);
@@ -65,7 +89,7 @@ export function ConnectionLinkDialog({
           className="grid gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            connect(connectionUrl.trim());
+            void connect(connectionUrl.trim());
           }}
         >
           <label htmlFor="showtime-connection-url" className="text-sm font-medium">
@@ -89,7 +113,7 @@ export function ConnectionLinkDialog({
             }}
           />
           <Button type="submit" disabled={!connectionUrl.trim() || state === "connecting"}>
-            <LinkIcon /> Open connection link
+            <LinkIcon /> {state === "connecting" ? "Connecting…" : "Open connection link"}
           </Button>
         </form>
 

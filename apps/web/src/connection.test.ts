@@ -6,6 +6,7 @@ import {
   parseShowtimePairingUrl,
   probeStoredConnection,
   readStoredConnection,
+  showtimePairingNavigationUrl,
   storedRpcWebSocketUrl,
 } from "./connection";
 
@@ -35,6 +36,16 @@ describe("browser connection persistence", () => {
     expect(
       parseShowtimePairingUrl("https://showtime.example/#pair=not-a-token", "https://app.example/"),
     ).toBeUndefined();
+  });
+
+  it("keeps pairing navigation inside an installed PWA origin", () => {
+    const pairingUrl = `http://192.168.1.20:8585/#pair=${pairingToken}`;
+    expect(showtimePairingNavigationUrl(pairingUrl, "http://showtime.local:8585/#/", true)).toBe(
+      `http://showtime.local:8585/#pair=${pairingToken}`,
+    );
+    expect(showtimePairingNavigationUrl(pairingUrl, "http://showtime.local:8585/#/", false)).toBe(
+      pairingUrl,
+    );
   });
 
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
