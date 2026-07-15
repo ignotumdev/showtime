@@ -1,41 +1,30 @@
 import * as React from "react";
 import type { Profile, ProfileId, ProfilesState } from "@showtime/contracts";
-
-const storageKey = "showtime.selected-profile.v1";
-const selectionEvent = "showtime-profile-selection";
-
-const readSelection = (): string | undefined => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(storageKey) ?? "null") as unknown;
-    return typeof parsed === "object" &&
-      parsed !== null &&
-      "profileId" in parsed &&
-      typeof parsed.profileId === "string"
-      ? parsed.profileId
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
+import {
+  profileSelectionChangedEvent,
+  readProfileSelection,
+  writeProfileSelection,
+} from "@/profile-selection";
+import { updateConnectionProfile } from "@/connection";
 
 const writeSelection = (profileId: ProfileId) => {
   try {
-    localStorage.setItem(storageKey, JSON.stringify({ version: 1, profileId }));
-    window.dispatchEvent(new Event(selectionEvent));
+    writeProfileSelection(profileId);
+    window.dispatchEvent(new Event(profileSelectionChangedEvent));
   } catch {
     // Selection remains usable for this page when storage is unavailable.
   }
 };
 
-export function useSelectedProfile(state: ProfilesState | undefined) {
-  const [storedId, setStoredId] = React.useState(readSelection);
+export function useProfileSelection(state: ProfilesState | undefined) {
+  const [storedId, setStoredId] = React.useState(readProfileSelection);
   React.useEffect(() => {
-    const update = () => setStoredId(readSelection());
+    const update = () => setStoredId(readProfileSelection());
     window.addEventListener("storage", update);
-    window.addEventListener(selectionEvent, update);
+    window.addEventListener(profileSelectionChangedEvent, update);
     return () => {
       window.removeEventListener("storage", update);
-      window.removeEventListener(selectionEvent, update);
+      window.removeEventListener(profileSelectionChangedEvent, update);
     };
   }, []);
 
@@ -57,4 +46,30 @@ export function useSelectedProfile(state: ProfilesState | undefined) {
   }, []);
 
   return { selected, select } as const;
+}
+
+export function useSelectedProfile(state: ProfilesState | undefined) {
+  const selection = useProfileSelection(state);
+  const selected = selection.selected;
+
+  React.useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    let timer: number | undefined;
+    let failures = 0;
+    const sync = () => {
+      void updateConnectionProfile(selected.id).catch(() => {
+        if (!active) return;
+        failures += 1;
+        timer = window.setTimeout(sync, Math.min(5_000, 500 * 2 ** (failures - 1)));
+      });
+    };
+    sync();
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [selected]);
+
+  return selection;
 }

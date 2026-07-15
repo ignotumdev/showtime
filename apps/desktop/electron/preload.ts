@@ -14,8 +14,8 @@ import {
 const bridge: ShowtimeHostBridge = {
   rpcWebSocketUrl: () => ipcRenderer.invoke(desktopRpcWebSocketUrlChannel) as Promise<string>,
   connectionsState: () => ipcRenderer.invoke(desktopConnectionsStateChannel),
-  createInvitation: (name, scopes) =>
-    ipcRenderer.invoke(desktopCreateInvitationChannel, name, scopes),
+  createInvitation: (name, clientProfile, scopes) =>
+    ipcRenderer.invoke(desktopCreateInvitationChannel, name, clientProfile, scopes),
   pairingInfo: async (invitationId) =>
     Schema.decodeUnknownSync(ShowtimeConnectionInfo)(
       await ipcRenderer.invoke(desktopPairingInfoChannel, invitationId),

@@ -235,7 +235,7 @@ describe("Showtime WebSocket RPC", () => {
     try {
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Monitor iPad", []),
+          connections.createInvitation("Monitor iPad", "profile_0000000000000000", []),
         ),
       );
       expect(pending.clients[0]).toMatchObject({ kind: "pending", name: "Monitor iPad" });
@@ -328,7 +328,7 @@ describe("Showtime WebSocket RPC", () => {
     try {
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Restarted iPad", []),
+          connections.createInvitation("Restarted iPad", "profile_0000000000000000", []),
         ),
       );
       const invitation = pending.clients[0];
@@ -380,7 +380,7 @@ describe("Showtime WebSocket RPC", () => {
       ) => {
         await runtime.runPromise(
           Effect.flatMap(ConnectionManager, (connections) =>
-            connections.createInvitation(name, scopes),
+            connections.createInvitation(name, "profile_0000000000000000", scopes),
           ),
         );
         const persisted = JSON.parse(
@@ -399,7 +399,7 @@ describe("Showtime WebSocket RPC", () => {
         fetch(url, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name, scopes }),
+          body: JSON.stringify({ name, clientProfile: "profile_0000000000000000", scopes }),
         });
 
       const unscoped = await pair("Unscoped iPad", []);
@@ -417,6 +417,28 @@ describe("Showtime WebSocket RPC", () => {
       expect(stateResponse.status).toBe(200);
       const state = (await stateResponse.json()) as { clients: Array<{ name: string }> };
       expect(state.clients.map((client) => client.name)).toContain("Manager iPad");
+
+      const changedProfile = "profile_1111111111111111";
+      const profileUpdate = await fetch(
+        `${origin}/connection-profile/${manager.clientId}/${manager.capability}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ clientProfile: changedProfile }),
+        },
+      );
+      expect(profileUpdate.status).toBe(200);
+      const updatedState = (await (await fetch(managerUrl)).json()) as {
+        clients: Array<{
+          name: string;
+          clientProfile: string;
+          updatedAt: string;
+        }>;
+      };
+      expect(updatedState.clients.find((client) => client.name === "Manager iPad")).toMatchObject({
+        clientProfile: changedProfile,
+        updatedAt: expect.any(String),
+      });
 
       const createdResponse = await create(managerUrl, "Managed client", ["connections:read"]);
       expect(createdResponse.status).toBe(200);
@@ -466,6 +488,8 @@ describe("Showtime WebSocket RPC", () => {
             name: "Expired iPad",
             token: expiredToken,
             expiresAt: "2000-01-01T00:00:00.000Z",
+            updatedAt: "2000-01-01T00:00:00.000Z",
+            clientProfile: "profile_0000000000000000",
             scopes: [],
           },
         ],

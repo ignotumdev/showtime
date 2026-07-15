@@ -6,6 +6,7 @@ const credentials = {
   version: 1,
   clientId: "Abcdefghijklmnopqrstu",
   capability: "a".repeat(43),
+  clientProfile: "profile_0000000000000000",
   scopes: ["connections:read", "connections:create", "connections:delete"],
 };
 
@@ -46,16 +47,20 @@ describe("browser connection management", () => {
     const base = `/connection-management/${credentials.clientId}/${credentials.capability}`;
 
     await expect(client.connectionsState()).resolves.toEqual(state);
-    await expect(client.createInvitation("Monitor iPad", ["connections:read"])).resolves.toEqual(
-      state,
-    );
+    await expect(
+      client.createInvitation("Monitor iPad", credentials.clientProfile, ["connections:read"]),
+    ).resolves.toEqual(state);
     await expect(client.removeConnection("connection-id")).resolves.toEqual(state);
 
     expect(request).toHaveBeenNthCalledWith(1, base, { cache: "no-store" });
     expect(request).toHaveBeenNthCalledWith(2, base, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Monitor iPad", scopes: ["connections:read"] }),
+      body: JSON.stringify({
+        name: "Monitor iPad",
+        clientProfile: credentials.clientProfile,
+        scopes: ["connections:read"],
+      }),
     });
     expect(request).toHaveBeenNthCalledWith(3, `${base}/connection-id`, {
       method: "DELETE",
