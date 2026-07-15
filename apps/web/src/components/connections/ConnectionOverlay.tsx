@@ -131,7 +131,7 @@ function ConnectionEmpty({
   readonly children?: React.ReactNode;
 }) {
   return (
-    <main className="fixed inset-0 z-50 flex min-h-screen bg-background p-6">
+    <main className="fixed inset-x-0 top-0 z-50 flex h-[var(--app-height)] bg-background pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.5rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))]">
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">{icon}</EmptyMedia>

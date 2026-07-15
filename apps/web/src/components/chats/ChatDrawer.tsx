@@ -95,7 +95,7 @@ function ChatDrawerView({
       <DrawerContent
         className={
           isMobile
-            ? "[--drawer-height:calc(100dvh-3rem)]"
+            ? "[--drawer-height:calc(var(--app-height)-3rem)]"
             : "data-[swipe-axis=x]:[--drawer-content-width:min(44rem,100vw)]"
         }
       >
