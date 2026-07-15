@@ -63,11 +63,26 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(chatsSyncKey(showId), chats.renameChannel({ showId, channelId, name })),
       "chats.deleteChannel": ({ showId, channelId }) =>
         sync.mutation(chatsSyncKey(showId), chats.deleteChannel({ showId, channelId })),
-      "chats.send": ({ showId, channelId, senderProfileId, body }) =>
+      "chats.send": ({ showId, channelId, senderProfileId, body, parts }) =>
         sync.mutation(
           chatsSyncKey(showId),
-          chats.send({ showId, channelId, senderProfileId, body }),
+          chats.send({
+            showId,
+            channelId,
+            senderProfileId,
+            body,
+            ...(parts === undefined ? {} : { parts }),
+          }),
         ),
+      "chats.createPreset": ({ showId, name, template, fields }) =>
+        sync.mutation(chatsSyncKey(showId), chats.createPreset({ showId, name, template, fields })),
+      "chats.updatePreset": ({ showId, presetId, name, template, fields }) =>
+        sync.mutation(
+          chatsSyncKey(showId),
+          chats.updatePreset({ showId, presetId, name, template, fields }),
+        ),
+      "chats.deletePreset": ({ showId, presetId }) =>
+        sync.mutation(chatsSyncKey(showId), chats.deletePreset({ showId, presetId })),
       "chats.markRead": ({ showId, channelId, profileId, sequence }) =>
         sync.mutation(
           chatsSyncKey(showId),
