@@ -11,6 +11,7 @@ import { showColorClassNames } from "./shows/show-color";
 import { isDesktopHost } from "@/platform";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ShowPageAction } from "@/components/shows/ShowPageAction";
+import { PwaInstallButton } from "@/components/connections/PwaInstallButton";
 
 type TitleBarProps = {
   className?: string;
@@ -58,7 +59,7 @@ export function TitleBar({
           : undefined
       }
       className={cn(
-        "fixed inset-x-0 top-0 z-10 flex h-10 min-w-0 select-none items-center bg-[#0a0a0a] px-2 py-0 sm:px-3",
+        "title-bar-height title-bar-padding fixed inset-x-0 top-0 z-10 flex min-w-0 select-none items-center bg-[#0a0a0a] px-2 pb-0 sm:px-3",
         desktopHost && "drag-region",
         stack === "below-content" && "z-0",
         stack === "above-content" && "z-30",
@@ -105,6 +106,7 @@ export function TitleBar({
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
         {actions}
+        {!desktopHost && isShowsRoute && <PwaInstallButton compact />}
         {!isLiveRoute && (
           <>
             <ConnectionDialog compact className="md:hidden" />

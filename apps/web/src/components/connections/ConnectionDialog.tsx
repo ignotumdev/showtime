@@ -54,6 +54,7 @@ import {
   type ConnectionManagementClient,
 } from "./connection-management";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/clipboard";
 import { profileAtoms } from "@/client";
 import { useProfileSelection } from "@/profiles";
 import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
@@ -513,6 +514,7 @@ function PairClientDialog({
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
+    setError(undefined);
     if (!selectedUrl) return;
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(
@@ -546,6 +548,20 @@ function PairClientDialog({
             </SelectContent>
           </Select>
         )}
+        {selectedUrl && (
+          <div className="grid gap-2">
+            <label htmlFor="generated-showtime-connection-url" className="text-sm font-medium">
+              Connection link
+            </label>
+            <Input
+              id="generated-showtime-connection-url"
+              type="url"
+              value={selectedUrl}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+        )}
         {qrCode && (
           <div className="grid justify-items-center">
             <img
@@ -569,8 +585,15 @@ function PairClientDialog({
           variant="outline"
           disabled={!selectedUrl}
           onClick={async () => {
-            await navigator.clipboard.writeText(selectedUrl);
-            setCopied(true);
+            try {
+              await copyText(selectedUrl);
+              setCopied(true);
+              setError(undefined);
+            } catch {
+              setError(
+                "Could not copy automatically. Press and hold the connection link above to copy it.",
+              );
+            }
           }}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}
