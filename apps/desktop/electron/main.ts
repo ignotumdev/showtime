@@ -174,9 +174,10 @@ if (gotSingleInstanceLock) {
       })
       .catch((error: unknown) => {
         console.error("Showtime backend startup failed", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         dialog.showErrorBox(
           "Showtime could not start",
-          "The local Showtime backend could not start. Please close other Showtime windows and try again.",
+          `The local Showtime backend could not start.\n\n${errorMessage}`,
         );
         app.quit();
       });
