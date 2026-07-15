@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { showtimeConnectionStorageKey } from "@showtime/shared";
 import { restorePwaConnectionHandoff, stagePwaConnectionHandoff } from "./pwa";
 
@@ -9,14 +9,28 @@ const connection = {
   scopes: ["connections:read" as const],
 };
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("PWA connection handoff", () => {
-  it("stages a short-lived validated connection cookie for installation", () => {
+  it("stages a secure, short-lived validated connection cookie on HTTPS", () => {
+    vi.stubGlobal("location", { protocol: "https:" });
     const cookieDocument = { cookie: "" };
 
     expect(stagePwaConnectionHandoff(cookieDocument, connection)).toBe(true);
     expect(cookieDocument.cookie).toContain("showtime.pwa.connection.v1=");
     expect(cookieDocument.cookie).toContain("Max-Age=600");
     expect(cookieDocument.cookie).toContain("SameSite=Strict");
+    expect(cookieDocument.cookie).toContain("Secure");
+  });
+
+  it("allows the handoff cookie on an HTTP localhost development origin", () => {
+    vi.stubGlobal("location", { protocol: "http:", hostname: "localhost" });
+    const cookieDocument = { cookie: "" };
+
+    expect(stagePwaConnectionHandoff(cookieDocument, connection)).toBe(true);
+    expect(cookieDocument.cookie).not.toContain("Secure");
   });
 
   it("restores the handoff only inside an installed app", () => {

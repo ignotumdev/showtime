@@ -19,7 +19,8 @@ import { installMobileViewport } from "./mobile-viewport";
 import { registerServiceWorker, restorePwaConnectionHandoff } from "./pwa";
 import { ConnectToShowtime } from "./components/connections/ConnectToShowtime";
 
-installMobileViewport();
+const uninstallMobileViewport = installMobileViewport();
+if (import.meta.hot) import.meta.hot.dispose(uninstallMobileViewport);
 restorePwaConnectionHandoff();
 void registerServiceWorker();
 const pairing = await capturePairingFragment();

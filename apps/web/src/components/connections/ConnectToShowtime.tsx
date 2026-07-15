@@ -15,7 +15,7 @@ export function ConnectToShowtime({ error }: { readonly error?: string }) {
   const [connectOpen, setConnectOpen] = React.useState(false);
 
   return (
-    <main className="app-height flex bg-background px-[max(1.5rem,env(safe-area-inset-left))] py-[max(1.5rem,env(safe-area-inset-top))] text-foreground">
+    <main className="app-height flex bg-background pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.5rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] text-foreground">
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">

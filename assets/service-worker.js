@@ -25,11 +25,18 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-const cacheResponse = async (request, response) => {
-  if (response.ok && response.type === "basic") {
+const writeToCache = async (request, response) => {
+  try {
     const cache = await caches.open(CACHE_NAME);
     await cache.put(request, response.clone());
+  } catch {
+    // Cache Storage can fail independently (for example, when the quota is full).
+    // The successfully fetched response is still useful to the current request.
   }
+};
+
+const cacheResponse = async (request, response) => {
+  if (response.ok && response.type === "basic") await writeToCache(request, response);
   return response;
 };
 
@@ -44,10 +51,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then(async (response) => {
-          if (response.ok) {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(APP_SHELL, response.clone());
-          }
+          if (response.ok) await writeToCache(APP_SHELL, response);
           return response;
         })
         .catch(async () => (await caches.match(APP_SHELL)) || Response.error()),

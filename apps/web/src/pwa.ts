@@ -8,6 +8,9 @@ const connectionHandoffLifetimeSeconds = 10 * 60;
 type CookieDocument = Pick<Document, "cookie">;
 type ConnectionStorage = Pick<Storage, "getItem" | "setItem">;
 
+const connectionHandoffCookieSecurity = () =>
+  typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
+
 const browserLocalStorage = (): Storage | undefined => {
   try {
     return window.localStorage;
@@ -21,7 +24,7 @@ export const isStandalonePwa = () =>
   ("standalone" in navigator && (navigator as Navigator & { standalone?: boolean }).standalone);
 
 const expireConnectionHandoff = (cookieDocument: CookieDocument) => {
-  cookieDocument.cookie = `${connectionHandoffCookie}=; Path=/; Max-Age=0; SameSite=Strict`;
+  cookieDocument.cookie = `${connectionHandoffCookie}=; Path=/; Max-Age=0; SameSite=Strict${connectionHandoffCookieSecurity()}`;
 };
 
 /**
@@ -35,7 +38,7 @@ export const stagePwaConnectionHandoff = (
   if (!connection) return false;
   try {
     const value = encodeURIComponent(JSON.stringify(connection));
-    cookieDocument.cookie = `${connectionHandoffCookie}=${value}; Path=/; Max-Age=${connectionHandoffLifetimeSeconds}; SameSite=Strict`;
+    cookieDocument.cookie = `${connectionHandoffCookie}=${value}; Path=/; Max-Age=${connectionHandoffLifetimeSeconds}; SameSite=Strict${connectionHandoffCookieSecurity()}`;
     return cookieDocument.cookie
       .split(";")
       .some((cookie) => cookie.trim().startsWith(`${connectionHandoffCookie}=`));

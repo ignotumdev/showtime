@@ -27,7 +27,10 @@ export function ConnectionLinkDialog({
   const [connectionUrl, setConnectionUrl] = React.useState("");
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setConnectionUrl("");
+      return;
+    }
     handledRef.current = false;
     setState("idle");
     setMessage(undefined);

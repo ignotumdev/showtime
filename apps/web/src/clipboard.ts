@@ -22,6 +22,7 @@ export const copyText = async (
   documentRef.body.append(textarea);
   let copied = false;
   try {
+    textarea.focus();
     textarea.select();
     textarea.setSelectionRange(0, value.length);
     copied = documentRef.execCommand("copy");

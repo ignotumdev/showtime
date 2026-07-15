@@ -451,6 +451,7 @@ function PairClientDialog({
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
+    setError(undefined);
     if (!selectedUrl) return;
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(

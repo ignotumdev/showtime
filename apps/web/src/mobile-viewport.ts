@@ -14,6 +14,7 @@ const scrollFocusedControlIntoView = () => {
 export const installMobileViewport = () => {
   const viewport = window.visualViewport;
   let frame: number | undefined;
+  let focusTimeout: number | undefined;
 
   const update = () => {
     frame = undefined;
@@ -39,13 +40,29 @@ export const installMobileViewport = () => {
     frame = window.requestAnimationFrame(update);
   };
 
+  const onFocusIn = () => {
+    scheduleUpdate();
+    if (focusTimeout !== undefined) window.clearTimeout(focusTimeout);
+    focusTimeout = window.setTimeout(() => {
+      focusTimeout = undefined;
+      scrollFocusedControlIntoView();
+    }, 250);
+  };
+
   scheduleUpdate();
   viewport?.addEventListener("resize", scheduleUpdate, { passive: true });
   viewport?.addEventListener("scroll", scheduleUpdate, { passive: true });
   window.addEventListener("resize", scheduleUpdate, { passive: true });
   window.addEventListener("orientationchange", scheduleUpdate, { passive: true });
-  document.addEventListener("focusin", () => {
-    scheduleUpdate();
-    window.setTimeout(scrollFocusedControlIntoView, 250);
-  });
+  document.addEventListener("focusin", onFocusIn);
+
+  return () => {
+    viewport?.removeEventListener("resize", scheduleUpdate);
+    viewport?.removeEventListener("scroll", scheduleUpdate);
+    window.removeEventListener("resize", scheduleUpdate);
+    window.removeEventListener("orientationchange", scheduleUpdate);
+    document.removeEventListener("focusin", onFocusIn);
+    if (frame !== undefined) window.cancelAnimationFrame(frame);
+    if (focusTimeout !== undefined) window.clearTimeout(focusTimeout);
+  };
 };
