@@ -3,6 +3,7 @@ import { FileSystem } from "effect/FileSystem";
 import { nanoid } from "nanoid";
 import { randomBytes } from "node:crypto";
 import { ShowtimeConnectionScopes, type ShowtimeConnectionScope } from "@showtime/shared";
+import { ProfileId, type ProfileId as ProfileIdType } from "@showtime/contracts";
 import * as HomeDirectory from "../platform/HomeDirectory.js";
 import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
 
@@ -17,6 +18,8 @@ const Client = Schema.Struct({
   name: ClientName,
   capability: Capability,
   createdAt: Schema.String,
+  updatedAt: Schema.String,
+  clientProfile: ProfileId,
   scopes: StoredConnectionScopes,
 });
 const Invitation = Schema.Struct({
@@ -24,6 +27,8 @@ const Invitation = Schema.Struct({
   name: ClientName,
   token: Capability,
   expiresAt: Schema.String,
+  updatedAt: Schema.String,
+  clientProfile: ProfileId,
   scopes: StoredConnectionScopes,
 });
 const ConnectionsFile = Schema.Struct({
@@ -38,6 +43,7 @@ export interface PairingCredentials {
   readonly clientId: string;
   readonly capability: string;
   readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
+  readonly clientProfile: ProfileIdType;
 }
 
 const pairingLifetimeMs = 5 * 60 * 1_000;
@@ -58,6 +64,7 @@ const nextDefaultClientName = (names: Iterable<string>) => {
 };
 const makeInvitation = (
   name: string,
+  clientProfile: ProfileIdType,
   scopes: ReadonlyArray<ShowtimeConnectionScope>,
   now: number,
 ): StoredInvitation => ({
@@ -65,6 +72,8 @@ const makeInvitation = (
   name,
   token: makeToken(),
   expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
+  updatedAt: new Date(now).toISOString(),
+  clientProfile,
   scopes: [...scopes],
 });
 
@@ -75,7 +84,8 @@ export class ConnectionStore extends Context.Service<
     readonly invitations: Effect.Effect<ReadonlyArray<StoredInvitation>>;
     readonly connectedClientIds: Effect.Effect<ReadonlySet<string>>;
     readonly createInvitation: (
-      name?: string,
+      name: string | undefined,
+      clientProfile: string,
       scopes?: ReadonlyArray<ShowtimeConnectionScope>,
     ) => Effect.Effect<StoredInvitation>;
     readonly pairingInvitation: (
@@ -83,6 +93,11 @@ export class ConnectionStore extends Context.Service<
     ) => Effect.Effect<StoredInvitation | undefined>;
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
+    readonly updateClientProfile: (
+      clientId: string,
+      capability: string,
+      clientProfile: string,
+    ) => Effect.Effect<boolean>;
     readonly disconnectAll: Effect.Effect<void>;
     readonly credentialsStatus: (
       clientId: string,
@@ -124,7 +139,8 @@ const make = Effect.gen(function* () {
     );
 
   const createInvitation = (
-    name?: string,
+    name: string | undefined,
+    clientProfile: string,
     requestedScopes: ReadonlyArray<ShowtimeConnectionScope> = [],
   ) =>
     lock.withPermits(1)(
@@ -144,7 +160,10 @@ const make = Effect.gen(function* () {
           requestedScopes,
         ).pipe(Effect.orDie);
         const now = yield* Clock.currentTimeMillis;
-        const invitation = makeInvitation(validatedName, scopes, now);
+        const validatedProfile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
+          Effect.orDie,
+        );
+        const invitation = makeInvitation(validatedName, validatedProfile, scopes, now);
         yield* persist({
           ...current,
           invitations: [...current.invitations, invitation],
@@ -171,6 +190,7 @@ const make = Effect.gen(function* () {
           ...invitation,
           token: makeToken(),
           expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
+          updatedAt: new Date(now).toISOString(),
         };
         yield* persist({
           ...current,
@@ -200,6 +220,8 @@ const make = Effect.gen(function* () {
           name: invitation.name,
           capability: makeToken(),
           createdAt: new Date(now).toISOString(),
+          updatedAt: new Date(now).toISOString(),
+          clientProfile: invitation.clientProfile,
           scopes: invitation.scopes,
         };
         yield* persist({
@@ -216,6 +238,7 @@ const make = Effect.gen(function* () {
           clientId: client.clientId,
           capability: client.capability,
           scopes: client.scopes,
+          clientProfile: client.clientProfile,
         };
       }),
     );
@@ -244,6 +267,31 @@ const make = Effect.gen(function* () {
             clientName: client?.name ?? invitation?.name ?? "unknown",
           }),
         );
+      }),
+    );
+
+  const updateClientProfile = (clientId: string, capability: string, clientProfile: string) =>
+    lock.withPermits(1)(
+      Effect.gen(function* () {
+        const current = yield* Ref.get(state);
+        const client = current.clients.find(
+          (item) => item.clientId === clientId && item.capability === capability,
+        );
+        if (!client) return false;
+        const validatedProfile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
+          Effect.orDie,
+        );
+        if (client.clientProfile === validatedProfile) return true;
+        const now = yield* Clock.currentTimeMillis;
+        yield* persist({
+          ...current,
+          clients: current.clients.map((item) =>
+            item.clientId === clientId
+              ? { ...item, clientProfile: validatedProfile, updatedAt: new Date(now).toISOString() }
+              : item,
+          ),
+        });
+        return true;
       }),
     );
 
@@ -305,6 +353,7 @@ const make = Effect.gen(function* () {
     pairingInvitation,
     consumeInvitation,
     remove,
+    updateClientProfile,
     disconnectAll: lock
       .withPermits(1)(
         Ref.get(sessions).pipe(

@@ -77,6 +77,8 @@ export interface ShowtimePendingClient {
   readonly invitationId: string;
   readonly name: string;
   readonly expiresAt: string;
+  readonly clientProfile: string;
+  readonly updatedAt: string;
   readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
 
@@ -85,6 +87,8 @@ export interface ShowtimePairedClient {
   readonly clientId: string;
   readonly name: string;
   readonly createdAt: string;
+  readonly clientProfile: string;
+  readonly updatedAt: string;
   readonly connected: boolean;
   readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
 }
@@ -101,6 +105,7 @@ export interface ShowtimeStoredConnection {
   readonly clientId: string;
   readonly capability: string;
   readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
+  readonly clientProfile: string;
 }
 
 /** Capabilities supplied by a native host. Browser clients run without this bridge. */
@@ -109,6 +114,7 @@ export interface ShowtimeHostBridge {
   readonly connectionsState: () => Promise<ShowtimeConnectionsState>;
   readonly createInvitation: (
     name: string | undefined,
+    clientProfile: string,
     scopes: ReadonlyArray<ShowtimeConnectionScope>,
   ) => Promise<ShowtimeConnectionsState>;
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;

@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { showtimeConnectionStorageKey } from "@showtime/shared";
+import { profileSelectionStorageKey } from "./profile-selection";
 import {
   capturePairingFragment,
   forgetBrowserConnection,
   probeStoredConnection,
   readStoredConnection,
   storedRpcWebSocketUrl,
+  updateConnectionProfile,
 } from "./connection";
 
 const capability = "a".repeat(43);
 const clientId = "Abcdefghijklmnopqrstu";
 const pairingToken = "p".repeat(43);
 const scopes = ["connections:read", "connections:create", "connections:delete"] as const;
+const clientProfile = "profile_0000000000000000";
 
 describe("browser connection persistence", () => {
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
@@ -19,14 +22,18 @@ describe("browser connection persistence", () => {
     const removeItem = vi.fn();
     const replaceState = vi.fn();
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
     );
     await expect(
       capturePairingFragment(
-        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        {
+          hash: `#pair=${pairingToken}&profile=${clientProfile}`,
+          pathname: "/",
+          search: "",
+        },
         { setItem, removeItem },
         { replaceState },
         request,
@@ -35,7 +42,7 @@ describe("browser connection persistence", () => {
     expect(request).toHaveBeenCalledWith(`/pair/${pairingToken}`, { method: "POST" });
     expect(setItem).toHaveBeenCalledWith(
       showtimeConnectionStorageKey,
-      JSON.stringify({ version: 1, clientId, capability, scopes }),
+      JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }),
     );
     expect(replaceState).toHaveBeenCalledWith(null, "", "/#/");
   });
@@ -95,7 +102,7 @@ describe("browser connection persistence", () => {
       }
     });
     const request = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ version: 1, clientId, capability, scopes }), {
+      new Response(JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -114,17 +121,186 @@ describe("browser connection persistence", () => {
         "This browser could not save the connection after the link was used. Ask the engineer for a new link.",
     });
     expect(request).toHaveBeenCalledOnce();
+    expect(setItem).not.toHaveBeenCalledWith(profileSelectionStorageKey, expect.any(String));
     expect(replaceState).toHaveBeenCalledWith(null, "", "/#/");
   });
 
   it("restores a validated record and creates its authenticated socket URL", () => {
     const connection = readStoredConnection({
-      getItem: () => JSON.stringify({ version: 1, clientId, capability, scopes }),
+      getItem: () => JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }),
     });
-    expect(connection).toEqual({ version: 1, clientId, capability, scopes });
+    expect(connection).toEqual({ version: 1, clientId, capability, clientProfile, scopes });
     expect(
       storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
     ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
+  });
+
+  it("updates the authenticated client profile and then persists it locally", async () => {
+    let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ updated: true })));
+    const nextProfile = "profile_1111111111111111" as Parameters<typeof updateConnectionProfile>[0];
+
+    await updateConnectionProfile(nextProfile, storage, request);
+
+    expect(request).toHaveBeenCalledWith(`/connection-profile/${clientId}/${capability}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientProfile: nextProfile }),
+      signal: expect.any(AbortSignal),
+    });
+    expect(JSON.parse(stored)).toMatchObject({ clientProfile: nextProfile, version: 1 });
+  });
+
+  it("serializes profile updates so the latest selection wins", async () => {
+    let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+    const responses: Array<(response: Response) => void> = [];
+    const request = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          responses.push(resolve);
+        }),
+    );
+    const firstProfile = "profile_1111111111111111" as Parameters<
+      typeof updateConnectionProfile
+    >[0];
+    const latestProfile = "profile_2222222222222222" as Parameters<
+      typeof updateConnectionProfile
+    >[0];
+
+    const firstUpdate = updateConnectionProfile(firstProfile, storage, request);
+    const latestUpdate = updateConnectionProfile(latestProfile, storage, request);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+
+    responses[0]!(new Response(null, { status: 200 }));
+    await firstUpdate;
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(request).toHaveBeenLastCalledWith(`/connection-profile/${clientId}/${capability}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientProfile: latestProfile }),
+      signal: expect.any(AbortSignal),
+    });
+
+    responses[1]!(new Response(null, { status: 200 }));
+    await latestUpdate;
+    expect(JSON.parse(stored)).toMatchObject({ clientProfile: latestProfile });
+  });
+
+  it("releases queued profile updates when an earlier request stalls", async () => {
+    vi.useFakeTimers();
+    try {
+      let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+      const storage = {
+        getItem: () => stored,
+        setItem: (_key: string, value: string) => {
+          stored = value;
+        },
+      };
+      const signals: AbortSignal[] = [];
+      let requestCount = 0;
+      const request = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        requestCount += 1;
+        signals.push(init?.signal as AbortSignal);
+        return requestCount === 1
+          ? new Promise<Response>(() => undefined)
+          : Promise.resolve(new Response(null, { status: 200 }));
+      });
+      const stalledProfile = "profile_1111111111111111" as Parameters<
+        typeof updateConnectionProfile
+      >[0];
+      const latestProfile = "profile_2222222222222222" as Parameters<
+        typeof updateConnectionProfile
+      >[0];
+
+      const stalledUpdate = updateConnectionProfile(stalledProfile, storage, request, 1_000);
+      const latestUpdate = updateConnectionProfile(latestProfile, storage, request, 1_000);
+      const stalledExpectation = expect(stalledUpdate).rejects.toThrow(
+        "Connection profile update timed out",
+      );
+      await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await stalledExpectation;
+      await expect(latestUpdate).resolves.toBeUndefined();
+      expect(signals[0]?.aborted).toBe(true);
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(stored)).toMatchObject({ clientProfile: latestProfile });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("continues queued profile updates after an earlier request fails", async () => {
+    let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const firstProfile = "profile_1111111111111111" as Parameters<
+      typeof updateConnectionProfile
+    >[0];
+    const latestProfile = "profile_2222222222222222" as Parameters<
+      typeof updateConnectionProfile
+    >[0];
+
+    const firstUpdate = updateConnectionProfile(firstProfile, storage, request);
+    const latestUpdate = updateConnectionProfile(latestProfile, storage, request);
+
+    await expect(firstUpdate).rejects.toThrow("Profile update failed (503)");
+    await expect(latestUpdate).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(stored)).toMatchObject({ clientProfile: latestProfile });
+  });
+
+  it("does not overwrite replacement credentials when an update finishes", async () => {
+    let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+    let resolveRequest: ((response: Response) => void) | undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const nextProfile = "profile_1111111111111111" as Parameters<typeof updateConnectionProfile>[0];
+    const replacement = {
+      version: 1,
+      clientId: "Zbcdefghijklmnopqrstu",
+      capability: "z".repeat(43),
+      clientProfile: "profile_2222222222222222",
+      scopes,
+    };
+
+    const update = updateConnectionProfile(nextProfile, storage, request);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    stored = JSON.stringify(replacement);
+    resolveRequest!(new Response(null, { status: 200 }));
+
+    await update;
+    expect(JSON.parse(stored)).toEqual(replacement);
   });
 
   it("verifies that forgetting removed the credentials", () => {
@@ -157,7 +333,7 @@ describe("browser connection persistence", () => {
   ] as const)("maps connection probe status %s to %s", async (status, expected) => {
     const request = vi.fn().mockResolvedValue(new Response(null, { status }));
     await expect(
-      probeStoredConnection({ version: 1, clientId, capability, scopes }, request),
+      probeStoredConnection({ version: 1, clientId, capability, clientProfile, scopes }, request),
     ).resolves.toBe(expected);
     expect(request).toHaveBeenCalledWith(`/connection-status/${clientId}/${capability}`, {
       cache: "no-store",
@@ -173,7 +349,7 @@ describe("browser connection persistence", () => {
         return new Promise<Response>(() => undefined);
       });
       const result = probeStoredConnection(
-        { version: 1, clientId, capability, scopes },
+        { version: 1, clientId, capability, clientProfile, scopes },
         request as typeof fetch,
         1_000,
       );

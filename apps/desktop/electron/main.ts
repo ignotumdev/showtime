@@ -149,9 +149,16 @@ if (gotSingleInstanceLock) {
         );
         ipcMain.handle(
           desktopCreateInvitationChannel,
-          (_event, name: string | undefined, scopes: ReadonlyArray<ShowtimeConnectionScope>) =>
+          (
+            _event,
+            name: string | undefined,
+            clientProfile: string,
+            scopes: ReadonlyArray<ShowtimeConnectionScope>,
+          ) =>
             backendRuntime.runPromise(
-              Effect.flatMap(ConnectionManager, (_) => _.createInvitation(name, scopes)),
+              Effect.flatMap(ConnectionManager, (_) =>
+                _.createInvitation(name, clientProfile, scopes),
+              ),
             ),
         );
         ipcMain.handle(desktopPairingInfoChannel, (_event, invitationId: string) =>

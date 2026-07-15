@@ -8,6 +8,7 @@ import * as HomeDirectory from "../platform/HomeDirectory.js";
 import { ConnectionStore, layer } from "./ConnectionStore.js";
 
 const tempHomes = new Set<string>();
+const clientProfile = "profile_0000000000000000";
 
 afterEach(async () => {
   await Promise.all(Array.from(tempHomes, (home) => rm(home, { recursive: true, force: true })));
@@ -29,9 +30,9 @@ describe("ConnectionStore session admission", () => {
     const names = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        const first = yield* store.createInvitation();
-        const custom = yield* store.createInvitation("Monitor iPad");
-        const second = yield* store.createInvitation("   ");
+        const first = yield* store.createInvitation(undefined, clientProfile);
+        const custom = yield* store.createInvitation("Monitor iPad", clientProfile);
+        const second = yield* store.createInvitation("   ", clientProfile);
         return [first.name, custom.name, second.name];
       }).pipe(Effect.provide(testLayer(homeDirectory))),
     );
@@ -53,6 +54,9 @@ describe("ConnectionStore session admission", () => {
       name,
       capability: `000000000000000000000000000000000000000000${index}`,
       createdAt: "2026-07-12T20:10:10.266Z",
+      updatedAt: "2026-07-12T20:10:10.266Z",
+      clientProfile,
+      scopes: [],
     }));
     await mkdir(directory);
     await writeFile(filePath, JSON.stringify({ version: 1, clients, invitations: [] }));
@@ -60,7 +64,7 @@ describe("ConnectionStore session admission", () => {
     const name = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        return (yield* store.createInvitation()).name;
+        return (yield* store.createInvitation(undefined, clientProfile)).name;
       }).pipe(Effect.provide(testLayer(homeDirectory))),
     );
 
@@ -77,6 +81,8 @@ describe("ConnectionStore session admission", () => {
       name: "Monitor iPad",
       capability: "QdMNx4sOay_y4bjoiZkruXPGCI6k8Gm32ETBgCecz7Q",
       createdAt: "2026-07-12T20:10:10.266Z",
+      updatedAt: "2026-07-12T20:10:10.266Z",
+      clientProfile,
       scopes: [],
     };
     await mkdir(directory);
@@ -104,7 +110,7 @@ describe("ConnectionStore session admission", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        const invitation = yield* store.createInvitation("Manager iPad", [
+        const invitation = yield* store.createInvitation("Manager iPad", clientProfile, [
           "connections:read",
           "connections:create",
         ]);
@@ -141,6 +147,36 @@ describe("ConnectionStore session admission", () => {
     });
   });
 
+  it("tracks a paired client's current profile and update timestamp", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
+    tempHomes.add(homeDirectory);
+    const nextProfile = "profile_1111111111111111";
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        const invitation = yield* store.createInvitation("Monitor iPad", clientProfile, []);
+        const credentials = yield* store.consumeInvitation(invitation.token);
+        if (!credentials) return undefined;
+        const before = (yield* store.clients)[0]!;
+        yield* Effect.sleep("1 millis");
+        const updated = yield* store.updateClientProfile(
+          credentials.clientId,
+          credentials.capability,
+          nextProfile,
+        );
+        return { updated, before, after: (yield* store.clients)[0]! };
+      }).pipe(Effect.provide(testLayer(homeDirectory))),
+    );
+
+    expect(result?.updated).toBe(true);
+    expect(result?.before.clientProfile).toBe(clientProfile);
+    expect(result?.after.clientProfile).toBe(nextProfile);
+    expect(Date.parse(result!.after.updatedAt)).toBeGreaterThan(
+      Date.parse(result!.before.updatedAt),
+    );
+  });
+
   it("serializes registration with revocation so an admitted session cannot escape closing", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
     tempHomes.add(homeDirectory);
@@ -148,7 +184,7 @@ describe("ConnectionStore session admission", () => {
     const interrupted = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        const invitation = yield* store.createInvitation("Monitor iPad", []);
+        const invitation = yield* store.createInvitation("Monitor iPad", clientProfile, []);
         const credentials = yield* store.consumeInvitation(invitation.token);
         if (!credentials) return false;
 
@@ -184,7 +220,7 @@ describe("ConnectionStore session admission", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        const invitation = yield* store.createInvitation("Monitor iPad", []);
+        const invitation = yield* store.createInvitation("Monitor iPad", clientProfile, []);
         const credentials = yield* store.consumeInvitation(invitation.token);
         if (!credentials) return "missing credentials";
         yield* store.remove(credentials.clientId);
@@ -207,7 +243,7 @@ describe("ConnectionStore session admission", () => {
     const interrupted = await Effect.runPromise(
       Effect.gen(function* () {
         const store = yield* ConnectionStore;
-        const invitation = yield* store.createInvitation("Monitor iPad", []);
+        const invitation = yield* store.createInvitation("Monitor iPad", clientProfile, []);
         const credentials = yield* store.consumeInvitation(invitation.token);
         if (!credentials) return false;
 
