@@ -9,6 +9,9 @@ export const makeChatAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
   const renameChannel = RpcClient.mutation("chats.renameChannel");
   const deleteChannel = RpcClient.mutation("chats.deleteChannel");
   const send = RpcClient.mutation("chats.send");
+  const createPreset = RpcClient.mutation("chats.createPreset");
+  const updatePreset = RpcClient.mutation("chats.updatePreset");
+  const deletePreset = RpcClient.mutation("chats.deletePreset");
   const markRead = RpcClient.mutation("chats.markRead");
   const setNotifications = RpcClient.mutation("chats.setNotifications");
   const byShow = Atom.family((showId: ShowId) =>
@@ -18,6 +21,9 @@ export const makeChatAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
       renameChannel,
       deleteChannel,
       send,
+      createPreset,
+      updatePreset,
+      deletePreset,
       markRead,
       setNotifications,
     })),

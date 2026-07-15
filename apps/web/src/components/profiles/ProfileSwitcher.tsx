@@ -46,7 +46,7 @@ const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 const isPendingProfile = (profile: Profile): boolean =>
   "pending" in profile && profile.pending === true;
 
-const currentState = (
+export const currentProfilesState = (
   result: AsyncResult.AsyncResult<ProfilesState, unknown>,
 ): ProfilesState | undefined =>
   AsyncResult.isSuccess(result)
@@ -63,8 +63,38 @@ export function ProfileSwitcher({
   readonly variant?: "full" | "avatar";
 }) {
   const result = useAtomValue(profileAtoms.state);
-  const state = currentState(result);
+  const state = currentProfilesState(result);
   const { selected, select } = useSelectedProfile(state);
+
+  return (
+    <ProfileControl
+      className={className}
+      variant={variant}
+      state={state}
+      selected={selected}
+      onSelect={select}
+      loadResult={result}
+    />
+  );
+}
+
+export function ProfileControl({
+  className,
+  state,
+  selected,
+  onSelect,
+  loadResult,
+  fullWidth = false,
+  variant = "full",
+}: {
+  readonly className?: string;
+  readonly state: ProfilesState | undefined;
+  readonly selected: Profile | undefined;
+  readonly onSelect: (profile: Profile) => void;
+  readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
+  readonly fullWidth?: boolean;
+  readonly variant?: "full" | "avatar";
+}) {
   const [open, setOpen] = React.useState(false);
 
   if (variant === "avatar") {
@@ -74,10 +104,10 @@ export function ProfileSwitcher({
           className={className}
           selected={selected}
           state={state}
-          onSelect={select}
+          onSelect={onSelect}
           onEdit={() => setOpen(true)}
         />
-        <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={result} />
+        <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={loadResult} />
       </>
     );
   }
@@ -90,10 +120,13 @@ export function ProfileSwitcher({
           disabled={!state}
           onValueChange={(id) => {
             const profile = state?.profiles.find((item) => item.id === id);
-            if (profile) select(profile);
+            if (profile) onSelect(profile);
           }}
         >
-          <SelectTrigger aria-label="Selected profile" className="w-44">
+          <SelectTrigger
+            aria-label="Selected profile"
+            className={fullWidth ? "min-w-0 flex-1" : "w-44"}
+          >
             <SelectValue>
               {selected ? <ProfileLabel profile={selected} /> : "Loading profiles…"}
             </SelectValue>
@@ -116,7 +149,7 @@ export function ProfileSwitcher({
           <PencilIcon />
         </Button>
       </ButtonGroup>
-      <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={result} />
+      <ProfileDialog open={open} onOpenChange={setOpen} state={state} loadResult={loadResult} />
     </>
   );
 }
@@ -191,7 +224,7 @@ function ProfileAvatarPopover({
   );
 }
 
-function ProfileLabel({ profile }: { readonly profile: Profile }) {
+export function ProfileLabel({ profile }: { readonly profile: Profile }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <ProfileAvatar name={profile.name} color={profile.color} className="size-5 text-[10px]" />

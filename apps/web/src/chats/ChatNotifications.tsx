@@ -151,6 +151,7 @@ function publishMessageNotification(
       kind: "chat",
       title: senderName,
       description: message.body,
+      ...(message.parts ? { descriptionParts: message.parts } : {}),
       timestamp: DateTime.toEpochMillis(message.sentAt),
       chat: {
         showId: show.id,

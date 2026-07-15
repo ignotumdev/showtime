@@ -7,6 +7,7 @@ const connection = {
   clientId: "Abcdefghijklmnopqrstu",
   capability: "a".repeat(43),
   scopes: ["connections:read" as const],
+  clientProfile: "profile_0000000000000000",
 };
 
 afterEach(() => {

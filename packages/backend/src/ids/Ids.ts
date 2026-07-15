@@ -17,6 +17,8 @@ import {
   chatChannelIdPrefix,
   ChatMessageId,
   chatMessageIdPrefix,
+  ChatPresetId,
+  chatPresetIdPrefix,
 } from "@showtime/contracts";
 
 export class Ids extends Context.Service<
@@ -29,6 +31,7 @@ export class Ids extends Context.Service<
     readonly makeProfileId: Effect.Effect<ProfileId>;
     readonly makeChatChannelId: Effect.Effect<ChatChannelId>;
     readonly makeChatMessageId: Effect.Effect<ChatMessageId>;
+    readonly makeChatPresetId: Effect.Effect<ChatPresetId>;
   }
 >()("@showtime/backend/ids/Ids") {}
 
@@ -63,6 +66,10 @@ export const layer = Layer.succeed(
     ),
     makeChatMessageId: Effect.sync(() => `${chatMessageIdPrefix}${makeId()}`).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(ChatMessageId)),
+      Effect.orDie,
+    ),
+    makeChatPresetId: Effect.sync(() => `${chatPresetIdPrefix}${makeId()}`).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(ChatPresetId)),
       Effect.orDie,
     ),
   }),

@@ -21,6 +21,7 @@ interface ChatDrawerProps {
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
   readonly trigger?: (unreadCount: number) => React.ReactElement;
+  readonly onSelectedChannelChange?: (channelId: ChatChannelId) => void;
 }
 
 export function ChatDrawer(props: ChatDrawerProps) {
@@ -52,11 +53,19 @@ function ChatDrawerView({
   open: controlledOpen,
   onOpenChange,
   trigger,
+  onSelectedChannelChange,
 }: ChatDrawerProps & { readonly unreadCount: number }) {
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
+  const selectChannel = React.useCallback(
+    (channelId: ChatChannelId) => {
+      setSelectedChannelId(channelId);
+      onSelectedChannelChange?.(channelId);
+    },
+    [onSelectedChannelChange],
+  );
   const [isMobile, setIsMobile] = React.useState(() =>
     typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches,
   );
@@ -73,12 +82,12 @@ function ChatDrawerView({
     const openRequestedChat = () => {
       const request = consumeChatOpenRequest(showId);
       if (!request) return;
-      setSelectedChannelId(request.channelId);
+      selectChannel(request.channelId);
       setOpen(true);
     };
     openRequestedChat();
     return subscribeChatOpenRequests(openRequestedChat);
-  }, [setOpen, showId]);
+  }, [selectChannel, setOpen, showId]);
 
   return (
     <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>
@@ -100,7 +109,7 @@ function ChatDrawerView({
             active={open}
             compact
             requestedChannelId={selectedChannelId}
-            onSelectedChannelChange={setSelectedChannelId}
+            onSelectedChannelChange={selectChannel}
           />
         </div>
       </DrawerContent>

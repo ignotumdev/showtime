@@ -8,7 +8,7 @@ import {
   type ChatChannel,
   type ChatChannelId,
   type ChatChannelName,
-  type ChatMessageBody,
+  type ChatPreset,
   type Profile,
   type ProfileId,
   type ShowId,
@@ -19,6 +19,7 @@ import {
   BellOffIcon,
   HashIcon,
   MoreHorizontalIcon,
+  LibraryIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
@@ -26,6 +27,9 @@ import {
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { setChatPresence } from "@/chats/ChatPresence";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
+import { ChatMessageBody as RichChatMessageBody } from "@/components/chats/ChatMessageBody";
+import { ChatPresetDialog } from "@/components/chats/ChatPresetDialog";
+import { useSendChatMessage } from "@/components/chats/useSendChatMessage";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { formatClientTime } from "@/lib/dates";
 import { Badge } from "@/components/ui/badge";
@@ -176,6 +180,7 @@ function ProfileChatWorkspace({
         profile={profile}
         profiles={profiles}
         channel={selectedChannel}
+        presets={snapshot.presets}
         active={active}
       />
     </section>
@@ -485,12 +490,14 @@ function Conversation({
   profile,
   profiles,
   channel,
+  presets,
   active,
 }: {
   readonly showId: ShowId;
   readonly profile: Profile;
   readonly profiles: ReadonlyArray<Profile>;
   readonly channel: ChatChannel;
+  readonly presets: ReadonlyArray<ChatPreset>;
   readonly active: boolean;
 }) {
   return (
@@ -524,7 +531,7 @@ function Conversation({
                       <MessageHeader>{sender?.name ?? "Deleted profile"}</MessageHeader>
                       <Bubble variant={mine ? "default" : "secondary"}>
                         <BubbleContent className="whitespace-pre-wrap">
-                          {message.body}
+                          <RichChatMessageBody body={message.body} parts={message.parts} />
                         </BubbleContent>
                       </Bubble>
                       <MessageFooter>
@@ -538,7 +545,7 @@ function Conversation({
           </MessageScroller.Content>
         </ScrollArea>
         <ReadTracker showId={showId} profileId={profile.id} channel={channel} active={active} />
-        <Composer showId={showId} profileId={profile.id} channelId={channel.id} />
+        <Composer showId={showId} profileId={profile.id} channelId={channel.id} presets={presets} />
       </MessageScroller.Root>
     </MessageScroller.Provider>
   );
@@ -622,16 +629,17 @@ function Composer({
   showId,
   profileId,
   channelId,
+  presets,
 }: {
   readonly showId: ShowId;
   readonly profileId: ProfileId;
   readonly channelId: ChatChannelId;
+  readonly presets: ReadonlyArray<ChatPreset>;
 }) {
-  const send = useAtomSet(chatAtoms(showId, profileId).send, { mode: "promiseExit" });
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = React.useState("");
-  const [sending, setSending] = React.useState(false);
-  const [error, setError] = React.useState<string>();
+  const [presetsOpen, setPresetsOpen] = React.useState(false);
+  const { sendMessage, sending, error } = useSendChatMessage(showId, profileId, channelId);
 
   React.useLayoutEffect(() => {
     if (textareaRef.current) resizeComposer(textareaRef.current);
@@ -639,27 +647,23 @@ function Composer({
 
   const submit = async () => {
     const submittedDraft = body;
-    const trimmed = submittedDraft.trim();
-    if (!trimmed || sending) return;
-    setSending(true);
-    setError(undefined);
-    const exit = await send({
-      payload: {
-        showId,
-        channelId,
-        senderProfileId: profileId,
-        body: trimmed as ChatMessageBody,
-      },
-      reactivityKeys: chatsSyncKey(showId),
-    });
-    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else setBody((current) => (current === submittedDraft ? "" : current));
-    setSending(false);
+    const nextError = await sendMessage(submittedDraft);
+    if (!nextError) setBody((current) => (current === submittedDraft ? "" : current));
   };
 
   return (
     <div className="shrink-0 border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <InputGroup>
+        <InputGroupAddon align="inline-start">
+          <InputGroupButton
+            size="icon-sm"
+            aria-label="Open message presets"
+            title="Message presets"
+            onClick={() => setPresetsOpen(true)}
+          >
+            <LibraryIcon />
+          </InputGroupButton>
+        </InputGroupAddon>
         <InputGroupTextarea
           ref={textareaRef}
           value={body}
@@ -697,6 +701,14 @@ function Composer({
           {error}
         </p>
       )}
+      <ChatPresetDialog
+        open={presetsOpen}
+        onOpenChange={setPresetsOpen}
+        showId={showId}
+        profileId={profileId}
+        presets={presets}
+        onSend={(presetBody, parts) => sendMessage(presetBody, parts)}
+      />
     </div>
   );
 }
