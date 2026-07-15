@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Toast } from "@base-ui/react/toast";
 import { XIcon } from "lucide-react";
 import { openChat } from "@/chats/ChatNavigation";
+import { ChatMessageBody } from "@/components/chats/ChatMessageBody";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { profileColorClassNames } from "@/components/profiles/profile-color";
 import { formatClientTime } from "@/lib/dates";
@@ -112,9 +113,24 @@ function NotificationViewport() {
                     )}
                   </Toast.Title>
                   {toast.description && (
-                    <Toast.Description className="mt-1 line-clamp-3 text-sm text-muted-foreground">
-                      {toast.description}
-                    </Toast.Description>
+                    <>
+                      <Toast.Description
+                        className={cn(
+                          "mt-1 line-clamp-3 text-sm text-muted-foreground",
+                          toast.data?.descriptionParts?.length && "sr-only",
+                        )}
+                      >
+                        {toast.description}
+                      </Toast.Description>
+                      {toast.data?.descriptionParts?.length ? (
+                        <div className="mt-1 line-clamp-3 text-sm text-muted-foreground">
+                          <ChatMessageBody
+                            body={toast.data?.description ?? ""}
+                            parts={toast.data.descriptionParts}
+                          />
+                        </div>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </Toast.Content>

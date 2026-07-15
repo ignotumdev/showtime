@@ -1,10 +1,11 @@
 import { Toast } from "@base-ui/react/toast";
-import type { ChatChannelId, Color, ShowId } from "@showtime/contracts";
+import type { ChatChannelId, ChatMessagePart, Color, ShowId } from "@showtime/contracts";
 
 export interface AppNotification {
   readonly id: string;
   readonly title: string;
   readonly description?: string;
+  readonly descriptionParts?: ReadonlyArray<ChatMessagePart>;
   readonly timestamp?: number;
   readonly priority?: "low" | "high";
   readonly timeout?: number;
