@@ -152,6 +152,7 @@ describe("browser connection persistence", () => {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ clientProfile: nextProfile }),
+      signal: expect.any(AbortSignal),
     });
     expect(JSON.parse(stored)).toMatchObject({ clientProfile: nextProfile, version: 1 });
   });
@@ -189,11 +190,56 @@ describe("browser connection persistence", () => {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ clientProfile: latestProfile }),
+      signal: expect.any(AbortSignal),
     });
 
     responses[1]!(new Response(null, { status: 200 }));
     await latestUpdate;
     expect(JSON.parse(stored)).toMatchObject({ clientProfile: latestProfile });
+  });
+
+  it("releases queued profile updates when an earlier request stalls", async () => {
+    vi.useFakeTimers();
+    try {
+      let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
+      const storage = {
+        getItem: () => stored,
+        setItem: (_key: string, value: string) => {
+          stored = value;
+        },
+      };
+      const signals: AbortSignal[] = [];
+      let requestCount = 0;
+      const request = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        requestCount += 1;
+        signals.push(init?.signal as AbortSignal);
+        return requestCount === 1
+          ? new Promise<Response>(() => undefined)
+          : Promise.resolve(new Response(null, { status: 200 }));
+      });
+      const stalledProfile = "profile_1111111111111111" as Parameters<
+        typeof updateConnectionProfile
+      >[0];
+      const latestProfile = "profile_2222222222222222" as Parameters<
+        typeof updateConnectionProfile
+      >[0];
+
+      const stalledUpdate = updateConnectionProfile(stalledProfile, storage, request, 1_000);
+      const latestUpdate = updateConnectionProfile(latestProfile, storage, request, 1_000);
+      const stalledExpectation = expect(stalledUpdate).rejects.toThrow(
+        "Connection profile update timed out",
+      );
+      await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await stalledExpectation;
+      await expect(latestUpdate).resolves.toBeUndefined();
+      expect(signals[0]?.aborted).toBe(true);
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(stored)).toMatchObject({ clientProfile: latestProfile });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("continues queued profile updates after an earlier request fails", async () => {

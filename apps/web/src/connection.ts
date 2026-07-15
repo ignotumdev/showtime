@@ -18,6 +18,31 @@ const clientIdPattern = /^[A-Za-z0-9_-]{21}$/;
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
 const connectionScopeSet = new Set<string>(showtimeConnectionScopes);
+const connectionRequestTimeoutMs = 5_000;
+
+const requestWithTimeout = async (
+  request: typeof fetch,
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> => {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request(input, { ...init, signal: controller.signal }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new DOMException(timeoutMessage, "TimeoutError"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+};
 
 const validScopes = (value: unknown): value is ReadonlyArray<ShowtimeConnectionScope> =>
   Array.isArray(value) &&
@@ -220,17 +245,21 @@ export const updateConnectionProfile = (
   clientProfile: ProfileIdType,
   storage: Pick<Storage, "getItem" | "setItem"> | undefined = browserLocalStorage(),
   request: typeof fetch = fetch,
+  timeoutMs = connectionRequestTimeoutMs,
 ): Promise<void> => {
   const update = connectionProfileUpdateQueue.then(async () => {
     const connection = readStoredConnection(storage);
     if (!connection || connection.clientProfile === clientProfile) return;
-    const response = await request(
+    const response = await requestWithTimeout(
+      request,
       `/connection-profile/${encodeURIComponent(connection.clientId)}/${encodeURIComponent(connection.capability)}`,
       {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ clientProfile }),
       },
+      timeoutMs,
+      "Connection profile update timed out",
     );
     if (!response.ok) throw new Error(`Profile update failed (${response.status})`);
 
@@ -293,30 +322,23 @@ export const forgetBrowserConnection = (
 export const probeStoredConnection = async (
   connection: ShowtimeStoredConnection,
   request: typeof fetch = fetch,
-  timeoutMs = 5_000,
+  timeoutMs = connectionRequestTimeoutMs,
 ): Promise<ConnectionProbeResult> => {
-  const controller = new AbortController();
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await Promise.race([
-      request(`/connection-status/${connection.clientId}/${connection.capability}`, {
+    const response = await requestWithTimeout(
+      request,
+      `/connection-status/${connection.clientId}/${connection.capability}`,
+      {
         cache: "no-store",
-        signal: controller.signal,
-      }),
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => {
-          controller.abort();
-          reject(new DOMException("Connection probe timed out", "TimeoutError"));
-        }, timeoutMs);
-      }),
-    ]);
+      },
+      timeoutMs,
+      "Connection probe timed out",
+    );
     if (response.status === 200) return "available";
     if (response.status === 503) return "disabled";
     if (response.status === 401) return "revoked";
     return "unreachable";
   } catch {
     return "unreachable";
-  } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
   }
 };
