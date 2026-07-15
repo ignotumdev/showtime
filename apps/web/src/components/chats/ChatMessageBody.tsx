@@ -11,14 +11,17 @@ export function ChatMessageBody({
   readonly parts?: ReadonlyArray<ChatMessagePart>;
 }) {
   if (!parts?.length) return body;
-  return parts.map((part, index) => {
-    if (part.type === "text") return <span key={index}>{part.text}</span>;
+  let characterOffset = 0;
+  return parts.map((part) => {
+    const key = `${part.type}:${characterOffset}:${part.text}`;
+    characterOffset += part.text.length;
+    if (part.type === "text") return <span key={key}>{part.text}</span>;
     const colors = microphoneColorClassNames[part.color];
     const label = part.type === "microphone" ? "Microphone" : "Mix";
     const Icon = part.type === "microphone" ? Mic2Icon : SpeakerIcon;
     return (
       <span
-        key={index}
+        key={key}
         className="mx-0.5 inline-flex max-w-full translate-y-px items-center gap-1 rounded-md border bg-background/80 py-0.5 pr-1.5 pl-0.5 align-baseline text-xs font-medium text-foreground"
         aria-label={`${label} ${part.number}${part.name ? `, ${part.name}` : ""}`}
         title={part.name || `${label} ${part.number}`}

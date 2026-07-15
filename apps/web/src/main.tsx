@@ -15,6 +15,18 @@ import { showsAtom } from "./client";
 import { useBrowserConnectionIdentity } from "./browser-connection-state";
 import { NotificationProvider } from "./notifications/NotificationProvider";
 import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
+import { configureChatNavigation } from "./chats/ChatNavigation";
+
+configureChatNavigation({
+  getActiveShowId: () => {
+    for (const match of router.state.matches) {
+      const showId = (match.params as { readonly showId?: unknown }).showId;
+      if (typeof showId === "string") return showId;
+    }
+    return undefined;
+  },
+  navigateToShow: (showId) => router.navigate({ to: "/shows/$showId", params: { showId } }),
+});
 
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");

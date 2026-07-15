@@ -14,6 +14,9 @@ export function LiveSongNavigation({
   readonly onPrevious: () => void;
   readonly onNext: () => void;
 }) {
+  const handlePrevious = React.useEffectEvent(onPrevious);
+  const handleNext = React.useEffectEvent(onNext);
+
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (
@@ -38,15 +41,15 @@ export function LiveSongNavigation({
       const direction = liveSongNavigationDirection(event.key);
       if (direction === "previous" && previous) {
         event.preventDefault();
-        onPrevious();
+        handlePrevious();
       } else if (direction === "next" && next) {
         event.preventDefault();
-        onNext();
+        handleNext();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [next, onNext, onPrevious, previous]);
+  }, [next, previous]);
 
   return (
     <nav

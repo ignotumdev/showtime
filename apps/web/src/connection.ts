@@ -289,8 +289,6 @@ export const storedRpcWebSocketUrl = (
   return `${protocol}//${location.host}/rpc/${connection.clientId}/${connection.capability}`;
 };
 
-export const hasBrowserConnection = () => readStoredConnection() !== undefined;
-
 export const forgetBrowserConnection = (
   storage: Pick<Storage, "getItem" | "removeItem"> | undefined = browserLocalStorage(),
 ): ForgetConnectionResult => {

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Exit, Option } from "effect";
+import { Exit } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   profilesSyncKey,
@@ -40,20 +40,12 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { ColorPickerPopover } from "@/components/ColorPickerPopover";
+import { currentProfilesState } from "@/profiles/currentProfilesState";
 
 const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 
 const isPendingProfile = (profile: Profile): boolean =>
   "pending" in profile && profile.pending === true;
-
-export const currentProfilesState = (
-  result: AsyncResult.AsyncResult<ProfilesState, unknown>,
-): ProfilesState | undefined =>
-  AsyncResult.isSuccess(result)
-    ? result.value
-    : AsyncResult.isFailure(result)
-      ? Option.getOrUndefined(result.previousSuccess)?.value
-      : undefined;
 
 export function ProfileSwitcher({
   className,
@@ -224,7 +216,7 @@ function ProfileAvatarPopover({
   );
 }
 
-export function ProfileLabel({ profile }: { readonly profile: Profile }) {
+function ProfileLabel({ profile }: { readonly profile: Profile }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <ProfileAvatar name={profile.name} color={profile.color} className="size-5 text-[10px]" />
@@ -313,7 +305,7 @@ function ProfileRow({
   const [color, setColor] = React.useState<Color>(profile.color);
   const [busy, setBusy] = React.useState(false);
   const pending = isPendingProfile(profile);
-  const saveQueue = React.useRef(Promise.resolve());
+  const saveQueue = React.useRef<Promise<void>>(undefined);
   const suppressNextBlurSave = React.useRef(false);
   React.useEffect(() => {
     setName(profile.name);
@@ -323,7 +315,7 @@ function ProfileRow({
   const run = (operation: () => Promise<Exit.Exit<unknown, unknown>>) => {
     setBusy(true);
     onError(undefined);
-    saveQueue.current = saveQueue.current
+    saveQueue.current = (saveQueue.current ?? Promise.resolve())
       .then(async () => {
         const result = await operation();
         if (Exit.isFailure(result)) onError(rpcErrorMessageFromCause(result.cause));
@@ -339,7 +331,7 @@ function ProfileRow({
     }
     if (trimmedName === profile.name && nextColor === profile.color) return;
     onError(undefined);
-    saveQueue.current = saveQueue.current.then(async () => {
+    saveQueue.current = (saveQueue.current ?? Promise.resolve()).then(async () => {
       const result = await edit({
         payload: {
           id: profile.id,

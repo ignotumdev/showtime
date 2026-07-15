@@ -22,6 +22,8 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { songAtoms, songsRpcReactivityKey, type SongListItem } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 
+const noSongs: ReadonlyArray<SongListItem> = [];
+
 export const Route = createFileRoute("/shows/$showId/setlist/")({
   component: RouteComponent,
 });
@@ -31,7 +33,7 @@ function RouteComponent() {
   const typedShowId = showId as ShowId;
   const result = useAtomValue(songAtoms(typedShowId).songs);
   const reorder = useAtomSet(songAtoms(typedShowId).reorder, { mode: "promiseExit" });
-  const songs = AsyncResult.isSuccess(result) ? result.value : [];
+  const songs = AsyncResult.isSuccess(result) ? result.value : noSongs;
   const [previewSongs, setPreviewSongs] = React.useState<ReadonlyArray<SongListItem>>(songs);
   const [draggedId, setDraggedId] = React.useState<SongId>();
   const didDropRef = React.useRef(false);

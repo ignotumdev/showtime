@@ -28,7 +28,9 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
   const [deleteError, setDeleteError] = React.useState<string | undefined>();
   const dialogRef = React.useRef(dialog);
 
-  dialogRef.current = dialog;
+  React.useEffect(() => {
+    dialogRef.current = dialog;
+  }, [dialog]);
 
   const close = () => setDialog({ type: "closed" });
 

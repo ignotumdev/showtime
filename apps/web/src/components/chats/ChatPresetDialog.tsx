@@ -125,11 +125,11 @@ export function ChatPresetDialog({
 }) {
   const [mode, setMode] = React.useState<Mode>({ type: "list" });
 
-  React.useEffect(() => {
-    if (!open) setMode({ type: "list" });
-  }, [open]);
-
   const back = () => setMode({ type: "list" });
+  const changeOpen = (nextOpen: boolean) => {
+    if (!nextOpen) back();
+    onOpenChange(nextOpen);
+  };
   const title =
     mode.type === "list"
       ? "Message presets"
@@ -142,7 +142,7 @@ export function ChatPresetDialog({
             : "New preset";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -239,7 +239,7 @@ function PresetList({
             </div>
           ) : (
             presets.map((preset) => (
-              <Item key={preset.id} variant="outline">
+              <Item key={preset.id} variant="outline" render={<div />}>
                 <button
                   type="button"
                   className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -316,11 +316,13 @@ function resolvePreset(
   mixes: ReadonlyArray<Mix>,
 ) {
   const parts = new Map<string, ChatMessagePart>();
+  const microphonesById = new Map(microphones.map((microphone) => [microphone.id, microphone]));
+  const mixesById = new Map(mixes.map((mix) => [mix.id, mix]));
   for (const field of preset.fields) {
     const value = values[field.name]?.trim() ?? "";
     if (!value) return undefined;
     if (field.type === "microphone") {
-      const mic = microphones.find((item) => item.id === value);
+      const mic = microphonesById.get(value as Microphone["id"]);
       if (!mic) return undefined;
       parts.set(field.name, {
         type: "microphone",
@@ -331,7 +333,7 @@ function resolvePreset(
         text: `Mic ${mic.number}${mic.name ? ` (${mic.name})` : ""}`,
       });
     } else if (field.type === "mix") {
-      const mix = mixes.find((item) => item.id === value);
+      const mix = mixesById.get(value as Mix["id"]);
       if (!mix) return undefined;
       parts.set(field.name, {
         type: "mix",

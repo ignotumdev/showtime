@@ -21,15 +21,7 @@ export interface AppNotification {
 }
 
 export const notificationManager = Toast.createToastManager<AppNotification>();
-const listeners = new Set<(notification: AppNotification) => void>();
 const blinkListeners = new Set<(color: Color | undefined) => void>();
-
-export const subscribeNotifications = (listener: (notification: AppNotification) => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
 
 export const subscribeNotificationBlinks = (listener: (color: Color | undefined) => void) => {
   blinkListeners.add(listener);
@@ -52,5 +44,4 @@ export const publishNotification = (notification: AppNotification) => {
     type: notification.kind,
     data: notification,
   });
-  for (const listener of listeners) listener(notification);
 };

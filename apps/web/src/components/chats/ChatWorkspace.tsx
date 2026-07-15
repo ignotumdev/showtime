@@ -129,32 +129,18 @@ function ProfileChatWorkspace({
 }) {
   const atoms = chatAtoms(showId, profile.id);
   const result = useAtomValue(atoms.state);
-  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId | undefined>(
-    requestedChannelId,
-  );
+  const [internalSelectedChannelId, setInternalSelectedChannelId] = React.useState<ChatChannelId>();
   const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const selectedChannelId = requestedChannelId ?? internalSelectedChannelId;
   const selectedChannel =
     snapshot?.channels.find((channel) => channel.id === selectedChannelId) ?? snapshot?.channels[0];
   const selectChannel = React.useCallback(
     (channelId: ChatChannelId) => {
-      setSelectedChannelId(channelId);
+      setInternalSelectedChannelId(channelId);
       onSelectedChannelChange?.(channelId);
     },
     [onSelectedChannelChange],
   );
-
-  React.useEffect(() => {
-    if (selectedChannel && selectedChannel.id !== selectedChannelId)
-      selectChannel(selectedChannel.id);
-  }, [selectChannel, selectedChannel, selectedChannelId]);
-
-  React.useEffect(() => {
-    if (
-      requestedChannelId &&
-      snapshot?.channels.some((channel) => channel.id === requestedChannelId)
-    )
-      selectChannel(requestedChannelId);
-  }, [requestedChannelId, selectChannel, snapshot?.channels]);
 
   if (!snapshot || !selectedChannel) {
     return (

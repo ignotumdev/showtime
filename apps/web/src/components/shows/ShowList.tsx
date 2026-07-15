@@ -78,9 +78,7 @@ function ShowItems({ shows }: { readonly shows: ReadonlyArray<ShowListItem> }) {
     <ScrollArea className="h-full w-full sm:px-4">
       <ItemGroup>
         {shows.map((show) => (
-          <div key={show.id} role="listitem">
-            <ShowItem show={show} now={now} />
-          </div>
+          <ShowItem key={show.id} show={show} now={now} />
         ))}
       </ItemGroup>
     </ScrollArea>

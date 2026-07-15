@@ -56,10 +56,69 @@ import {
 import { cn } from "@/lib/utils";
 import { profileAtoms } from "@/client";
 import { useProfileSelection } from "@/profiles";
-import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
+import { ProfileControl } from "@/components/profiles/ProfileSwitcher";
+import { currentProfilesState } from "@/profiles/currentProfilesState";
 import { showColorClassNames } from "@/components/shows/show-color";
 
 const emptyState: ShowtimeConnectionsState = { enabled: false, clients: [] };
+
+type PairClientState = {
+  readonly candidates: ReadonlyArray<ShowtimeConnectionCandidate>;
+  readonly selectedUrl: string;
+  readonly discovery: ShowtimeLocalDiscoveryState;
+  readonly qrCode?: string;
+  readonly copied: boolean;
+  readonly error?: string;
+};
+
+const initialPairClientState: PairClientState = {
+  candidates: [],
+  selectedUrl: "",
+  discovery: { kind: "disabled" },
+  copied: false,
+};
+
+type PairClientAction =
+  | { readonly type: "reset" }
+  | {
+      readonly type: "loaded";
+      readonly discovery: ShowtimeLocalDiscoveryState;
+      readonly candidates: ReadonlyArray<ShowtimeConnectionCandidate>;
+      readonly error?: string;
+    }
+  | { readonly type: "select"; readonly url: string }
+  | { readonly type: "qr-code"; readonly value?: string }
+  | { readonly type: "copied" }
+  | { readonly type: "error"; readonly message: string };
+
+const reducePairClientState = (
+  state: PairClientState,
+  action: PairClientAction,
+): PairClientState => {
+  switch (action.type) {
+    case "reset":
+      return { ...initialPairClientState, discovery: { kind: "probing" } };
+    case "loaded": {
+      const selectedUrl = selectPairingCandidateUrl(action.candidates, state.selectedUrl);
+      return {
+        ...state,
+        discovery: action.discovery,
+        candidates: action.candidates,
+        selectedUrl,
+        ...(selectedUrl !== state.selectedUrl ? { qrCode: undefined, copied: false } : {}),
+        error: action.error,
+      };
+    }
+    case "select":
+      return { ...state, selectedUrl: action.url, qrCode: undefined, copied: false };
+    case "qr-code":
+      return { ...state, qrCode: action.value };
+    case "copied":
+      return { ...state, copied: true };
+    case "error":
+      return { ...state, error: action.message };
+  }
+};
 
 const timeUntil = (expiresAt: string, now: number) => {
   const remaining = Math.max(0, Date.parse(expiresAt) - now);
@@ -175,7 +234,7 @@ export function ConnectionDialog({
             </DialogDescription>
           </DialogHeader>
           {manager.isOwner && (
-            <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
+            <Item variant="outline" render={<div />}>
               <ItemContent>
                 <ItemTitle>Allow connections</ItemTitle>
                 <ItemDescription>
@@ -185,6 +244,7 @@ export function ConnectionDialog({
               <ItemActions>
                 <Switch
                   id="showtime-connections-enabled"
+                  aria-label="Allow connections"
                   checked={state.enabled}
                   disabled={loading}
                   onCheckedChange={updateEnabled}
@@ -391,7 +451,7 @@ function CreateClientDialog({
           loadResult={profilesResult}
           fullWidth
         />
-        <Item variant="outline" render={<label htmlFor="showtime-client-can-manage" />}>
+        <Item variant="outline" render={<div />}>
           <ItemContent>
             <ItemTitle>Allow this client to manage connections</ItemTitle>
             <ItemDescription>Let it view, add, connect, and remove other clients.</ItemDescription>
@@ -399,6 +459,7 @@ function CreateClientDialog({
           <ItemActions>
             <Switch
               id="showtime-client-can-manage"
+              aria-label="Allow this client to manage connections"
               checked={canManageConnections}
               disabled={creating}
               onCheckedChange={setCanManageConnections}
@@ -427,30 +488,18 @@ function PairClientDialog({
   readonly client: ShowtimePendingClient | undefined;
   readonly onOpenChange: (open: boolean) => void;
 }) {
-  const [candidates, setCandidates] = React.useState<ReadonlyArray<ShowtimeConnectionCandidate>>(
-    [],
-  );
-  const [selectedUrl, setSelectedUrl] = React.useState("");
-  const [discovery, setDiscovery] = React.useState<ShowtimeLocalDiscoveryState>({
-    kind: "disabled",
-  });
-  const [qrCode, setQrCode] = React.useState<string>();
-  const [copied, setCopied] = React.useState(false);
-  const [error, setError] = React.useState<string>();
+  const [{ candidates, selectedUrl, discovery, qrCode, copied, error }, dispatch] =
+    React.useReducer(reducePairClientState, initialPairClientState);
   React.useEffect(() => {
     if (!client) return;
     let active = true;
-    setCandidates([]);
-    setSelectedUrl("");
-    setDiscovery({ kind: "probing" });
-    setQrCode(undefined);
-    setCopied(false);
-    setError(undefined);
+    dispatch({ type: "reset" });
     let timer: number | undefined;
     let consecutiveFailures = 0;
     let expiresAt = Date.parse(client.expiresAt);
     let hasRequestedPairingInfo = false;
-    const setExpiredError = () => setError("This connection link has expired.");
+    const setExpiredError = () =>
+      dispatch({ type: "error", message: "This connection link has expired." });
     const hasExpired = () => pairingInfoRetryWait(expiresAt, 0) === undefined;
     const scheduleLoad = (delay: number) => {
       const wait = pairingInfoRetryWait(expiresAt, delay);
@@ -480,16 +529,14 @@ function PairClientDialog({
             return;
           }
           consecutiveFailures = 0;
-          setDiscovery(info.discovery);
-          setCandidates(info.candidates);
-          setSelectedUrl((currentUrl) => selectPairingCandidateUrl(info.candidates, currentUrl));
-          if (info.discovery.kind === "probing") {
-            setError(undefined);
-          } else if (info.candidates.length === 0) {
-            setError("No local network was found on this computer.");
-          } else {
-            setError(undefined);
-          }
+          dispatch({
+            type: "loaded",
+            discovery: info.discovery,
+            candidates: info.candidates,
+            ...(info.discovery.kind !== "probing" && info.candidates.length === 0
+              ? { error: "No local network was found on this computer." }
+              : {}),
+          });
           if (shouldPollPairingInfo(info.discovery)) scheduleLoad(pairingInfoPollDelay);
         },
         () => {
@@ -499,7 +546,10 @@ function PairClientDialog({
             return;
           }
           consecutiveFailures += 1;
-          setError("Showtime could not refresh the connection link. Retrying…");
+          dispatch({
+            type: "error",
+            message: "Showtime could not refresh the connection link. Retrying…",
+          });
           scheduleLoad(pairingInfoRetryDelay(consecutiveFailures));
         },
       );
@@ -511,12 +561,11 @@ function PairClientDialog({
     };
   }, [client, manager]);
   React.useEffect(() => {
-    setQrCode(undefined);
-    setCopied(false);
+    dispatch({ type: "qr-code" });
     if (!selectedUrl) return;
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(
-      (value) => active && setQrCode(value),
+      (value) => active && dispatch({ type: "qr-code", value }),
     );
     return () => {
       active = false;
@@ -533,7 +582,10 @@ function PairClientDialog({
           </DialogDescription>
         </DialogHeader>
         {candidates.length > 0 && (
-          <Select value={selectedUrl} onValueChange={(value) => value && setSelectedUrl(value)}>
+          <Select
+            value={selectedUrl}
+            onValueChange={(value) => value && dispatch({ type: "select", url: value })}
+          >
             <SelectTrigger>
               <SelectValue>{selected?.label ?? "Choose network"}</SelectValue>
             </SelectTrigger>
@@ -570,7 +622,7 @@ function PairClientDialog({
           disabled={!selectedUrl}
           onClick={async () => {
             await navigator.clipboard.writeText(selectedUrl);
-            setCopied(true);
+            dispatch({ type: "copied" });
           }}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}
