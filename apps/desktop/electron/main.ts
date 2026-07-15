@@ -13,6 +13,7 @@ import {
   showtimeLocalPort,
   type ShowtimeConnectionScope,
 } from "@showtime/shared";
+import { formatStartupError } from "./startup-error.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -183,7 +184,7 @@ if (gotSingleInstanceLock) {
         console.error("Showtime backend startup failed", error);
         dialog.showErrorBox(
           "Showtime could not start",
-          "The local Showtime backend could not start. Please close other Showtime windows and try again.",
+          `The local Showtime backend could not start.\n\n${formatStartupError(error)}`,
         );
         app.quit();
       });
