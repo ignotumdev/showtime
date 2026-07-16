@@ -1,5 +1,10 @@
 import * as React from "react";
-import type { ChatMessage, ProfileId, ShowId } from "@showtime/contracts";
+import {
+  chatPresetTemplateIsSinglePlaceholder,
+  type ChatMessage,
+  type ProfileId,
+  type ShowId,
+} from "@showtime/contracts";
 import { ArrowUpIcon, CheckIcon } from "lucide-react";
 import {
   ChatPresetFieldInputs,
@@ -102,7 +107,7 @@ function PendingChatPresetAnswerForm({
         mixes={mixes}
         onValueChange={setValue}
       />
-      {resolved && (
+      {resolved && !chatPresetTemplateIsSinglePlaceholder(request.answer.template) && (
         <div className="rounded-lg border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
           <ChatMessageBody body={resolved.body} parts={resolved.parts} />
         </div>

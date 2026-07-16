@@ -169,6 +169,12 @@ export const decodeChatPresetFields = Schema.decodeUnknownSync(Schema.Array(Chat
 export const decodeChatPresetAnswer = Schema.decodeUnknownSync(ChatPresetAnswer);
 
 const placeholderPattern = /{{\s*([A-Za-z][A-Za-z0-9_-]*)\s*}}/g;
+const singlePlaceholderPattern = /^{{\s*[A-Za-z][A-Za-z0-9_-]*\s*}}/;
+
+export const chatPresetTemplateIsSinglePlaceholder = (template: string): boolean => {
+  const match = singlePlaceholderPattern.exec(template);
+  return match !== null && match[0].length === template.length;
+};
 
 export const chatPresetPlaceholderNames = (template: string): ReadonlyArray<string> => {
   const names: Array<string> = [];

@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import {
   chatPresetPlaceholderNames,
+  chatPresetTemplateIsSinglePlaceholder,
   ChatChannel,
   ChatMessageBody,
   ChatMessageId,
@@ -41,6 +42,14 @@ describe("ChatChannel", () => {
 });
 
 describe("chat presets", () => {
+  it("identifies templates that contain exactly one placeholder", () => {
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}}")).toBe(true);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{ status }}")).toBe(true);
+    expect(chatPresetTemplateIsSinglePlaceholder("Status: {{status}}")).toBe(false);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}}\n")).toBe(false);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}} {{level}}")).toBe(false);
+  });
+
   it("extracts unique placeholders in message order and validates field definitions", () => {
     expect(chatPresetPlaceholderNames("Put {{ mic }} in {{mix}}, then check {{mic}}")).toEqual([
       "mic",
