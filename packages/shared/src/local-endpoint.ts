@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Hash, Schema } from "effect";
 
 export const showtimeLocalPort = 8585;
 export const showtimeLocalBaseLabel = "showtime";
@@ -23,14 +23,14 @@ export const ShowtimeHostnameLabel = Schema.String.check(
 export type ShowtimeHostnameLabel = typeof ShowtimeHostnameLabel.Type;
 
 export const normalizeShowtimeHostName = (value: string): ShowtimeHostName => {
-  const normalized = value
-    .normalize("NFKD")
-    .toLowerCase()
+  const canonicalValue = value.normalize("NFKD").toLowerCase();
+  const normalized = canonicalValue
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, showtimeHostNameMaxLength)
     .replace(/-+$/g, "");
-  return Schema.decodeUnknownSync(ShowtimeHostName)(normalized || "device");
+  const fallback = `device-${Hash.string(canonicalValue).toString(36)}`;
+  return Schema.decodeUnknownSync(ShowtimeHostName)(normalized || fallback);
 };
 
 export const showtimeHostnameLabel = (hostName: ShowtimeHostName): ShowtimeHostnameLabel =>

@@ -24,6 +24,15 @@ describe("local endpoint", () => {
     expect(showtimeHostnameLabel("foh-laptop")).toBe("showtime-foh-laptop");
   });
 
+  it("keeps non-Latin device names stable and distinct", () => {
+    const stage = normalizeShowtimeHostName("舞台");
+    const sound = normalizeShowtimeHostName("音響");
+
+    expect(stage).toMatch(/^device-[a-z0-9]+$/);
+    expect(normalizeShowtimeHostName("舞台")).toBe(stage);
+    expect(sound).not.toBe(stage);
+  });
+
   it("rejects hostname labels with trailing line terminators", () => {
     for (const label of [
       "showtime-foh\n",
