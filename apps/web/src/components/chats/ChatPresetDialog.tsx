@@ -279,7 +279,6 @@ function UsePreset({
   const [values, setValues] = React.useState<Record<string, string>>(() =>
     initialChatPresetValues(preset.fields, microphones, mixes),
   );
-  const [answerEnabled, setAnswerEnabled] = React.useState(Boolean(preset.answer));
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string>();
 
@@ -299,11 +298,7 @@ function UsePreset({
     if (!resolved || sending) return;
     setSending(true);
     setError(undefined);
-    const nextError = await onSend(
-      resolved.body,
-      resolved.parts,
-      answerEnabled ? preset.answer : undefined,
-    );
+    const nextError = await onSend(resolved.body, resolved.parts, preset.answer);
     if (nextError) setError(nextError);
     setSending(false);
   };
@@ -323,21 +318,6 @@ function UsePreset({
         mixes={mixes}
         onValueChange={setValue}
       />
-      {preset.answer && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-          <div>
-            <p className="text-sm font-medium">Request an answer</p>
-            <p className="text-xs text-muted-foreground">
-              Recipients can respond with the prepared answer.
-            </p>
-          </div>
-          <Switch
-            checked={answerEnabled}
-            aria-label="Request an answer"
-            onCheckedChange={setAnswerEnabled}
-          />
-        </div>
-      )}
       <div className="rounded-lg border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
         {resolved ? (
           <ChatMessageBody body={resolved.body} parts={resolved.parts} />
