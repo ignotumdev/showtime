@@ -63,7 +63,15 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(chatsSyncKey(showId), chats.renameChannel({ showId, channelId, name })),
       "chats.deleteChannel": ({ showId, channelId }) =>
         sync.mutation(chatsSyncKey(showId), chats.deleteChannel({ showId, channelId })),
-      "chats.send": ({ showId, channelId, senderProfileId, body, parts }) =>
+      "chats.send": ({
+        showId,
+        channelId,
+        senderProfileId,
+        body,
+        parts,
+        answer,
+        replyToMessageId,
+      }) =>
         sync.mutation(
           chatsSyncKey(showId),
           chats.send({
@@ -72,14 +80,32 @@ const handlers = ShowtimeRpcs.toLayer(
             senderProfileId,
             body,
             ...(parts === undefined ? {} : { parts }),
+            ...(answer === undefined ? {} : { answer }),
+            ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
           }),
         ),
-      "chats.createPreset": ({ showId, name, template, fields }) =>
-        sync.mutation(chatsSyncKey(showId), chats.createPreset({ showId, name, template, fields })),
-      "chats.updatePreset": ({ showId, presetId, name, template, fields }) =>
+      "chats.createPreset": ({ showId, name, template, fields, answer }) =>
         sync.mutation(
           chatsSyncKey(showId),
-          chats.updatePreset({ showId, presetId, name, template, fields }),
+          chats.createPreset({
+            showId,
+            name,
+            template,
+            fields,
+            ...(answer === undefined ? {} : { answer }),
+          }),
+        ),
+      "chats.updatePreset": ({ showId, presetId, name, template, fields, answer }) =>
+        sync.mutation(
+          chatsSyncKey(showId),
+          chats.updatePreset({
+            showId,
+            presetId,
+            name,
+            template,
+            fields,
+            ...(answer === undefined ? {} : { answer }),
+          }),
         ),
       "chats.deletePreset": ({ showId, presetId }) =>
         sync.mutation(chatsSyncKey(showId), chats.deletePreset({ showId, presetId })),

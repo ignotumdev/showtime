@@ -84,12 +84,19 @@ export const ChatPresetField = Schema.Union([
 ]);
 export type ChatPresetField = typeof ChatPresetField.Type;
 
+export const ChatPresetAnswer = Schema.Struct({
+  template: ChatPresetTemplate,
+  fields: Schema.Array(ChatPresetField),
+});
+export type ChatPresetAnswer = typeof ChatPresetAnswer.Type;
+
 export const ChatPreset = Schema.Struct({
   id: ChatPresetId,
   showId: ShowId,
   name: ChatPresetName,
   template: ChatPresetTemplate,
   fields: Schema.Array(ChatPresetField),
+  answer: Schema.optional(ChatPresetAnswer),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 });
@@ -124,6 +131,8 @@ export const ChatMessage = Schema.Struct({
   senderProfileId: ProfileId,
   body: ChatMessageBody,
   parts: Schema.optional(Schema.Array(ChatMessagePart)),
+  answer: Schema.optional(ChatPresetAnswer),
+  replyToMessageId: Schema.optional(ChatMessageId),
   sentAt: Schema.DateTimeUtcFromString,
 });
 export type ChatMessage = typeof ChatMessage.Type;
@@ -157,6 +166,7 @@ export const decodeChatMessageBody = Schema.decodeUnknownEffect(ChatMessageBody)
 export const decodeChatPresetName = Schema.decodeUnknownEffect(ChatPresetName);
 export const decodeChatPresetTemplate = Schema.decodeUnknownEffect(ChatPresetTemplate);
 export const decodeChatPresetFields = Schema.decodeUnknownSync(Schema.Array(ChatPresetField));
+export const decodeChatPresetAnswer = Schema.decodeUnknownSync(ChatPresetAnswer);
 
 const placeholderPattern = /{{\s*([A-Za-z][A-Za-z0-9_-]*)\s*}}/g;
 
@@ -220,38 +230,77 @@ export const resolveChatPresetTemplate = (
 };
 
 const legacyStoredChatMessagePrefix = "__showtime_chat_v1__:";
-const storedChatMessagePrefix = "__showtime_chat_v2__:";
+const previousStoredChatMessagePrefix = "__showtime_chat_v2__:";
+const storedChatMessagePrefix = "__showtime_chat_v3__:";
 const decodeChatMessageParts = Schema.decodeUnknownSync(Schema.Array(ChatMessagePart));
+const decodeChatMessageId = Schema.decodeUnknownSync(ChatMessageId);
+const decodeStoredChatPresetAnswer = (input: unknown) => {
+  const answer = decodeChatPresetAnswer(input);
+  const validationError = validateChatPresetDefinition(answer);
+  if (validationError) throw new Error(validationError);
+  return answer;
+};
 
 export const encodeStoredChatMessage = (
   body: ChatMessageBody,
-  parts?: ReadonlyArray<ChatMessagePart>,
+  options: {
+    readonly parts?: ReadonlyArray<ChatMessagePart>;
+    readonly answer?: ChatPresetAnswer;
+    readonly replyToMessageId?: ChatMessageId;
+  } = {},
 ): string =>
-  `${storedChatMessagePrefix}${JSON.stringify(
-    parts?.length ? { kind: "rich", body, parts } : { kind: "plain", body },
-  )}`;
+  `${storedChatMessagePrefix}${JSON.stringify({
+    kind: options.parts?.length ? "rich" : "plain",
+    body,
+    ...(options.parts?.length ? { parts: options.parts } : {}),
+    ...(options.answer ? { answer: options.answer } : {}),
+    ...(options.replyToMessageId ? { replyToMessageId: options.replyToMessageId } : {}),
+  })}`;
 
 export const decodeStoredChatMessage = (
   stored: string,
-): { readonly body: string; readonly parts?: ReadonlyArray<ChatMessagePart> } => {
+): {
+  readonly body: string;
+  readonly parts?: ReadonlyArray<ChatMessagePart>;
+  readonly answer?: ChatPresetAnswer;
+  readonly replyToMessageId?: ChatMessageId;
+} => {
   const isCurrentEnvelope = stored.startsWith(storedChatMessagePrefix);
+  const isPreviousEnvelope = stored.startsWith(previousStoredChatMessagePrefix);
   const isLegacyEnvelope = stored.startsWith(legacyStoredChatMessagePrefix);
-  if (!isCurrentEnvelope && !isLegacyEnvelope) return { body: stored };
+  if (!isCurrentEnvelope && !isPreviousEnvelope && !isLegacyEnvelope) return { body: stored };
   try {
-    const prefix = isCurrentEnvelope ? storedChatMessagePrefix : legacyStoredChatMessagePrefix;
+    const prefix = isCurrentEnvelope
+      ? storedChatMessagePrefix
+      : isPreviousEnvelope
+        ? previousStoredChatMessagePrefix
+        : legacyStoredChatMessagePrefix;
     const parsed = JSON.parse(stored.slice(prefix.length)) as unknown;
     if (!parsed || typeof parsed !== "object") return { body: stored };
     const value = parsed as {
       readonly kind?: unknown;
       readonly body?: unknown;
       readonly parts?: unknown;
+      readonly answer?: unknown;
+      readonly replyToMessageId?: unknown;
     };
     if (typeof value.body !== "string") return { body: stored };
-    if (isCurrentEnvelope && value.kind === "plain") return { body: value.body };
-    if (isCurrentEnvelope && value.kind !== "rich") return { body: stored };
+    if (!isLegacyEnvelope && value.kind !== "plain" && value.kind !== "rich")
+      return { body: stored };
+    const metadata = isCurrentEnvelope
+      ? {
+          ...(value.answer === undefined
+            ? {}
+            : { answer: decodeStoredChatPresetAnswer(value.answer) }),
+          ...(value.replyToMessageId === undefined
+            ? {}
+            : { replyToMessageId: decodeChatMessageId(value.replyToMessageId) }),
+        }
+      : {};
+    if (!isLegacyEnvelope && value.kind === "plain") return { body: value.body, ...metadata };
     const parts = decodeChatMessageParts(value.parts);
     if (parts.length === 0 || chatMessagePartsText(parts) !== value.body) return { body: stored };
-    return { body: value.body, parts };
+    return { body: value.body, parts, ...metadata };
   } catch {
     return { body: stored };
   }

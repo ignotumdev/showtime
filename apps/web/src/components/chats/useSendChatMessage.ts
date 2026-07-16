@@ -5,7 +5,9 @@ import {
   chatsSyncKey,
   type ChatChannelId,
   type ChatMessageBody,
+  type ChatMessageId,
   type ChatMessagePart,
+  type ChatPresetAnswer,
   type ProfileId,
   type ShowId,
 } from "@showtime/contracts";
@@ -20,6 +22,10 @@ export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channel
     async (
       messageBody: string,
       parts?: ReadonlyArray<ChatMessagePart>,
+      options?: {
+        readonly answer?: ChatPresetAnswer;
+        readonly replyToMessageId?: ChatMessageId;
+      },
     ): Promise<string | undefined> => {
       const trimmed = messageBody.trim();
       if (!trimmed || sending) return "A message is already being sent.";
@@ -32,6 +38,10 @@ export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channel
           senderProfileId: profileId,
           body: trimmed as ChatMessageBody,
           ...(parts === undefined ? {} : { parts }),
+          ...(options?.answer === undefined ? {} : { answer: options.answer }),
+          ...(options?.replyToMessageId === undefined
+            ? {}
+            : { replyToMessageId: options.replyToMessageId }),
         },
         reactivityKeys: chatsSyncKey(showId),
       });

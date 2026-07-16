@@ -2,6 +2,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import {
   chatMessagePartsText,
+  decodeChatPresetAnswer,
   decodeChatPresetName,
   decodeChatPresetFields,
   decodeChatPresetTemplate,
@@ -14,8 +15,10 @@ import {
   type ChatChannel,
   type ChatChannelId,
   type ChatMessage,
+  type ChatMessageId,
   type ChatMessagePart,
   type ChatPreset,
+  type ChatPresetAnswer,
   type ChatPresetField,
   type ChatPresetId,
   type ChatSequence,
@@ -57,6 +60,7 @@ interface PresetRow {
   readonly name: string;
   readonly template: string;
   readonly fields_json: string;
+  readonly answer_json: string | null;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -84,12 +88,15 @@ export class ChatService extends Context.Service<
       readonly senderProfileId: ProfileId;
       readonly body: string;
       readonly parts?: ReadonlyArray<ChatMessagePart>;
+      readonly answer?: ChatPresetAnswer;
+      readonly replyToMessageId?: ChatMessageId;
     }) => Effect.Effect<ChatMessage, RpcError>;
     readonly createPreset: (params: {
       readonly showId: ShowId;
       readonly name: string;
       readonly template: string;
       readonly fields: ReadonlyArray<ChatPresetField>;
+      readonly answer?: ChatPresetAnswer;
     }) => Effect.Effect<ChatPreset, RpcError>;
     readonly updatePreset: (params: {
       readonly showId: ShowId;
@@ -97,6 +104,7 @@ export class ChatService extends Context.Service<
       readonly name: string;
       readonly template: string;
       readonly fields: ReadonlyArray<ChatPresetField>;
+      readonly answer?: ChatPresetAnswer;
     }) => Effect.Effect<ChatPreset, RpcError>;
     readonly deletePreset: (params: {
       readonly showId: ShowId;
@@ -131,6 +139,10 @@ const toMessage = (row: MessageRow): ChatMessage => {
     senderProfileId: row.sender_profile_id as ProfileId,
     body: content.body as ChatMessage["body"],
     ...(content.parts === undefined ? {} : { parts: content.parts }),
+    ...(content.answer === undefined ? {} : { answer: content.answer }),
+    ...(content.replyToMessageId === undefined
+      ? {}
+      : { replyToMessageId: content.replyToMessageId }),
     sentAt: DateTime.makeUnsafe(row.sent_at),
   };
 };
@@ -139,12 +151,19 @@ const toPreset = (row: PresetRow): ChatPreset => {
   const fields = decodeChatPresetFields(JSON.parse(row.fields_json));
   const validationError = validateChatPresetDefinition({ template: row.template, fields });
   if (validationError) throw new Error(validationError);
+  const answer =
+    row.answer_json === null ? undefined : decodeChatPresetAnswer(JSON.parse(row.answer_json));
+  if (answer) {
+    const answerValidationError = validateChatPresetDefinition(answer);
+    if (answerValidationError) throw new Error(answerValidationError);
+  }
   return {
     id: row.id as ChatPresetId,
     showId: row.show_id as ShowId,
     name: row.name as ChatPreset["name"],
     template: row.template as ChatPreset["template"],
     fields,
+    ...(answer === undefined ? {} : { answer }),
     createdAt: DateTime.makeUnsafe(row.created_at),
     updatedAt: DateTime.makeUnsafe(row.updated_at),
   };
@@ -189,10 +208,16 @@ const make = Effect.gen(function* () {
     name TEXT NOT NULL COLLATE NOCASE,
     template TEXT NOT NULL,
     fields_json TEXT NOT NULL,
+    answer_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(show_id, name)
   )`;
+  const presetColumns = (yield* sql`PRAGMA table_info(chat_presets)`) as unknown as ReadonlyArray<{
+    readonly name: string;
+  }>;
+  if (!presetColumns.some((column) => column.name === "answer_json"))
+    yield* sql`ALTER TABLE chat_presets ADD COLUMN answer_json TEXT`;
   yield* sql`CREATE INDEX IF NOT EXISTS chat_presets_show_updated
     ON chat_presets(show_id, updated_at DESC)`;
 
@@ -248,7 +273,7 @@ const make = Effect.gen(function* () {
   const loadPresets = (showId: ShowId) =>
     Effect.gen(function* () {
       const rows =
-        (yield* sql`SELECT id, show_id, name, template, fields_json, created_at, updated_at
+        (yield* sql`SELECT id, show_id, name, template, fields_json, answer_json, created_at, updated_at
         FROM chat_presets
         WHERE show_id = ${showId}
         ORDER BY name COLLATE NOCASE, created_at`) as unknown as ReadonlyArray<PresetRow>;
@@ -405,6 +430,7 @@ const make = Effect.gen(function* () {
     readonly name: string;
     readonly template: string;
     readonly fields: ReadonlyArray<ChatPresetField>;
+    readonly answer?: ChatPresetAnswer;
   }) =>
     Effect.gen(function* () {
       const name = yield* decodeChatPresetName(params.name.trim()).pipe(
@@ -417,7 +443,11 @@ const make = Effect.gen(function* () {
       );
       const definitionError = validateChatPresetDefinition({ template, fields: params.fields });
       if (definitionError) return yield* Effect.fail(rpcError(definitionError));
-      return { name, template, fields: params.fields };
+      if (params.answer) {
+        const answerError = validateChatPresetDefinition(params.answer);
+        if (answerError) return yield* Effect.fail(rpcError(`Answer: ${answerError}`));
+      }
+      return { name, template, fields: params.fields, answer: params.answer };
     });
 
   const createPreset = (params: {
@@ -425,6 +455,7 @@ const make = Effect.gen(function* () {
     readonly name: string;
     readonly template: string;
     readonly fields: ReadonlyArray<ChatPresetField>;
+    readonly answer?: ChatPresetAnswer;
   }) =>
     Effect.gen(function* () {
       const definition = yield* presetDefinition(params);
@@ -432,14 +463,15 @@ const make = Effect.gen(function* () {
       const now = yield* DateTime.now;
       const timestamp = DateTime.formatIso(now);
       yield* sql`INSERT INTO chat_presets
-          (id, show_id, name, template, fields_json, created_at, updated_at)
-        VALUES (${id}, ${params.showId}, ${definition.name}, ${definition.template}, ${JSON.stringify(definition.fields)}, ${timestamp}, ${timestamp})`;
+          (id, show_id, name, template, fields_json, answer_json, created_at, updated_at)
+        VALUES (${id}, ${params.showId}, ${definition.name}, ${definition.template}, ${JSON.stringify(definition.fields)}, ${definition.answer ? JSON.stringify(definition.answer) : null}, ${timestamp}, ${timestamp})`;
       return {
         id,
         showId: params.showId,
         name: definition.name,
         template: definition.template,
         fields: definition.fields,
+        ...(definition.answer === undefined ? {} : { answer: definition.answer }),
         createdAt: now,
         updatedAt: now,
       } satisfies ChatPreset;
@@ -457,15 +489,18 @@ const make = Effect.gen(function* () {
     readonly name: string;
     readonly template: string;
     readonly fields: ReadonlyArray<ChatPresetField>;
+    readonly answer?: ChatPresetAnswer;
   }) =>
     Effect.gen(function* () {
       const definition = yield* presetDefinition(params);
       const updatedAt = yield* DateTime.now;
       const rows = (yield* sql`UPDATE chat_presets
         SET name = ${definition.name}, template = ${definition.template},
-          fields_json = ${JSON.stringify(definition.fields)}, updated_at = ${DateTime.formatIso(updatedAt)}
+          fields_json = ${JSON.stringify(definition.fields)},
+          answer_json = ${definition.answer ? JSON.stringify(definition.answer) : null},
+          updated_at = ${DateTime.formatIso(updatedAt)}
         WHERE id = ${params.presetId} AND show_id = ${params.showId}
-        RETURNING id, show_id, name, template, fields_json, created_at, updated_at`) as unknown as ReadonlyArray<PresetRow>;
+        RETURNING id, show_id, name, template, fields_json, answer_json, created_at, updated_at`) as unknown as ReadonlyArray<PresetRow>;
       if (rows.length === 0) return yield* Effect.fail(rpcError("Preset not found."));
       return toPreset(rows[0]!)!;
     }).pipe(
@@ -494,6 +529,8 @@ const make = Effect.gen(function* () {
     readonly senderProfileId: ProfileId;
     readonly body: string;
     readonly parts?: ReadonlyArray<ChatMessagePart>;
+    readonly answer?: ChatPresetAnswer;
+    readonly replyToMessageId?: ChatMessageId;
   }) =>
     Effect.gen(function* () {
       yield* ensureProfile(params.senderProfileId);
@@ -502,14 +539,36 @@ const make = Effect.gen(function* () {
       );
       if (params.parts?.length && chatMessagePartsText(params.parts) !== body)
         return yield* Effect.fail(rpcError("The rich message content does not match its text."));
+      if (params.answer) {
+        const answerError = validateChatPresetDefinition(params.answer);
+        if (answerError) return yield* Effect.fail(rpcError(`Answer: ${answerError}`));
+      }
       const channel = (yield* sql`SELECT id FROM chat_channels
         WHERE id = ${params.channelId} AND show_id = ${params.showId}`) as unknown as ReadonlyArray<{
         id: string;
       }>;
       if (channel.length === 0) return yield* Effect.fail(rpcError("Channel not found."));
+      if (params.replyToMessageId) {
+        const request = (yield* sql`SELECT id, body FROM chat_messages
+          WHERE id = ${params.replyToMessageId} AND channel_id = ${params.channelId}
+            AND show_id = ${params.showId}`) as unknown as ReadonlyArray<{
+          readonly id: string;
+          readonly body: string;
+        }>;
+        if (request.length === 0)
+          return yield* Effect.fail(rpcError("The message being answered was not found."));
+        if (!decodeStoredChatMessage(request[0]!.body).answer)
+          return yield* Effect.fail(rpcError("This message does not accept an answer."));
+      }
       const id = yield* ids.makeChatMessageId;
       const sentAt = yield* DateTime.now;
-      const storedBody = encodeStoredChatMessage(body, params.parts);
+      const storedBody = encodeStoredChatMessage(body, {
+        ...(params.parts?.length ? { parts: params.parts } : {}),
+        ...(params.answer === undefined ? {} : { answer: params.answer }),
+        ...(params.replyToMessageId === undefined
+          ? {}
+          : { replyToMessageId: params.replyToMessageId }),
+      });
       const inserted = (yield* sql`INSERT INTO chat_messages
           (id, show_id, channel_id, sender_profile_id, body, sent_at)
         VALUES (${id}, ${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${storedBody}, ${DateTime.formatIso(sentAt)})
@@ -528,6 +587,10 @@ const make = Effect.gen(function* () {
         senderProfileId: params.senderProfileId,
         body,
         ...(params.parts?.length ? { parts: params.parts } : {}),
+        ...(params.answer === undefined ? {} : { answer: params.answer }),
+        ...(params.replyToMessageId === undefined
+          ? {}
+          : { replyToMessageId: params.replyToMessageId }),
         sentAt,
       } satisfies ChatMessage;
     }).pipe(

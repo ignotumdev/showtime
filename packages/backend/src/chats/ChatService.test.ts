@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   MicrophoneNumber,
   MixNumber,
+  ChatPresetTemplate,
   type ChatMessageBody,
   type ChatMessagePart,
   type ChatPresetField,
@@ -243,6 +244,13 @@ describe("ChatService", () => {
             { name: "mic", type: "microphone" },
             { name: "mix", type: "mix" },
           ] satisfies ReadonlyArray<ChatPresetField>,
+          answer: {
+            template: ChatPresetTemplate.make("{{status}} at {{level}}"),
+            fields: [
+              { name: "status", type: "select", options: ["Done", "Working"] },
+              { name: "level", type: "number" },
+            ],
+          },
         });
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
         const microphoneId = yield* ids.makeMicrophoneId;
@@ -266,12 +274,20 @@ describe("ChatService", () => {
             text: "Mix 3",
           },
         ] as const satisfies ReadonlyArray<ChatMessagePart>;
-        yield* chats.send({
+        const request = yield* chats.send({
           showId,
           channelId: channel.id,
           senderProfileId: profileId,
           body: "Put Mic 7 (Lead) in Mix 3",
           parts,
+          answer: preset.answer,
+        });
+        yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Done at 5",
+          replyToMessageId: request.id,
         });
         const updated = yield* chats.updatePreset({
           showId,
@@ -282,13 +298,20 @@ describe("ChatService", () => {
             { name: "mix", type: "mix" },
             { name: "level", type: "number" },
           ],
+          answer: {
+            template: ChatPresetTemplate.make("{{status}}"),
+            fields: [{ name: "status", type: "select", options: ["Done", "Not yet"] }],
+          },
         });
         const otherShow = yield* chats.state(otherShowId, profileId);
         return { showId, otherShowId, profileId, preset, updated, otherShow };
       }),
     );
 
-    expect(initial.updated).toMatchObject({ name: "Monitor level" });
+    expect(initial.updated).toMatchObject({
+      name: "Monitor level",
+      answer: { template: "{{status}}" },
+    });
     expect(initial.otherShow.presets).toEqual([]);
 
     const reloaded = await withService(
@@ -310,6 +333,20 @@ describe("ChatService", () => {
         { type: "text", text: " in " },
         { type: "mix", number: "3", color: "blue" },
       ],
+      answer: {
+        template: "{{status}} at {{level}}",
+        fields: [
+          { name: "status", type: "select", options: ["Done", "Working"] },
+          { name: "level", type: "number" },
+        ],
+      },
+    });
+    expect(reloaded.snapshot.channels[0]!.messages[1]).toMatchObject({
+      body: "Done at 5",
+      replyToMessageId: reloaded.snapshot.channels[0]!.messages[0]!.id,
+    });
+    expect(reloaded.snapshot.presets[0]).toMatchObject({
+      answer: { template: "{{status}}" },
     });
     expect(reloaded.afterDelete.presets).toEqual([]);
   });

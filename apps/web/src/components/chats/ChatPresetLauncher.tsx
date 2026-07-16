@@ -78,7 +78,7 @@ function ReadyChatPresetLauncher({
         showId={showId}
         profileId={profileId}
         presets={presets}
-        onSend={sendMessage}
+        onSend={(body, parts, answer) => sendMessage(body, parts, answer ? { answer } : undefined)}
       />
     </>
   );
