@@ -3,6 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { ChatChannelId, ChatSnapshot, Profile, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
+import { registerChatAnswerDialog } from "@/chats/ChatAnswerDialogPresence";
 import {
   planChatAnswerRequests,
   type AnswerRequest,
@@ -111,6 +112,11 @@ function ChatDrawerView({
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
+
+  React.useLayoutEffect(() => {
+    if (!profile || open) return;
+    return registerChatAnswerDialog(showId, profile.id);
+  }, [open, profile, showId]);
 
   React.useEffect(() => {
     const openRequestedChat = () => {

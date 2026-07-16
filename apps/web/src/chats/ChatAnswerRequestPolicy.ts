@@ -14,6 +14,17 @@ export type ChatAnswerRequestSequences = ReadonlyMap<ChatChannelId, ChatSequence
 const isAnswerRequest = (message: ChatMessage): message is AnswerRequest =>
   message.answer !== undefined;
 
+export const isPendingChatAnswerRequest = (
+  channel: ChatChannel,
+  message: ChatMessage,
+  profileId: ProfileId,
+): message is AnswerRequest =>
+  message.senderProfileId !== profileId &&
+  isAnswerRequest(message) &&
+  !channel.messages.some(
+    (reply) => reply.replyToMessageId === message.id && reply.senderProfileId === profileId,
+  );
+
 export const planChatAnswerRequests = ({
   channels,
   profileId,
@@ -40,11 +51,7 @@ export const planChatAnswerRequests = ({
       ...channel.messages.filter(
         (message): message is AnswerRequest =>
           message.sequence > previousSequence &&
-          message.senderProfileId !== profileId &&
-          isAnswerRequest(message) &&
-          !channel.messages.some(
-            (reply) => reply.replyToMessageId === message.id && reply.senderProfileId === profileId,
-          ),
+          isPendingChatAnswerRequest(channel, message, profileId),
       ),
     );
   }

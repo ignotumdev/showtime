@@ -144,4 +144,44 @@ describe("chat notification policy", () => {
       expect(planned.cursor).toEqual({ sequence: 2, count: 2 });
     }
   });
+
+  it("suppresses a message handled by the answer dialog without suppressing its blink", () => {
+    const answerRequest = message(2);
+    const planned = planChatNotifications({
+      previous: cursor(1, 1),
+      channel: channel({
+        messages: [answerRequest],
+        messageCount: 2,
+        incomingMessageCount: 2,
+        newestSequence: 2 as ChatSequence,
+      }),
+      profileId: selectedProfileId,
+      visibleAtBottom: false,
+      messageHandledElsewhere: (candidate) => candidate.id === answerRequest.id,
+    });
+
+    expect(planned.notifications).toEqual([]);
+    expect(planned.blink).toBe(true);
+    expect(planned.latestIncomingMessage).toBe(answerRequest);
+  });
+
+  it("removes dialog-handled messages from reconnect summary counts", () => {
+    const answerRequest = message(109);
+    const latestIncomingMessage = message(110);
+    const planned = planChatNotifications({
+      previous: cursor(10, 4),
+      channel: channel({
+        messages: [answerRequest, latestIncomingMessage],
+        messageCount: 110,
+        incomingMessageCount: 75,
+        newestSequence: 110 as ChatSequence,
+      }),
+      profileId: selectedProfileId,
+      visibleAtBottom: false,
+      messageHandledElsewhere: (candidate) => candidate.id === answerRequest.id,
+    });
+
+    expect(planned.notifications).toEqual([{ kind: "summary", count: 70 }]);
+    expect(planned.blink).toBe(true);
+  });
 });
