@@ -1,4 +1,4 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useParams, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ListMusicIcon,
@@ -32,7 +32,7 @@ import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Option } from "effect";
-import type { ChatChannelId, ShowId } from "@showtime/contracts";
+import type { ChatChannelId, ShowId, SongId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
@@ -50,6 +50,8 @@ export function ShowLayout() {
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
   const typedShowId = showId as ShowId;
+  const params = useParams({ strict: false });
+  const currentSongId = typeof params.songId === "string" ? (params.songId as SongId) : undefined;
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
@@ -58,7 +60,7 @@ export function ShowLayout() {
     : AsyncResult.isFailure(songsResult)
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
-  const songCreator = useCreateSong(typedShowId);
+  const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>
       <TitleBar
