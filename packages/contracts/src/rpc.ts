@@ -214,7 +214,12 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     stream: true,
   }),
   Rpc.make("songs.create", {
-    payload: { showId: ShowId, name: SongName, artist: SongArtist },
+    payload: {
+      showId: ShowId,
+      name: SongName,
+      artist: SongArtist,
+      insertAfterSongId: Schema.optional(SongId),
+    },
     success: Song,
     error: RpcError,
   }),

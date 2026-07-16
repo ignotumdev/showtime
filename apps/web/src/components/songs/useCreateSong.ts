@@ -1,11 +1,11 @@
 import * as React from "react";
 import { Exit } from "effect";
 import { useNavigate } from "@tanstack/react-router";
-import { type ShowId, type SongArtist, type SongName } from "@showtime/contracts";
+import { type ShowId, type SongArtist, type SongId, type SongName } from "@showtime/contracts";
 import { useAtomSet } from "@effect/atom-react";
 import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
 
-export function useCreateSong(showId: ShowId) {
+export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
   const navigate = useNavigate();
   const create = useAtomSet(songAtoms(showId).create, { mode: "promiseExit" });
   const [isCreating, setIsCreating] = React.useState(false);
@@ -16,7 +16,12 @@ export function useCreateSong(showId: ShowId) {
     setIsCreating(true);
     setError(undefined);
     const result = await create({
-      payload: { showId, name: "" as SongName, artist: "" as SongArtist },
+      payload: {
+        showId,
+        name: "" as SongName,
+        artist: "" as SongArtist,
+        insertAfterSongId,
+      },
       reactivityKeys: songsRpcReactivityKey(showId),
     });
     if (Exit.isFailure(result)) {
