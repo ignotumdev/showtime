@@ -70,9 +70,7 @@ export function useChatPresetResources(showId: ShowId) {
   );
   const mixes = React.useMemo(
     () =>
-      AsyncResult.isSuccess(mixesResult)
-        ? mixesResult.value.filter((item) => !item.deletedAt)
-        : [],
+      AsyncResult.isSuccess(mixesResult) ? mixesResult.value.filter((item) => !item.deletedAt) : [],
     [mixesResult],
   );
   return { microphones, mixes } as const;
@@ -153,6 +151,26 @@ export function ChatPresetFieldInputs({
     <div className="grid gap-3 sm:grid-cols-2">
       {fields.map((field, index) => {
         const label = readableChatPresetFieldName(field.name);
+        if (field.type === "select" && chatPresetOptionsUseButtons(field.options)) {
+          return (
+            <fieldset key={field.name} className="grid content-start gap-1.5 text-sm">
+              <legend className="font-medium">{label}</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {field.options.map((option) => (
+                  <Button
+                    key={option}
+                    type="button"
+                    variant={values[field.name] === option ? "default" : "outline"}
+                    aria-pressed={values[field.name] === option}
+                    onClick={() => onValueChange(field.name, option)}
+                  >
+                    {option}
+                  </Button>
+                ))}
+              </div>
+            </fieldset>
+          );
+        }
         return (
           <label key={field.name} className="grid content-start gap-1.5 text-sm">
             <span className="font-medium">{label}</span>
@@ -200,20 +218,6 @@ export function ChatPresetFieldInputs({
                   ))}
                 </SelectContent>
               </Select>
-            ) : field.type === "select" && chatPresetOptionsUseButtons(field.options) ? (
-              <div className="grid grid-cols-2 gap-2">
-                {field.options.map((option) => (
-                  <Button
-                    key={option}
-                    type="button"
-                    variant={values[field.name] === option ? "default" : "outline"}
-                    aria-pressed={values[field.name] === option}
-                    onClick={() => onValueChange(field.name, option)}
-                  >
-                    {option}
-                  </Button>
-                ))}
-              </div>
             ) : field.type === "select" ? (
               <Select
                 value={values[field.name] || null}

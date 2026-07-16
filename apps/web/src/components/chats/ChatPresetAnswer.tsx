@@ -65,11 +65,7 @@ function PendingChatPresetAnswerForm({
   const [values, setValues] = React.useState<Record<string, string>>(() =>
     initialChatPresetValues(request.answer.fields, microphones, mixes),
   );
-  const { sendMessage, sending, error } = useSendChatMessage(
-    showId,
-    profileId,
-    request.channelId,
-  );
+  const { sendMessage, sending, error } = useSendChatMessage(showId, profileId, request.channelId);
 
   React.useEffect(() => {
     setValues((current) => {
@@ -139,7 +135,9 @@ export function ChatPresetAnswerDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly showId: ShowId;
   readonly profileId: ProfileId;
-  readonly request: (ChatMessage & { readonly answer: NonNullable<ChatMessage["answer"]> }) | undefined;
+  readonly request:
+    | (ChatMessage & { readonly answer: NonNullable<ChatMessage["answer"]> })
+    | undefined;
   readonly senderName: string;
   readonly answered: boolean;
   readonly onAnswered: () => void;
@@ -157,6 +155,7 @@ export function ChatPresetAnswerDialog({
               <ChatMessageBody body={request.body} parts={request.parts} />
             </div>
             <ChatPresetAnswerForm
+              key={request.id}
               showId={showId}
               profileId={profileId}
               request={request}

@@ -1,16 +1,13 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import type {
-  ChatChannelId,
-  ChatMessage,
-  ChatPresetAnswer,
-  ChatSnapshot,
-  Profile,
-  ProfileId,
-  ShowId,
-} from "@showtime/contracts";
+import type { ChatChannelId, ChatSnapshot, Profile, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
+import {
+  planChatAnswerRequests,
+  type AnswerRequest,
+  type ChatAnswerRequestSequences,
+} from "@/chats/ChatAnswerRequestPolicy";
 import { consumeChatOpenRequest, subscribeChatOpenRequests } from "@/chats/ChatNavigation";
 import { ChatWorkspace } from "@/components/chats/ChatWorkspace";
 import { ChatPresetAnswerDialog } from "@/components/chats/ChatPresetAnswer";
@@ -40,7 +37,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
 
   return selected ? (
     <ProfileChatDrawer
-      key={selected.id}
+      key={`${props.showId}:${selected.id}`}
       {...props}
       profile={selected}
       profiles={profileState?.profiles ?? []}
@@ -74,11 +71,6 @@ function ProfileChatDrawer({
   );
 }
 
-type AnswerRequest = ChatMessage & { readonly answer: ChatPresetAnswer };
-
-const isAnswerRequest = (message: ChatMessage): message is AnswerRequest =>
-  message.answer !== undefined;
-
 function ChatDrawerView({
   showId,
   unreadCount,
@@ -100,7 +92,7 @@ function ChatDrawerView({
   const setOpen = onOpenChange ?? setInternalOpen;
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
   const [pendingAnswers, setPendingAnswers] = React.useState<ReadonlyArray<AnswerRequest>>([]);
-  const newestSequences = React.useRef<Map<ChatChannelId, number> | undefined>(undefined);
+  const newestSequences = React.useRef<ChatAnswerRequestSequences | undefined>(undefined);
   const selectChannel = React.useCallback(
     (channelId: ChatChannelId) => {
       setSelectedChannelId(channelId);
@@ -133,31 +125,13 @@ function ChatDrawerView({
 
   React.useEffect(() => {
     if (!snapshot || !profile) return;
-    if (!newestSequences.current) {
-      newestSequences.current = new Map(
-        snapshot.channels.map((channel) => [channel.id, channel.newestSequence]),
-      );
-      return;
-    }
-    const requests: Array<AnswerRequest> = [];
-    for (const channel of snapshot.channels) {
-      const previousSequence = newestSequences.current.get(channel.id);
-      if (previousSequence !== undefined && !open) {
-        requests.push(
-          ...channel.messages.filter(
-            (message): message is AnswerRequest =>
-              message.sequence > previousSequence &&
-              message.senderProfileId !== profile.id &&
-              isAnswerRequest(message) &&
-              !channel.messages.some(
-                (reply) =>
-                  reply.replyToMessageId === message.id && reply.senderProfileId === profile.id,
-              ),
-          ),
-        );
-      }
-      newestSequences.current.set(channel.id, channel.newestSequence);
-    }
+    const { requests, sequences } = planChatAnswerRequests({
+      channels: snapshot.channels,
+      profileId: profile.id,
+      previousSequences: newestSequences.current,
+      shouldPrompt: !open,
+    });
+    newestSequences.current = sequences;
     if (requests.length > 0)
       setPendingAnswers((current) => [
         ...current,
