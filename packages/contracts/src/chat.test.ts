@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  bindChatPresetAnswer,
   chatPresetPlaceholderNames,
   chatPresetTemplateIsSinglePlaceholder,
   ChatChannel,
@@ -10,6 +11,7 @@ import {
   decodeStoredChatMessage,
   encodeStoredChatMessage,
   resolveChatPresetTemplate,
+  validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
   type ChatMessagePart,
 } from "./chat.js";
@@ -93,6 +95,34 @@ describe("chat presets", () => {
       body,
       parts: resolved.parts,
     });
+  });
+
+  it("inherits message values in answer templates", () => {
+    const microphone = {
+      type: "microphone",
+      id: MicrophoneId.make("mic_1234567890abcdef"),
+      number: MicrophoneNumber.make("7"),
+      color: "violet",
+      name: "Lead",
+      text: "Mic 7 (Lead)",
+    } as const satisfies ChatMessagePart;
+    const answer = {
+      template: ChatPresetTemplate.make("{{mic}} is {{status}}"),
+      fields: [{ name: "status", type: "select", options: ["Ready", "Not ready"] }],
+    } as const;
+
+    expect(validateChatPresetAnswerDefinition(answer, ["mic"])).toBeUndefined();
+    const bound = bindChatPresetAnswer(answer, new Map([["mic", microphone]]))!;
+    expect(bound.context).toEqual([{ name: "mic", part: microphone }]);
+    const resolved = resolveChatPresetTemplate(
+      bound.template,
+      new Map<string, ChatMessagePart>([
+        ["mic", microphone],
+        ["status", { type: "text", text: "Ready" } as const],
+      ]),
+    )!;
+    expect(resolved.body).toBe("Mic 7 (Lead) is Ready");
+    expect(resolved.parts[0]).toBe(microphone);
   });
 
   it("round-trips answer definitions and linked responses", () => {

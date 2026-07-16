@@ -245,11 +245,8 @@ describe("ChatService", () => {
             { name: "mix", type: "mix" },
           ] satisfies ReadonlyArray<ChatPresetField>,
           answer: {
-            template: ChatPresetTemplate.make("{{status}} at {{level}}"),
-            fields: [
-              { name: "status", type: "select", options: ["Done", "Working"] },
-              { name: "level", type: "number" },
-            ],
+            template: ChatPresetTemplate.make("{{mic}} is {{status}}"),
+            fields: [{ name: "status", type: "select", options: ["Done", "Working"] }],
           },
         });
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
@@ -280,7 +277,9 @@ describe("ChatService", () => {
           senderProfileId: profileId,
           body: "Put Mic 7 (Lead) in Mix 3",
           parts,
-          answer: preset.answer,
+          answer: preset.answer
+            ? { ...preset.answer, context: [{ name: "mic", part: parts[1]! }] }
+            : undefined,
         });
         yield* chats.send({
           showId,
@@ -334,11 +333,9 @@ describe("ChatService", () => {
         { type: "mix", number: "3", color: "blue" },
       ],
       answer: {
-        template: "{{status}} at {{level}}",
-        fields: [
-          { name: "status", type: "select", options: ["Done", "Working"] },
-          { name: "level", type: "number" },
-        ],
+        template: "{{mic}} is {{status}}",
+        fields: [{ name: "status", type: "select", options: ["Done", "Working"] }],
+        context: [{ name: "mic", part: { type: "microphone", number: "7" } }],
       },
     });
     expect(reloaded.snapshot.channels[0]!.messages[1]).toMatchObject({

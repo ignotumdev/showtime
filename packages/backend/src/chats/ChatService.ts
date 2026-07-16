@@ -11,6 +11,7 @@ import {
   decodeStoredChatMessage,
   encodeStoredChatMessage,
   RpcError,
+  validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
   type ChatChannel,
   type ChatChannelId,
@@ -154,7 +155,11 @@ const toPreset = (row: PresetRow): ChatPreset => {
   const answer =
     row.answer_json === null ? undefined : decodeChatPresetAnswer(JSON.parse(row.answer_json));
   if (answer) {
-    const answerValidationError = validateChatPresetDefinition(answer);
+    if (answer.context?.length) throw new Error("Preset answers cannot contain message context.");
+    const answerValidationError = validateChatPresetAnswerDefinition(
+      answer,
+      fields.map((field) => field.name),
+    );
     if (answerValidationError) throw new Error(answerValidationError);
   }
   return {
@@ -444,7 +449,12 @@ const make = Effect.gen(function* () {
       const definitionError = validateChatPresetDefinition({ template, fields: params.fields });
       if (definitionError) return yield* Effect.fail(rpcError(definitionError));
       if (params.answer) {
-        const answerError = validateChatPresetDefinition(params.answer);
+        if (params.answer.context?.length)
+          return yield* Effect.fail(rpcError("Preset answers cannot contain message context."));
+        const answerError = validateChatPresetAnswerDefinition(
+          params.answer,
+          params.fields.map((field) => field.name),
+        );
         if (answerError) return yield* Effect.fail(rpcError(`Answer: ${answerError}`));
       }
       return { name, template, fields: params.fields, answer: params.answer };
@@ -540,7 +550,10 @@ const make = Effect.gen(function* () {
       if (params.parts?.length && chatMessagePartsText(params.parts) !== body)
         return yield* Effect.fail(rpcError("The rich message content does not match its text."));
       if (params.answer) {
-        const answerError = validateChatPresetDefinition(params.answer);
+        const answerError = validateChatPresetAnswerDefinition(
+          params.answer,
+          params.answer.context?.map((item) => item.name) ?? [],
+        );
         if (answerError) return yield* Effect.fail(rpcError(`Answer: ${answerError}`));
       }
       const channel = (yield* sql`SELECT id FROM chat_channels

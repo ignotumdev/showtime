@@ -2,8 +2,10 @@ import * as React from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import {
+  bindChatPresetAnswer,
   chatPresetPlaceholderNames,
   chatsSyncKey,
+  validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
   type ChatMessagePart,
   type ChatPreset,
@@ -292,13 +294,16 @@ function UsePreset({
   }, [mixes, microphones, preset]);
 
   const resolved = resolveChatPresetDefinition(preset, values, microphones, mixes);
+  const answer =
+    preset.answer && resolved ? bindChatPresetAnswer(preset.answer, resolved.values) : undefined;
+  const ready = Boolean(resolved && (!preset.answer || answer));
   const setValue = (name: string, value: string) =>
     setValues((current) => ({ ...current, [name]: value }));
   const send = async () => {
-    if (!resolved || sending) return;
+    if (!resolved || !ready || sending) return;
     setSending(true);
     setError(undefined);
-    const nextError = await onSend(resolved.body, resolved.parts, preset.answer);
+    const nextError = await onSend(resolved.body, resolved.parts, answer);
     if (nextError) setError(nextError);
     setSending(false);
   };
@@ -331,7 +336,7 @@ function UsePreset({
         </p>
       )}
       <DialogFooter>
-        <Button type="submit" disabled={!resolved || sending}>
+        <Button type="submit" disabled={!ready || sending}>
           {sending ? <Spinner /> : <ArrowUpIcon />} Send message
         </Button>
       </DialogFooter>
@@ -348,10 +353,14 @@ interface FieldDraft {
 const draftsForTemplate = (
   template: string,
   previous: ReadonlyArray<FieldDraft>,
+  inheritedNames: ReadonlySet<string> = new Set(),
 ): Array<FieldDraft> =>
-  chatPresetPlaceholderNames(template).map(
-    (name) => previous.find((field) => field.name === name) ?? { name, type: "text", options: "" },
-  );
+  chatPresetPlaceholderNames(template)
+    .filter((name) => !inheritedNames.has(name))
+    .map(
+      (name) =>
+        previous.find((field) => field.name === name) ?? { name, type: "text", options: "" },
+    );
 
 const presetFieldsFromDrafts = (
   drafts: ReadonlyArray<FieldDraft>,
@@ -374,6 +383,7 @@ function PresetTemplateEditor({
   template,
   drafts,
   placeholder,
+  inheritedNames = [],
   onTemplateChange,
   onDraftsChange,
 }: {
@@ -381,6 +391,7 @@ function PresetTemplateEditor({
   readonly template: string;
   readonly drafts: ReadonlyArray<FieldDraft>;
   readonly placeholder: string;
+  readonly inheritedNames?: ReadonlyArray<string>;
   readonly onTemplateChange: (value: string) => void;
   readonly onDraftsChange: React.Dispatch<React.SetStateAction<Array<FieldDraft>>>;
 }) {
@@ -399,6 +410,11 @@ function PresetTemplateEditor({
           Wrap each changing detail in double braces.
         </span>
       </label>
+      {inheritedNames.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Filled from the message: {inheritedNames.map((name) => `{{${name}}}`).join(", ")}
+        </p>
+      )}
       {drafts.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">Details to fill</p>
@@ -495,11 +511,13 @@ function PresetEditor({
   const [answerTemplate, setAnswerTemplate] = React.useState(preset?.answer?.template ?? "");
   const [answerDrafts, setAnswerDrafts] = React.useState<Array<FieldDraft>>(
     () =>
-      preset?.answer?.fields.map((field) => ({
-        name: field.name,
-        type: field.type,
-        options: field.type === "select" ? field.options.join(", ") : "",
-      })) ?? [],
+      preset?.answer?.fields
+        .filter((field) => !preset.fields.some((messageField) => messageField.name === field.name))
+        .map((field) => ({
+          name: field.name,
+          type: field.type,
+          options: field.type === "select" ? field.options.join(", ") : "",
+        })) ?? [],
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string>();
@@ -507,19 +525,30 @@ function PresetEditor({
   const changeTemplate = (value: string) => {
     setTemplate(value);
     setDrafts((current) => draftsForTemplate(value, current));
+    const messageNames = new Set(chatPresetPlaceholderNames(value));
+    setAnswerDrafts((current) => draftsForTemplate(answerTemplate, current, messageNames));
   };
   const changeAnswerTemplate = (value: string) => {
     setAnswerTemplate(value);
-    setAnswerDrafts((current) => draftsForTemplate(value, current));
+    setAnswerDrafts((current) =>
+      draftsForTemplate(value, current, new Set(chatPresetPlaceholderNames(template))),
+    );
   };
   const fields = presetFieldsFromDrafts(drafts);
   const answerFields = presetFieldsFromDrafts(answerDrafts);
+  const messageFieldNames = chatPresetPlaceholderNames(template);
+  const inheritedAnswerNames = chatPresetPlaceholderNames(answerTemplate).filter((name) =>
+    messageFieldNames.includes(name),
+  );
   const definitionError = template.trim()
     ? validateChatPresetDefinition({ template: template.trim(), fields })
     : undefined;
   const answerDefinitionError =
     answerEnabled && answerTemplate.trim()
-      ? validateChatPresetDefinition({ template: answerTemplate.trim(), fields: answerFields })
+      ? validateChatPresetAnswerDefinition(
+          { template: answerTemplate.trim(), fields: answerFields },
+          messageFieldNames,
+        )
       : undefined;
   const canSave = Boolean(
     name.trim() &&
@@ -596,7 +625,8 @@ function PresetEditor({
           label="Answer"
           template={answerTemplate}
           drafts={answerDrafts}
-          placeholder="{{status}} — level is {{level}}"
+          placeholder="{{mic}} is {{status}}"
+          inheritedNames={inheritedAnswerNames}
           onTemplateChange={changeAnswerTemplate}
           onDraftsChange={setAnswerDrafts}
         />

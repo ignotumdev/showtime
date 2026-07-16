@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type TemplateDefinition = Pick<ChatPresetAnswer, "template" | "fields">;
+type TemplateDefinition = Pick<ChatPresetAnswer, "template" | "fields" | "context">;
 
 export const chatPresetOptionsUseButtons = (options: ReadonlyArray<string>) => options.length < 5;
 
@@ -101,7 +101,9 @@ export function resolveChatPresetDefinition(
   microphones: ReadonlyArray<Microphone>,
   mixes: ReadonlyArray<Mix>,
 ) {
-  const parts = new Map<string, ChatMessagePart>();
+  const parts = new Map<string, ChatMessagePart>(
+    definition.context?.map((item) => [item.name, item.part]),
+  );
   for (const field of definition.fields) {
     const value = values[field.name]?.trim() ?? "";
     if (!value) return undefined;
@@ -131,7 +133,8 @@ export function resolveChatPresetDefinition(
       parts.set(field.name, { type: "text", text: value });
     }
   }
-  return resolveChatPresetTemplate(definition.template, parts);
+  const resolved = resolveChatPresetTemplate(definition.template, parts);
+  return resolved ? { ...resolved, values: parts } : undefined;
 }
 
 export function ChatPresetFieldInputs({

@@ -84,24 +84,6 @@ export const ChatPresetField = Schema.Union([
 ]);
 export type ChatPresetField = typeof ChatPresetField.Type;
 
-export const ChatPresetAnswer = Schema.Struct({
-  template: ChatPresetTemplate,
-  fields: Schema.Array(ChatPresetField),
-});
-export type ChatPresetAnswer = typeof ChatPresetAnswer.Type;
-
-export const ChatPreset = Schema.Struct({
-  id: ChatPresetId,
-  showId: ShowId,
-  name: ChatPresetName,
-  template: ChatPresetTemplate,
-  fields: Schema.Array(ChatPresetField),
-  answer: Schema.optional(ChatPresetAnswer),
-  createdAt: Schema.DateTimeUtcFromString,
-  updatedAt: Schema.DateTimeUtcFromString,
-});
-export type ChatPreset = typeof ChatPreset.Type;
-
 export const ChatMessagePart = Schema.Union([
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
   Schema.Struct({
@@ -122,6 +104,31 @@ export const ChatMessagePart = Schema.Union([
   }),
 ]);
 export type ChatMessagePart = typeof ChatMessagePart.Type;
+
+export const ChatPresetAnswerContext = Schema.Struct({
+  name: ChatPresetFieldName,
+  part: ChatMessagePart,
+});
+export type ChatPresetAnswerContext = typeof ChatPresetAnswerContext.Type;
+
+export const ChatPresetAnswer = Schema.Struct({
+  template: ChatPresetTemplate,
+  fields: Schema.Array(ChatPresetField),
+  context: Schema.optional(Schema.Array(ChatPresetAnswerContext)),
+});
+export type ChatPresetAnswer = typeof ChatPresetAnswer.Type;
+
+export const ChatPreset = Schema.Struct({
+  id: ChatPresetId,
+  showId: ShowId,
+  name: ChatPresetName,
+  template: ChatPresetTemplate,
+  fields: Schema.Array(ChatPresetField),
+  answer: Schema.optional(ChatPresetAnswer),
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+});
+export type ChatPreset = typeof ChatPreset.Type;
 
 export const ChatMessage = Schema.Struct({
   id: ChatMessageId,
@@ -189,18 +196,24 @@ export const chatPresetPlaceholderNames = (template: string): ReadonlyArray<stri
   return names;
 };
 
-export const validateChatPresetDefinition = (input: {
-  readonly template: string;
-  readonly fields: ReadonlyArray<ChatPresetField>;
-}): string | undefined => {
+const validateChatPresetDefinitionWithContext = (
+  input: {
+    readonly template: string;
+    readonly fields: ReadonlyArray<ChatPresetField>;
+  },
+  contextNames: ReadonlySet<string>,
+): string | undefined => {
   const placeholders = chatPresetPlaceholderNames(input.template);
   if (placeholders.length === 0) return "Add at least one placeholder such as {{mic}}.";
   const fieldNames = input.fields.map((field) => field.name);
   if (new Set(fieldNames).size !== fieldNames.length)
     return "Each placeholder can only be defined once.";
+  const inputPlaceholders = placeholders.filter(
+    (name) => !contextNames.has(name) || fieldNames.includes(name),
+  );
   if (
-    placeholders.length !== fieldNames.length ||
-    placeholders.some((name) => !fieldNames.includes(name))
+    inputPlaceholders.length !== fieldNames.length ||
+    inputPlaceholders.some((name) => !fieldNames.includes(name))
   )
     return "Every template placeholder needs exactly one field definition.";
   const invalidSelect = input.fields.find(
@@ -211,6 +224,50 @@ export const validateChatPresetDefinition = (input: {
   );
   if (invalidSelect) return `Give {{${invalidSelect.name}}} at least one unique option.`;
   return undefined;
+};
+
+export const validateChatPresetDefinition = (input: {
+  readonly template: string;
+  readonly fields: ReadonlyArray<ChatPresetField>;
+}): string | undefined => validateChatPresetDefinitionWithContext(input, new Set());
+
+export const validateChatPresetAnswerDefinition = (
+  answer: {
+    readonly template: string;
+    readonly fields: ReadonlyArray<ChatPresetField>;
+  },
+  messageFieldNames: ReadonlyArray<string>,
+): string | undefined => {
+  if (answer.fields.length === 0)
+    return "Add at least one answer placeholder for recipients to fill.";
+  if (new Set(messageFieldNames).size !== messageFieldNames.length)
+    return "Each inherited message placeholder can only be supplied once.";
+  return validateChatPresetDefinitionWithContext(answer, new Set(messageFieldNames));
+};
+
+export const bindChatPresetAnswer = (
+  answer: ChatPresetAnswer,
+  messageValues: ReadonlyMap<string, ChatMessagePart>,
+): ChatPresetAnswer | undefined => {
+  const answerFieldNames = new Set(answer.fields.map((field) => field.name));
+  const context: Array<ChatPresetAnswerContext> = [];
+  for (const name of chatPresetPlaceholderNames(answer.template)) {
+    if (answerFieldNames.has(name)) continue;
+    const part = messageValues.get(name);
+    if (!part) return undefined;
+    context.push({ name, part });
+  }
+  const bound = {
+    template: answer.template,
+    fields: answer.fields,
+    ...(context.length > 0 ? { context } : {}),
+  } satisfies ChatPresetAnswer;
+  return validateChatPresetAnswerDefinition(
+    bound,
+    context.map((item) => item.name),
+  )
+    ? undefined
+    : bound;
 };
 
 export const chatMessagePartsText = (parts: ReadonlyArray<ChatMessagePart>): string =>
@@ -242,7 +299,10 @@ const decodeChatMessageParts = Schema.decodeUnknownSync(Schema.Array(ChatMessage
 const decodeChatMessageId = Schema.decodeUnknownSync(ChatMessageId);
 const decodeStoredChatPresetAnswer = (input: unknown) => {
   const answer = decodeChatPresetAnswer(input);
-  const validationError = validateChatPresetDefinition(answer);
+  const validationError = validateChatPresetAnswerDefinition(
+    answer,
+    answer.context?.map((item) => item.name) ?? [],
+  );
   if (validationError) throw new Error(validationError);
   return answer;
 };
