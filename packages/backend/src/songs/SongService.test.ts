@@ -108,6 +108,28 @@ describe("SongService", () => {
     expect(result.edited.createdAt).toEqual(result.first.createdAt);
   });
 
+  it("creates a song immediately after the requested song", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const first = yield* songs.create({ showId: show.id, ...songInput("First") });
+        yield* songs.create({ showId: show.id, ...songInput("Second") });
+        yield* songs.create({
+          showId: show.id,
+          ...songInput("Inserted"),
+          insertAfterSongId: first.id,
+        });
+        return yield* songs.list(show.id);
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.map((song) => song.name)).toEqual(["First", "Inserted", "Second"]);
+  });
+
   it("stores a song-specific microphone name and removes it when it matches the inherited name", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
     tempHomes.add(home);
