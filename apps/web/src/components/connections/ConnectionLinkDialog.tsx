@@ -105,7 +105,7 @@ export function ConnectionLinkDialog({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="http://showtime.local:8585/#pair=…"
+            placeholder="http://showtime-front-of-house.local:8585/#pair=…"
             value={connectionUrl}
             onChange={(event) => {
               setConnectionUrl(event.currentTarget.value);

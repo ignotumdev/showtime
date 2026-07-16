@@ -4,6 +4,7 @@ export const desktopCreateInvitationChannel = "showtime:create-invitation";
 export const desktopPairingInfoChannel = "showtime:pairing-info";
 export const desktopRemoveConnectionChannel = "showtime:remove-connection";
 export const desktopSetConnectionsEnabledChannel = "showtime:set-connections-enabled";
+export const desktopSetHostNameChannel = "showtime:set-host-name";
 export const showtimeConnectionStorageKey = "showtime.connection.v1";
 export * from "./local-endpoint.js";
 
@@ -97,6 +98,8 @@ export type ShowtimeConnectionClient = ShowtimePendingClient | ShowtimePairedCli
 
 export interface ShowtimeConnectionsState {
   readonly enabled: boolean;
+  readonly hostName: import("./local-endpoint.js").ShowtimeHostName;
+  readonly hostname: string;
   readonly clients: ReadonlyArray<ShowtimeConnectionClient>;
 }
 
@@ -120,4 +123,7 @@ export interface ShowtimeHostBridge {
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;
   readonly removeConnection: (id: string) => Promise<ShowtimeConnectionsState>;
   readonly setConnectionsEnabled: (enabled: boolean) => Promise<ShowtimeConnectionsState>;
+  readonly setHostName: (
+    hostName: import("./local-endpoint.js").ShowtimeHostName,
+  ) => Promise<ShowtimeConnectionsState>;
 }

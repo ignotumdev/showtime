@@ -71,6 +71,30 @@ describe("ConnectionStore session admission", () => {
     expect(name).toBe("Client 5");
   });
 
+  it("atomically removes paired clients and pending invitations", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
+    tempHomes.add(homeDirectory);
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        const paired = yield* store.createInvitation("Paired client", clientProfile);
+        const credentials = yield* store.consumeInvitation(paired.token);
+        yield* store.createInvitation("Pending client", clientProfile);
+        yield* store.removeAll;
+        return {
+          clients: yield* store.clients,
+          invitations: yield* store.invitations,
+          status: credentials
+            ? yield* store.credentialsStatus(credentials.clientId, credentials.capability)
+            : "missing",
+        };
+      }).pipe(Effect.provide(testLayer(homeDirectory))),
+    );
+
+    expect(result).toEqual({ clients: [], invitations: [], status: "revoked" });
+  });
+
   it("loads version 1 connection data without rewriting it", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-store-home-"));
     tempHomes.add(homeDirectory);

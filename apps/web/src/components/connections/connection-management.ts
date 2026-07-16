@@ -2,6 +2,7 @@ import type {
   ShowtimeConnectionInfo,
   ShowtimeConnectionScope,
   ShowtimeConnectionsState,
+  ShowtimeHostName,
 } from "@showtime/shared";
 import { hasShowtimeConnectionScope } from "@showtime/shared";
 import { readStoredConnection } from "../../connection";
@@ -19,6 +20,7 @@ export interface ConnectionManagementClient {
   readonly pairingInfo: (invitationId: string) => Promise<ShowtimeConnectionInfo>;
   readonly removeConnection: (id: string) => Promise<ShowtimeConnectionsState>;
   readonly setConnectionsEnabled?: (enabled: boolean) => Promise<ShowtimeConnectionsState>;
+  readonly setHostName?: (hostName: ShowtimeHostName) => Promise<ShowtimeConnectionsState>;
 }
 
 const responseJson = async <A>(response: Response): Promise<A> => {
@@ -38,6 +40,7 @@ export const getConnectionManagementClient = (): ConnectionManagementClient | un
       pairingInfo: bridge.pairingInfo,
       removeConnection: bridge.removeConnection,
       setConnectionsEnabled: bridge.setConnectionsEnabled,
+      setHostName: bridge.setHostName,
     };
   }
 

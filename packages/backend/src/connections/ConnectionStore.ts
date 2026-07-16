@@ -93,6 +93,7 @@ export class ConnectionStore extends Context.Service<
     ) => Effect.Effect<StoredInvitation | undefined>;
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
+    readonly removeAll: Effect.Effect<void>;
     readonly updateClientProfile: (
       clientId: string,
       capability: string,
@@ -270,6 +271,24 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const removeAll = lock.withPermits(1)(
+    Effect.gen(function* () {
+      const current = yield* Ref.get(state);
+      if (current.clients.length === 0 && current.invitations.length === 0) return;
+      yield* persist({ version: 1, clients: [], invitations: [] });
+      const active = Array.from((yield* Ref.get(sessions)).values()).flatMap((signals) =>
+        Array.from(signals),
+      );
+      yield* disconnect(active);
+      yield* Effect.logInfo("Revoked all clients after the host name changed").pipe(
+        Effect.annotateLogs({
+          pairedClients: current.clients.length,
+          pendingInvitations: current.invitations.length,
+        }),
+      );
+    }),
+  );
+
   const updateClientProfile = (clientId: string, capability: string, clientProfile: string) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
@@ -353,6 +372,7 @@ const make = Effect.gen(function* () {
     pairingInvitation,
     consumeInvitation,
     remove,
+    removeAll,
     updateClientProfile,
     disconnectAll: lock
       .withPermits(1)(
