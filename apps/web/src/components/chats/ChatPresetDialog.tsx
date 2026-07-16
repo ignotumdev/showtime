@@ -34,6 +34,12 @@ import {
   resolveChatPresetDefinition,
   useChatPresetResources,
 } from "@/components/chats/ChatPresetFields";
+import {
+  chatPresetDraftsForTemplate,
+  chatPresetFieldDrafts,
+  chatPresetFieldsFromDrafts,
+  type ChatPresetFieldDraft,
+} from "@/components/chats/ChatPresetDrafts";
 import { ChatMessageBody } from "@/components/chats/ChatMessageBody";
 import { Button } from "@/components/ui/button";
 import {
@@ -344,40 +350,6 @@ function UsePreset({
   );
 }
 
-interface FieldDraft {
-  readonly name: string;
-  readonly type: ChatPresetField["type"];
-  readonly options: string;
-}
-
-const draftsForTemplate = (
-  template: string,
-  previous: ReadonlyArray<FieldDraft>,
-  inheritedNames: ReadonlySet<string> = new Set(),
-): Array<FieldDraft> =>
-  chatPresetPlaceholderNames(template)
-    .filter((name) => !inheritedNames.has(name))
-    .map(
-      (name) =>
-        previous.find((field) => field.name === name) ?? { name, type: "text", options: "" },
-    );
-
-const presetFieldsFromDrafts = (
-  drafts: ReadonlyArray<FieldDraft>,
-): ReadonlyArray<ChatPresetField> =>
-  drafts.map((field) =>
-    field.type === "select"
-      ? {
-          name: field.name,
-          type: "select",
-          options: field.options
-            .split(",")
-            .map((option) => option.trim())
-            .filter(Boolean),
-        }
-      : { name: field.name, type: field.type },
-  );
-
 function PresetTemplateEditor({
   label,
   template,
@@ -389,11 +361,11 @@ function PresetTemplateEditor({
 }: {
   readonly label: string;
   readonly template: string;
-  readonly drafts: ReadonlyArray<FieldDraft>;
+  readonly drafts: ReadonlyArray<ChatPresetFieldDraft>;
   readonly placeholder: string;
   readonly inheritedNames?: ReadonlyArray<string>;
   readonly onTemplateChange: (value: string) => void;
-  readonly onDraftsChange: React.Dispatch<React.SetStateAction<Array<FieldDraft>>>;
+  readonly onDraftsChange: React.Dispatch<React.SetStateAction<Array<ChatPresetFieldDraft>>>;
 }) {
   return (
     <div className="space-y-3">
@@ -499,46 +471,37 @@ function PresetEditor({
   const updatePreset = useAtomSet(atoms.updatePreset, { mode: "promiseExit" });
   const [name, setName] = React.useState(preset?.name ?? "");
   const [template, setTemplate] = React.useState(preset?.template ?? "");
-  const [drafts, setDrafts] = React.useState<Array<FieldDraft>>(
-    () =>
-      preset?.fields.map((field) => ({
-        name: field.name,
-        type: field.type,
-        options: field.type === "select" ? field.options.join(", ") : "",
-      })) ?? [],
+  const [drafts, setDrafts] = React.useState<Array<ChatPresetFieldDraft>>(() =>
+    chatPresetFieldDrafts(preset?.fields ?? []),
   );
   const [answerEnabled, setAnswerEnabled] = React.useState(Boolean(preset?.answer));
   const [answerTemplate, setAnswerTemplate] = React.useState(preset?.answer?.template ?? "");
-  const [answerDrafts, setAnswerDrafts] = React.useState<Array<FieldDraft>>(
-    () =>
-      preset?.answer?.fields
-        .filter((field) => !preset.fields.some((messageField) => messageField.name === field.name))
-        .map((field) => ({
-          name: field.name,
-          type: field.type,
-          options: field.type === "select" ? field.options.join(", ") : "",
-        })) ?? [],
+  const [answerDrafts, setAnswerDrafts] = React.useState<Array<ChatPresetFieldDraft>>(() =>
+    chatPresetFieldDrafts(preset?.answer?.fields ?? []),
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string>();
 
   const changeTemplate = (value: string) => {
     setTemplate(value);
-    setDrafts((current) => draftsForTemplate(value, current));
+    setDrafts((current) => chatPresetDraftsForTemplate(value, current));
     const messageNames = new Set(chatPresetPlaceholderNames(value));
-    setAnswerDrafts((current) => draftsForTemplate(answerTemplate, current, messageNames));
+    setAnswerDrafts((current) =>
+      chatPresetDraftsForTemplate(answerTemplate, current, messageNames),
+    );
   };
   const changeAnswerTemplate = (value: string) => {
     setAnswerTemplate(value);
     setAnswerDrafts((current) =>
-      draftsForTemplate(value, current, new Set(chatPresetPlaceholderNames(template))),
+      chatPresetDraftsForTemplate(value, current, new Set(chatPresetPlaceholderNames(template))),
     );
   };
-  const fields = presetFieldsFromDrafts(drafts);
-  const answerFields = presetFieldsFromDrafts(answerDrafts);
+  const fields = chatPresetFieldsFromDrafts(drafts);
+  const answerFields = chatPresetFieldsFromDrafts(answerDrafts);
   const messageFieldNames = chatPresetPlaceholderNames(template);
-  const inheritedAnswerNames = chatPresetPlaceholderNames(answerTemplate).filter((name) =>
-    messageFieldNames.includes(name),
+  const answerFieldNames = new Set(answerFields.map((field) => field.name));
+  const inheritedAnswerNames = chatPresetPlaceholderNames(answerTemplate).filter(
+    (name) => messageFieldNames.includes(name) && !answerFieldNames.has(name),
   );
   const definitionError = template.trim()
     ? validateChatPresetDefinition({ template: template.trim(), fields })
