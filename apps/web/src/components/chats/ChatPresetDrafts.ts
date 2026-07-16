@@ -3,7 +3,7 @@ import { chatPresetPlaceholderNames, type ChatPresetField } from "@showtime/cont
 export interface ChatPresetFieldDraft {
   readonly name: string;
   readonly type: ChatPresetField["type"];
-  readonly options: string;
+  readonly options: ReadonlyArray<string>;
 }
 
 export const chatPresetFieldDrafts = (
@@ -12,7 +12,7 @@ export const chatPresetFieldDrafts = (
   fields.map((field) => ({
     name: field.name,
     type: field.type,
-    options: field.type === "select" ? field.options.join(", ") : "",
+    options: field.type === "select" ? field.options : [],
   }));
 
 export const chatPresetDraftsForTemplate = (
@@ -23,7 +23,7 @@ export const chatPresetDraftsForTemplate = (
   const previousByName = new Map(previous.map((field) => [field.name, field]));
   return chatPresetPlaceholderNames(template)
     .filter((name) => !inheritedNames.has(name) || previousByName.has(name))
-    .map((name) => previousByName.get(name) ?? { name, type: "text", options: "" });
+    .map((name) => previousByName.get(name) ?? { name, type: "text", options: [] });
 };
 
 export const chatPresetFieldsFromDrafts = (
@@ -34,10 +34,7 @@ export const chatPresetFieldsFromDrafts = (
       ? {
           name: field.name,
           type: "select",
-          options: field.options
-            .split(",")
-            .map((option) => option.trim())
-            .filter(Boolean),
+          options: field.options.map((option) => option.trim()).filter(Boolean),
         }
       : { name: field.name, type: field.type },
   );

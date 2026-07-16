@@ -24,8 +24,10 @@ import {
   LibraryIcon,
   Mic2Icon,
   PencilIcon,
+  PlusIcon,
   SpeakerIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { chatAtoms, rpcErrorMessageFromCause } from "@/client";
 import {
@@ -398,21 +400,17 @@ function PresetTemplateEditor({
               <div className="min-w-0">
                 <code className="text-sm">{`{{${field.name}}}`}</code>
                 {field.type === "select" && (
-                  <div className="mt-2">
-                    <Input
-                      value={field.options}
-                      placeholder="Options, separated by commas"
-                      aria-label={`Options for ${field.name}`}
-                      onChange={(event) => {
-                        const options = event.currentTarget.value;
-                        onDraftsChange((current) =>
-                          current.map((item) =>
-                            item.name === field.name ? { ...item, options } : item,
-                          ),
-                        );
-                      }}
-                    />
-                  </div>
+                  <PresetOptionsEditor
+                    fieldName={field.name}
+                    options={field.options}
+                    onChange={(options) =>
+                      onDraftsChange((current) =>
+                        current.map((item) =>
+                          item.name === field.name ? { ...item, options } : item,
+                        ),
+                      )
+                    }
+                  />
                 )}
               </div>
               <Select
@@ -422,7 +420,12 @@ function PresetTemplateEditor({
                   onDraftsChange((current) =>
                     current.map((item) =>
                       item.name === field.name
-                        ? { ...item, type: value as ChatPresetField["type"] }
+                        ? {
+                            ...item,
+                            type: value as ChatPresetField["type"],
+                            options:
+                              value === "select" && item.options.length === 0 ? [""] : item.options,
+                          }
                         : item,
                     ),
                   )
@@ -451,6 +454,50 @@ function PresetTemplateEditor({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PresetOptionsEditor({
+  fieldName,
+  options,
+  onChange,
+}: {
+  readonly fieldName: string;
+  readonly options: ReadonlyArray<string>;
+  readonly onChange: (options: ReadonlyArray<string>) => void;
+}) {
+  return (
+    <div className="mt-2 space-y-2">
+      {options.map((option, index) => (
+        <div key={index} className="flex gap-2">
+          <Input
+            value={option}
+            maxLength={120}
+            placeholder={`Option ${index + 1}`}
+            aria-label={`Option ${index + 1} for ${fieldName}`}
+            onChange={(event) =>
+              onChange(
+                options.map((item, itemIndex) =>
+                  itemIndex === index ? event.currentTarget.value : item,
+                ),
+              )
+            }
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Remove option ${index + 1} for ${fieldName}`}
+            onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...options, ""])}>
+        <PlusIcon /> Add option
+      </Button>
     </div>
   );
 }

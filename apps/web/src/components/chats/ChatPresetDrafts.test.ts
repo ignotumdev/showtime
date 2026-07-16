@@ -6,6 +6,18 @@ import {
 } from "./ChatPresetDrafts";
 
 describe("chat preset answer drafts", () => {
+  it("preserves commas inside select option boundaries", () => {
+    const fields = [
+      {
+        name: "position",
+        type: "select",
+        options: ["Stage left, then right", "Center"],
+      },
+    ] as const;
+
+    expect(chatPresetFieldsFromDrafts(chatPresetFieldDrafts(fields))).toEqual(fields);
+  });
+
   it("preserves explicitly recipient-supplied fields that overlap message fields", () => {
     const fields = [
       { name: "mic", type: "microphone" },
