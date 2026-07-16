@@ -22,10 +22,10 @@ describe("browser connection persistence", () => {
   it("accepts only safe Showtime connection links", () => {
     expect(
       parseShowtimePairingUrl(
-        `http://showtime.local:8585/#pair=${pairingToken}`,
+        `http://showtime-foh.local:8585/#pair=${pairingToken}`,
         "https://app.example/",
       ),
-    ).toBe(`http://showtime.local:8585/#pair=${pairingToken}`);
+    ).toBe(`http://showtime-foh.local:8585/#pair=${pairingToken}`);
     expect(
       parseShowtimePairingUrl(`/#pair=${pairingToken}`, "https://showtime.example/connect"),
     ).toBe(`https://showtime.example/#pair=${pairingToken}`);
@@ -43,12 +43,12 @@ describe("browser connection persistence", () => {
 
   it("keeps pairing navigation inside an installed PWA origin", () => {
     const pairingUrl = `http://192.168.1.20:8585/#pair=${pairingToken}`;
-    expect(showtimePairingNavigationUrl(pairingUrl, "http://showtime.local:8585/#/", true)).toBe(
-      `http://showtime.local:8585/#pair=${pairingToken}`,
-    );
-    expect(showtimePairingNavigationUrl(pairingUrl, "http://showtime.local:8585/#/", false)).toBe(
-      pairingUrl,
-    );
+    expect(
+      showtimePairingNavigationUrl(pairingUrl, "http://showtime-foh.local:8585/#/", true),
+    ).toBe(`http://showtime-foh.local:8585/#pair=${pairingToken}`);
+    expect(
+      showtimePairingNavigationUrl(pairingUrl, "http://showtime-foh.local:8585/#/", false),
+    ).toBe(pairingUrl);
   });
 
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
@@ -165,8 +165,8 @@ describe("browser connection persistence", () => {
     });
     expect(connection).toEqual({ version: 1, clientId, capability, clientProfile, scopes });
     expect(
-      storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
-    ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
+      storedRpcWebSocketUrl({ protocol: "http:", host: "showtime-foh.local:8585" }, connection!),
+    ).toBe(`ws://showtime-foh.local:8585/rpc/${clientId}/${capability}`);
   });
 
   it("updates the authenticated client profile and then persists it locally", async () => {

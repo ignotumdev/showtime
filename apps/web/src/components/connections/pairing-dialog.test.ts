@@ -28,7 +28,9 @@ describe("pairing dialog", () => {
   it("polls every discovery state that can recover", () => {
     expect(shouldPollPairingInfo({ kind: "probing" })).toBe(true);
     expect(shouldPollPairingInfo({ kind: "degraded", reason: "network-unavailable" })).toBe(true);
-    expect(shouldPollPairingInfo({ kind: "announced", hostname: "showtime.local" })).toBe(false);
+    expect(shouldPollPairingInfo({ kind: "announced", hostname: "showtime-foh.local" })).toBe(
+      false,
+    );
     expect(shouldPollPairingInfo({ kind: "disabled" })).toBe(false);
   });
 

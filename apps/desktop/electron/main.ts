@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { ConnectionManager, makeBackendRuntime } from "@showtime/backend";
 import {
   desktopConnectionsStateChannel,
@@ -10,6 +10,8 @@ import {
   desktopRemoveConnectionChannel,
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
+  desktopSetHostNameChannel,
+  ShowtimeHostName,
   showtimeLocalPort,
   type ShowtimeConnectionScope,
 } from "@showtime/shared";
@@ -175,6 +177,13 @@ if (gotSingleInstanceLock) {
         ipcMain.handle(desktopSetConnectionsEnabledChannel, (_event, enabled: boolean) =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (_) => _.setConnectionsEnabled(enabled)),
+          ),
+        );
+        ipcMain.handle(desktopSetHostNameChannel, (_event, hostName: unknown) =>
+          backendRuntime.runPromise(
+            Effect.flatMap(ConnectionManager, (_) =>
+              _.setHostName(Schema.decodeUnknownSync(ShowtimeHostName)(hostName)),
+            ),
           ),
         );
         backendStarted = true;

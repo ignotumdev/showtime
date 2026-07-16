@@ -3,32 +3,24 @@ import {
   Effect,
   Fiber,
   Layer,
-  Path,
-  Queue,
   Ref,
   Schema,
   Semaphore,
   SubscriptionRef,
   type Fiber as FiberType,
 } from "effect";
-import { FileSystem } from "effect/FileSystem";
 import { HttpServer } from "effect/unstable/http";
 import {
+  type ShowtimeHostName,
   ShowtimeHostnameLabel,
   type ShowtimeHostnameConnectionCandidate,
   type ShowtimeLocalDiscoveryState,
+  showtimeHostnameLabel,
   showtimeHostnamePairingUrl,
   showtimeLocalHostname,
 } from "@showtime/shared";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
-import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
 import * as Settings from "../settings/Settings.js";
-import { MdnsAdvertiser, type MdnsAdvertisement } from "./MdnsAdvertiser.js";
-
-const DiscoveryFile = Schema.Struct({
-  version: Schema.Literal(1),
-  hostnameLabel: ShowtimeHostnameLabel,
-});
+import { MdnsAdvertiser, MdnsAdvertiserError, type MdnsAdvertisement } from "./MdnsAdvertiser.js";
 
 export class LocalDiscovery extends Context.Service<
   LocalDiscovery,
@@ -38,6 +30,7 @@ export class LocalDiscovery extends Context.Service<
       pairingToken: string,
     ) => Effect.Effect<ShowtimeHostnameConnectionCandidate | undefined>;
     readonly setEnabled: (enabled: boolean) => Effect.Effect<void>;
+    readonly setHostName: (hostName: ShowtimeHostName) => Effect.Effect<void>;
   }
 >()("@showtime/backend/connections/LocalDiscovery") {}
 
@@ -53,55 +46,13 @@ const make = (options: LocalDiscoveryOptions) =>
     const scope = yield* Effect.scope;
     const advertiser = yield* MdnsAdvertiser;
     const settings = yield* Settings.Settings;
-    const fs = yield* FileSystem;
-    const path = yield* Path.Path;
-    const home = yield* HomeDirectory.HomeDirectory;
-    const directory = path.join(yield* home.homeDirectory, ".showtime");
-    const filePath = path.join(directory, "discovery.json");
-
-    const preferredLabel = yield* readJson(fs, filePath, DiscoveryFile).pipe(
-      Effect.map((value) => value.hostnameLabel),
-      Effect.catchIf(isNotFound, () => Effect.succeed("showtime" as ShowtimeHostnameLabel)),
-      Effect.catch((cause) =>
-        Effect.gen(function* () {
-          const quarantinePath = `${filePath}.corrupt-${Date.now()}`;
-          yield* fs.rename(filePath, quarantinePath).pipe(Effect.ignore);
-          yield* Effect.logWarning(
-            "Ignored an invalid local-address preference; a new one will be saved",
-          ).pipe(Effect.annotateLogs("cause", String(cause)));
-          return "showtime" as ShowtimeHostnameLabel;
-        }),
-      ),
-    );
-    const preference = yield* Ref.make(preferredLabel);
+    const initialSettings = yield* settings.get;
+    const configuredLabel = yield* Ref.make(showtimeHostnameLabel(initialSettings.hostName));
     const currentState = yield* SubscriptionRef.make<ShowtimeLocalDiscoveryState>({
       kind: "disabled",
     });
     const worker = yield* Ref.make<FiberType.Fiber<void, never> | undefined>(undefined);
     const transitionLock = yield* Semaphore.make(1);
-    const persistenceQueue = yield* Queue.unbounded<ShowtimeHostnameLabel>();
-    const persistenceWarning = yield* Ref.make(false);
-
-    const persist = (hostnameLabel: ShowtimeHostnameLabel): Effect.Effect<void, never> =>
-      writeJsonAtomic(fs, directory, filePath, { version: 1 as const, hostnameLabel }).pipe(
-        Effect.tap(() => Ref.set(persistenceWarning, false)),
-        Effect.catch((cause) =>
-          Effect.gen(function* () {
-            if (!(yield* Ref.get(persistenceWarning))) {
-              yield* Ref.set(persistenceWarning, true);
-              yield* Effect.logWarning(
-                "Could not save the local address preference; Showtime will retry",
-              ).pipe(Effect.annotateLogs("cause", String(cause)));
-            }
-            yield* Effect.sleep("10 seconds");
-            return yield* persist(hostnameLabel);
-          }),
-        ),
-      );
-    const persistenceLoop = Effect.forever(
-      Queue.take(persistenceQueue).pipe(Effect.flatMap(persist)),
-    );
-    yield* Effect.forkScoped(persistenceLoop);
 
     const setState = (state: ShowtimeLocalDiscoveryState) =>
       SubscriptionRef.set(currentState, state);
@@ -110,30 +61,22 @@ const make = (options: LocalDiscoveryOptions) =>
         Effect.timeoutOrElse({ duration: "2 seconds", orElse: () => Effect.void }),
       );
 
-    const waitForAdvertiser = (
-      advertisement: MdnsAdvertisement,
-    ): Effect.Effect<void, import("./MdnsAdvertiser.js").MdnsAdvertiserError> =>
-      Effect.suspend(() =>
-        advertisement.nextEvent.pipe(
-          Effect.flatMap((event) => {
-            if (event.kind === "failed") return Effect.fail(event.error);
-            return Ref.set(preference, event.hostnameLabel).pipe(
-              Effect.andThen(Queue.offer(persistenceQueue, event.hostnameLabel)),
-              Effect.andThen(
-                setState({
-                  kind: "announced",
-                  hostname: showtimeLocalHostname(event.hostnameLabel),
-                }),
-              ),
-              Effect.andThen(waitForAdvertiser(advertisement)),
-            );
-          }),
-        ),
+    const waitForAdvertiser = (advertisement: MdnsAdvertisement) =>
+      advertisement.nextEvent.pipe(
+        Effect.flatMap((event) => {
+          if (event.kind === "failed") return Effect.fail(event.error);
+          return Effect.fail(
+            new MdnsAdvertiserError({
+              operation: "republish",
+              cause: new Error("The fixed local hostname changed unexpectedly"),
+            }),
+          );
+        }),
       );
 
     const runAttempt = (attempt: number): Effect.Effect<void, never> =>
       Effect.acquireRelease(
-        Ref.get(preference).pipe(
+        Ref.get(configuredLabel).pipe(
           Effect.flatMap((label) =>
             advertiser.advertise({ preferredLabel: label, port: options.port }),
           ),
@@ -141,14 +84,10 @@ const make = (options: LocalDiscoveryOptions) =>
         release,
       ).pipe(
         Effect.flatMap((advertisement) =>
-          Ref.set(preference, advertisement.hostnameLabel).pipe(
-            Effect.andThen(Queue.offer(persistenceQueue, advertisement.hostnameLabel)),
-            Effect.andThen(
-              setState({
-                kind: "announced",
-                hostname: showtimeLocalHostname(advertisement.hostnameLabel),
-              }),
-            ),
+          setState({
+            kind: "announced",
+            hostname: showtimeLocalHostname(advertisement.hostnameLabel),
+          }).pipe(
             Effect.tap(() =>
               Effect.logInfo(
                 `Easy local address announced as ${showtimeLocalHostname(advertisement.hostnameLabel)}`,
@@ -175,26 +114,47 @@ const make = (options: LocalDiscoveryOptions) =>
         ),
       );
 
+    const start = Effect.gen(function* () {
+      yield* setState({ kind: "probing" });
+      const fiber = yield* Effect.forkIn(runAttempt(0), scope);
+      yield* Ref.set(worker, fiber);
+    });
+
+    const stop = Effect.gen(function* () {
+      const running = yield* Ref.get(worker);
+      if (running !== undefined) yield* Fiber.interrupt(running);
+      yield* Ref.set(worker, undefined);
+    });
+
     const setEnabled = (enabled: boolean) =>
       transitionLock.withPermits(1)(
         Effect.gen(function* () {
           const running = yield* Ref.get(worker);
           const shouldRun = options.runtimeEnabled && enabled;
           if (shouldRun && running === undefined) {
-            yield* setState({ kind: "probing" });
-            const fiber = yield* Effect.forkIn(runAttempt(0), scope);
-            yield* Ref.set(worker, fiber);
-          } else if (!shouldRun && running !== undefined) {
-            yield* Fiber.interrupt(running);
-            yield* Ref.set(worker, undefined);
-            yield* setState({ kind: "disabled" });
+            yield* start;
           } else if (!shouldRun) {
+            yield* stop;
             yield* setState({ kind: "disabled" });
           }
         }),
       );
 
-    yield* setEnabled((yield* settings.get).connectionsEnabled);
+    const setHostName = (hostName: ShowtimeHostName) =>
+      transitionLock.withPermits(1)(
+        Effect.gen(function* () {
+          const nextLabel = showtimeHostnameLabel(hostName);
+          if ((yield* Ref.get(configuredLabel)) === nextLabel) return;
+          yield* Ref.set(configuredLabel, nextLabel);
+          const running = yield* Ref.get(worker);
+          if (running !== undefined) {
+            yield* stop;
+            yield* start;
+          }
+        }),
+      );
+
+    yield* setEnabled(initialSettings.connectionsEnabled);
 
     return LocalDiscovery.of({
       state: SubscriptionRef.get(currentState),
@@ -215,6 +175,7 @@ const make = (options: LocalDiscoveryOptions) =>
           }),
         ),
       setEnabled,
+      setHostName,
     });
   });
 
