@@ -63,7 +63,7 @@ const handlers = ShowtimeRpcs.toLayer(
         sync.mutation(chatsSyncKey(showId), chats.renameChannel({ showId, channelId, name })),
       "chats.deleteChannel": ({ showId, channelId }) =>
         sync.mutation(chatsSyncKey(showId), chats.deleteChannel({ showId, channelId })),
-      "chats.send": ({ showId, channelId, senderProfileId, body, parts }) =>
+      "chats.send": ({ showId, channelId, senderProfileId, body, messageId, parts }) =>
         sync.mutation(
           chatsSyncKey(showId),
           chats.send({
@@ -71,6 +71,7 @@ const handlers = ShowtimeRpcs.toLayer(
             channelId,
             senderProfileId,
             body,
+            ...(messageId === undefined ? {} : { messageId }),
             ...(parts === undefined ? {} : { parts }),
           }),
         ),
