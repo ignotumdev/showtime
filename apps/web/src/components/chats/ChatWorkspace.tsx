@@ -28,6 +28,7 @@ import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { setChatPresence } from "@/chats/ChatPresence";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { ChatMessageBody as RichChatMessageBody } from "@/components/chats/ChatMessageBody";
+import { ChatPresetAnswerForm } from "@/components/chats/ChatPresetAnswer";
 import { ChatPresetDialog } from "@/components/chats/ChatPresetDialog";
 import { useSendChatMessage } from "@/components/chats/useSendChatMessage";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
@@ -518,6 +519,13 @@ function Conversation({
             {channel.messages.map((message) => {
               const sender = profiles.find((item) => item.id === message.senderProfileId);
               const mine = message.senderProfileId === profile.id;
+              const request = message.replyToMessageId
+                ? channel.messages.find((item) => item.id === message.replyToMessageId)
+                : undefined;
+              const answered = channel.messages.some(
+                (item) =>
+                  item.replyToMessageId === message.id && item.senderProfileId === profile.id,
+              );
               return (
                 <MessageScroller.Item key={message.id} messageId={message.id}>
                   <Message align={mine ? "end" : "start"}>
@@ -529,11 +537,27 @@ function Conversation({
                     </MessageAvatar>
                     <MessageContent>
                       <MessageHeader>{sender?.name ?? "Deleted profile"}</MessageHeader>
+                      {request && (
+                        <p className="max-w-72 truncate text-xs text-muted-foreground">
+                          Answer to: {request.body}
+                        </p>
+                      )}
                       <Bubble variant={mine ? "default" : "secondary"}>
                         <BubbleContent className="whitespace-pre-wrap">
                           <RichChatMessageBody body={message.body} parts={message.parts} />
                         </BubbleContent>
                       </Bubble>
+                      {message.answer && !mine && (
+                        <div className="mt-2 space-y-3 rounded-lg border p-3">
+                          <p className="text-sm font-medium">Answer</p>
+                          <ChatPresetAnswerForm
+                            showId={showId}
+                            profileId={profile.id}
+                            request={{ ...message, answer: message.answer }}
+                            answered={answered}
+                          />
+                        </div>
+                      )}
                       <MessageFooter>
                         {formatClientTime(DateTime.toDateUtc(message.sentAt))}
                       </MessageFooter>
@@ -707,7 +731,9 @@ function Composer({
         showId={showId}
         profileId={profileId}
         presets={presets}
-        onSend={(presetBody, parts) => sendMessage(presetBody, parts)}
+        onSend={(presetBody, parts, answer) =>
+          sendMessage(presetBody, parts, answer ? { answer } : undefined)
+        }
       />
     </div>
   );

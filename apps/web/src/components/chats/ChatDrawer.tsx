@@ -1,10 +1,17 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import type { ChatChannelId, ProfileId, ShowId } from "@showtime/contracts";
+import type { ChatChannelId, ChatSnapshot, Profile, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
+import { registerChatAnswerDialog } from "@/chats/ChatAnswerDialogPresence";
+import {
+  planChatAnswerRequests,
+  type AnswerRequest,
+  type ChatAnswerRequestSequences,
+} from "@/chats/ChatAnswerRequestPolicy";
 import { consumeChatOpenRequest, subscribeChatOpenRequests } from "@/chats/ChatNavigation";
 import { ChatWorkspace } from "@/components/chats/ChatWorkspace";
+import { ChatPresetAnswerDialog } from "@/components/chats/ChatPresetAnswer";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,21 +37,39 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const { selected } = useSelectedProfile(profileState);
 
   return selected ? (
-    <ProfileChatDrawer {...props} profileId={selected.id} />
+    <ProfileChatDrawer
+      key={`${props.showId}:${selected.id}`}
+      {...props}
+      profile={selected}
+      profiles={profileState?.profiles ?? []}
+    />
   ) : (
     <ChatDrawerView {...props} unreadCount={0} />
   );
 }
 
 function ProfileChatDrawer({
-  profileId,
+  profile,
+  profiles,
   ...props
-}: ChatDrawerProps & { readonly profileId: ProfileId }) {
-  const result = useAtomValue(chatAtoms(props.showId, profileId).state);
+}: ChatDrawerProps & {
+  readonly profile: Profile;
+  readonly profiles: ReadonlyArray<Profile>;
+}) {
+  const result = useAtomValue(chatAtoms(props.showId, profile.id).state);
+  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
   const unreadCount = AsyncResult.isSuccess(result)
     ? result.value.channels.reduce((total, channel) => total + channel.unreadCount, 0)
     : 0;
-  return <ChatDrawerView {...props} unreadCount={unreadCount} />;
+  return (
+    <ChatDrawerView
+      {...props}
+      unreadCount={unreadCount}
+      profile={profile}
+      profiles={profiles}
+      snapshot={snapshot}
+    />
+  );
 }
 
 function ChatDrawerView({
@@ -54,11 +79,21 @@ function ChatDrawerView({
   onOpenChange,
   trigger,
   onSelectedChannelChange,
-}: ChatDrawerProps & { readonly unreadCount: number }) {
+  profile,
+  profiles = [],
+  snapshot,
+}: ChatDrawerProps & {
+  readonly unreadCount: number;
+  readonly profile?: Profile;
+  readonly profiles?: ReadonlyArray<Profile>;
+  readonly snapshot?: ChatSnapshot;
+}) {
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
+  const [pendingAnswers, setPendingAnswers] = React.useState<ReadonlyArray<AnswerRequest>>([]);
+  const newestSequences = React.useRef<ChatAnswerRequestSequences | undefined>(undefined);
   const selectChannel = React.useCallback(
     (channelId: ChatChannelId) => {
       setSelectedChannelId(channelId);
@@ -78,6 +113,11 @@ function ChatDrawerView({
     return () => query.removeEventListener("change", update);
   }, []);
 
+  React.useLayoutEffect(() => {
+    if (!profile || open) return;
+    return registerChatAnswerDialog(showId, profile.id);
+  }, [open, profile, showId]);
+
   React.useEffect(() => {
     const openRequestedChat = () => {
       const request = consumeChatOpenRequest(showId);
@@ -89,31 +129,83 @@ function ChatDrawerView({
     return subscribeChatOpenRequests(openRequestedChat);
   }, [selectChannel, setOpen, showId]);
 
+  React.useEffect(() => {
+    if (!snapshot || !profile) return;
+    const { requests, sequences } = planChatAnswerRequests({
+      channels: snapshot.channels,
+      profileId: profile.id,
+      previousSequences: newestSequences.current,
+      shouldPrompt: !open,
+    });
+    newestSequences.current = sequences;
+    if (requests.length > 0)
+      setPendingAnswers((current) => [
+        ...current,
+        ...requests.filter((request) => !current.some((item) => item.id === request.id)),
+      ]);
+  }, [open, profile, snapshot]);
+
+  React.useEffect(() => {
+    if (open) setPendingAnswers([]);
+  }, [open]);
+
+  const pendingAnswer = pendingAnswers[0];
+  const pendingChannel = pendingAnswer
+    ? snapshot?.channels.find((channel) => channel.id === pendingAnswer.channelId)
+    : undefined;
+  const pendingAnswered = Boolean(
+    pendingAnswer &&
+    pendingChannel?.messages.some(
+      (message) =>
+        message.replyToMessageId === pendingAnswer.id && message.senderProfileId === profile?.id,
+    ),
+  );
+  const dismissPendingAnswer = () => setPendingAnswers((current) => current.slice(1));
+
   return (
-    <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>
-      {trigger && <DrawerTrigger render={trigger(unreadCount)} />}
-      <DrawerContent
-        className={
-          isMobile
-            ? "[--drawer-height:calc(var(--app-height)-3rem)]"
-            : "data-[swipe-axis=x]:[--drawer-content-width:min(44rem,100vw)]"
-        }
-      >
-        <DrawerHeader className="flex-row items-center justify-between pb-3 text-left">
-          <DrawerTitle>Chat</DrawerTitle>
-          {isMobile && <ProfileSwitcher variant="avatar" />}
-        </DrawerHeader>
-        <div className="min-h-0 flex-1 px-2 pb-2">
-          <ChatWorkspace
-            showId={showId}
-            active={open}
-            compact
-            requestedChannelId={selectedChannelId}
-            onSelectedChannelChange={selectChannel}
-          />
-        </div>
-      </DrawerContent>
-    </Drawer>
+    <>
+      <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>
+        {trigger && <DrawerTrigger render={trigger(unreadCount)} />}
+        <DrawerContent
+          className={
+            isMobile
+              ? "[--drawer-height:calc(var(--app-height)-3rem)]"
+              : "data-[swipe-axis=x]:[--drawer-content-width:min(44rem,100vw)]"
+          }
+        >
+          <DrawerHeader className="flex-row items-center justify-between pb-3 text-left">
+            <DrawerTitle>Chat</DrawerTitle>
+            {isMobile && <ProfileSwitcher variant="avatar" />}
+          </DrawerHeader>
+          <div className="min-h-0 flex-1 px-2 pb-2">
+            <ChatWorkspace
+              showId={showId}
+              active={open}
+              compact
+              requestedChannelId={selectedChannelId}
+              onSelectedChannelChange={selectChannel}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
+      {profile && (
+        <ChatPresetAnswerDialog
+          open={Boolean(pendingAnswer) && !open}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) dismissPendingAnswer();
+          }}
+          showId={showId}
+          profileId={profile.id}
+          request={pendingAnswer}
+          senderName={
+            profiles.find((candidate) => candidate.id === pendingAnswer?.senderProfileId)?.name ??
+            "the sender"
+          }
+          answered={pendingAnswered}
+          onAnswered={dismissPendingAnswer}
+        />
+      )}
+    </>
   );
 }
 

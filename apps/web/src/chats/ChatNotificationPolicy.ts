@@ -14,11 +14,13 @@ export const planChatNotifications = ({
   channel,
   profileId,
   visibleAtBottom,
+  messageHandledElsewhere = () => false,
 }: {
   readonly previous: ChatNotificationCursor | undefined;
   readonly channel: ChatChannel;
   readonly profileId: ProfileId;
   readonly visibleAtBottom: boolean;
+  readonly messageHandledElsewhere?: (message: ChatMessage) => boolean;
 }): {
   readonly cursor: ChatNotificationCursor;
   readonly blink: boolean;
@@ -45,17 +47,21 @@ export const planChatNotifications = ({
   );
   const latestIncomingMessage = messages[messages.length - 1];
   if (visibleAtBottom) return { cursor, blink, latestIncomingMessage, notifications: [] };
+  const unhandledMessages = messages.filter((message) => !messageHandledElsewhere(message));
+  const handledCount = messages.length - unhandledMessages.length;
+  const unhandledMissedCount = Math.max(0, missedCount - handledCount);
   return missedCount > messages.length
     ? {
         cursor,
         blink,
         latestIncomingMessage,
-        notifications: [{ kind: "summary", count: missedCount }],
+        notifications:
+          unhandledMissedCount > 0 ? [{ kind: "summary", count: unhandledMissedCount }] : [],
       }
     : {
         cursor,
         blink,
         latestIncomingMessage,
-        notifications: messages.map((message) => ({ kind: "message" as const, message })),
+        notifications: unhandledMessages.map((message) => ({ kind: "message" as const, message })),
       };
 };
