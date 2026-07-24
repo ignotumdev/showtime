@@ -1,19 +1,18 @@
 import * as React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
 import {
+  bindChatPresetAnswer,
   chatPresetPlaceholderNames,
   chatsSyncKey,
-  resolveChatPresetTemplate,
+  validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
   type ChatMessagePart,
   type ChatPreset,
+  type ChatPresetAnswer,
   type ChatPresetField,
   type ChatPresetName,
   type ChatPresetTemplate,
-  type Microphone,
-  type Mix,
   type ProfileId,
   type ShowId,
 } from "@showtime/contracts";
@@ -25,12 +24,25 @@ import {
   LibraryIcon,
   Mic2Icon,
   PencilIcon,
+  PlusIcon,
   SpeakerIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
-import { chatAtoms, microphoneAtoms, mixAtoms, rpcErrorMessageFromCause } from "@/client";
+import { chatAtoms, rpcErrorMessageFromCause } from "@/client";
+import {
+  ChatPresetFieldInputs,
+  initialChatPresetValues,
+  resolveChatPresetDefinition,
+  useChatPresetResources,
+} from "@/components/chats/ChatPresetFields";
+import {
+  chatPresetDraftsForTemplate,
+  chatPresetFieldDrafts,
+  chatPresetFieldsFromDrafts,
+  type ChatPresetFieldDraft,
+} from "@/components/chats/ChatPresetDrafts";
 import { ChatMessageBody } from "@/components/chats/ChatMessageBody";
-import { colorPreviewClassNames } from "@/components/color";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +69,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 type Mode =
@@ -72,38 +85,6 @@ const fieldTypeLabels: Record<ChatPresetField["type"], string> = {
   number: "Number",
   select: "Options",
 };
-
-const readableFieldName = (name: string) =>
-  name.replace(/[-_]+/g, " ").replace(/^./, (letter: string) => letter.toUpperCase());
-
-function ChannelIdentity({
-  channel,
-}: {
-  readonly channel: Pick<Microphone, "color" | "number"> | Pick<Mix, "color" | "number">;
-}) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        aria-hidden="true"
-        className={`size-2.5 shrink-0 rounded-full ${colorPreviewClassNames[channel.color]}`}
-      />
-      <span>{channel.number}</span>
-    </span>
-  );
-}
-
-function ChannelSelectValue({
-  channel,
-  placeholder,
-}: {
-  readonly channel:
-    | Pick<Microphone, "color" | "number">
-    | Pick<Mix, "color" | "number">
-    | undefined;
-  readonly placeholder: string;
-}) {
-  return channel ? <ChannelIdentity channel={channel} /> : placeholder;
-}
 
 export function ChatPresetDialog({
   open,
@@ -121,6 +102,7 @@ export function ChatPresetDialog({
   readonly onSend: (
     body: string,
     parts: ReadonlyArray<ChatMessagePart>,
+    answer?: ChatPresetAnswer,
   ) => Promise<string | undefined>;
 }) {
   const [mode, setMode] = React.useState<Mode>({ type: "list" });
@@ -184,8 +166,8 @@ export function ChatPresetDialog({
             key={mode.preset.id}
             preset={mode.preset}
             showId={showId}
-            onSend={async (body, parts) => {
-              const error = await onSend(body, parts);
+            onSend={async (body, parts, answer) => {
+              const error = await onSend(body, parts, answer);
               if (!error) onOpenChange(false);
               return error;
             }}
@@ -290,64 +272,6 @@ function PresetList({
   );
 }
 
-function initialValues(
-  preset: ChatPreset,
-  microphones: ReadonlyArray<Microphone>,
-  mixes: ReadonlyArray<Mix>,
-) {
-  return Object.fromEntries(
-    preset.fields.map((field) => [
-      field.name,
-      field.type === "microphone"
-        ? (microphones[0]?.id ?? "")
-        : field.type === "mix"
-          ? (mixes[0]?.id ?? "")
-          : field.type === "select"
-            ? (field.options[0] ?? "")
-            : "",
-    ]),
-  );
-}
-
-function resolvePreset(
-  preset: ChatPreset,
-  values: Readonly<Record<string, string>>,
-  microphones: ReadonlyArray<Microphone>,
-  mixes: ReadonlyArray<Mix>,
-) {
-  const parts = new Map<string, ChatMessagePart>();
-  for (const field of preset.fields) {
-    const value = values[field.name]?.trim() ?? "";
-    if (!value) return undefined;
-    if (field.type === "microphone") {
-      const mic = microphones.find((item) => item.id === value);
-      if (!mic) return undefined;
-      parts.set(field.name, {
-        type: "microphone",
-        id: mic.id,
-        number: mic.number,
-        color: mic.color,
-        ...(mic.name ? { name: mic.name } : {}),
-        text: `Mic ${mic.number}${mic.name ? ` (${mic.name})` : ""}`,
-      });
-    } else if (field.type === "mix") {
-      const mix = mixes.find((item) => item.id === value);
-      if (!mix) return undefined;
-      parts.set(field.name, {
-        type: "mix",
-        id: mix.id,
-        number: mix.number,
-        color: mix.color,
-        ...(mix.name ? { name: mix.name } : {}),
-        text: `Mix ${mix.number}${mix.name ? ` (${mix.name})` : ""}`,
-      });
-    } else {
-      parts.set(field.name, { type: "text", text: value });
-    }
-  }
-  return resolveChatPresetTemplate(preset.template, parts);
-}
-
 function UsePreset({
   preset,
   showId,
@@ -358,45 +282,36 @@ function UsePreset({
   readonly onSend: (
     body: string,
     parts: ReadonlyArray<ChatMessagePart>,
+    answer?: ChatPresetAnswer,
   ) => Promise<string | undefined>;
 }) {
-  const microphonesResult = useAtomValue(microphoneAtoms(showId).microphones);
-  const mixesResult = useAtomValue(mixAtoms(showId).mixes);
-  const microphones = React.useMemo(
-    () =>
-      AsyncResult.isSuccess(microphonesResult)
-        ? microphonesResult.value.filter((item) => !item.deletedAt)
-        : [],
-    [microphonesResult],
-  );
-  const mixes = React.useMemo(
-    () =>
-      AsyncResult.isSuccess(mixesResult) ? mixesResult.value.filter((item) => !item.deletedAt) : [],
-    [mixesResult],
-  );
+  const { microphones, mixes } = useChatPresetResources(showId);
   const [values, setValues] = React.useState<Record<string, string>>(() =>
-    initialValues(preset, microphones, mixes),
+    initialChatPresetValues(preset.fields, microphones, mixes),
   );
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string>();
 
   React.useEffect(() => {
     setValues((current) => {
-      const defaults = initialValues(preset, microphones, mixes);
+      const defaults = initialChatPresetValues(preset.fields, microphones, mixes);
       return Object.fromEntries(
         Object.entries(defaults).map(([name, value]) => [name, current[name] || value]),
       );
     });
   }, [mixes, microphones, preset]);
 
-  const resolved = resolvePreset(preset, values, microphones, mixes);
+  const resolved = resolveChatPresetDefinition(preset, values, microphones, mixes);
+  const answer =
+    preset.answer && resolved ? bindChatPresetAnswer(preset.answer, resolved.values) : undefined;
+  const ready = Boolean(resolved && (!preset.answer || answer));
   const setValue = (name: string, value: string) =>
     setValues((current) => ({ ...current, [name]: value }));
   const send = async () => {
-    if (!resolved || sending) return;
+    if (!resolved || !ready || sending) return;
     setSending(true);
     setError(undefined);
-    const nextError = await onSend(resolved.body, resolved.parts);
+    const nextError = await onSend(resolved.body, resolved.parts, answer);
     if (nextError) setError(nextError);
     setSending(false);
   };
@@ -409,83 +324,13 @@ function UsePreset({
         void send();
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {preset.fields.map((field, index) => (
-          <label key={field.name} className="grid gap-1.5 text-sm">
-            <span className="font-medium">{readableFieldName(field.name)}</span>
-            {field.type === "microphone" ? (
-              <Select
-                value={values[field.name] || null}
-                onValueChange={(value) => value && setValue(field.name, value)}
-              >
-                <SelectTrigger autoFocus={index === 0} aria-label={readableFieldName(field.name)}>
-                  <SelectValue>
-                    <ChannelSelectValue
-                      channel={microphones.find((mic) => mic.id === values[field.name])}
-                      placeholder="Choose microphone"
-                    />
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {microphones.map((mic) => (
-                    <SelectItem key={mic.id} value={mic.id}>
-                      <ChannelIdentity channel={mic} />
-                      {mic.name ? ` — ${mic.name}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : field.type === "mix" ? (
-              <Select
-                value={values[field.name] || null}
-                onValueChange={(value) => value && setValue(field.name, value)}
-              >
-                <SelectTrigger autoFocus={index === 0} aria-label={readableFieldName(field.name)}>
-                  <SelectValue>
-                    <ChannelSelectValue
-                      channel={mixes.find((mix) => mix.id === values[field.name])}
-                      placeholder="Choose mix"
-                    />
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {mixes.map((mix) => (
-                    <SelectItem key={mix.id} value={mix.id}>
-                      <ChannelIdentity channel={mix} />
-                      {mix.name ? ` — ${mix.name}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : field.type === "select" ? (
-              <Select
-                value={values[field.name] || null}
-                onValueChange={(value) => value && setValue(field.name, value)}
-              >
-                <SelectTrigger autoFocus={index === 0} aria-label={readableFieldName(field.name)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {field.options.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                autoFocus={index === 0}
-                type={field.type === "number" ? "number" : "text"}
-                inputMode={field.type === "number" ? "decimal" : undefined}
-                value={values[field.name] ?? ""}
-                placeholder={field.type === "number" ? "Enter number" : "Enter text"}
-                onChange={(event) => setValue(field.name, event.currentTarget.value)}
-              />
-            )}
-          </label>
-        ))}
-      </div>
+      <ChatPresetFieldInputs
+        fields={preset.fields}
+        values={values}
+        microphones={microphones}
+        mixes={mixes}
+        onValueChange={setValue}
+      />
       <div className="rounded-lg border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
         {resolved ? (
           <ChatMessageBody body={resolved.body} parts={resolved.parts} />
@@ -499,7 +344,7 @@ function UsePreset({
         </p>
       )}
       <DialogFooter>
-        <Button type="submit" disabled={!resolved || sending}>
+        <Button type="submit" disabled={!ready || sending}>
           {sending ? <Spinner /> : <ArrowUpIcon />} Send message
         </Button>
       </DialogFooter>
@@ -507,120 +352,43 @@ function UsePreset({
   );
 }
 
-interface FieldDraft {
-  readonly name: string;
-  readonly type: ChatPresetField["type"];
-  readonly options: string;
-}
-
-const draftsForTemplate = (
-  template: string,
-  previous: ReadonlyArray<FieldDraft>,
-): Array<FieldDraft> =>
-  chatPresetPlaceholderNames(template).map(
-    (name) => previous.find((field) => field.name === name) ?? { name, type: "text", options: "" },
-  );
-
-const presetFieldsFromDrafts = (
-  drafts: ReadonlyArray<FieldDraft>,
-): ReadonlyArray<ChatPresetField> =>
-  drafts.map((field) =>
-    field.type === "select"
-      ? {
-          name: field.name,
-          type: "select",
-          options: field.options
-            .split(",")
-            .map((option) => option.trim())
-            .filter(Boolean),
-        }
-      : { name: field.name, type: field.type },
-  );
-
-function PresetEditor({
-  showId,
-  profileId,
-  preset,
-  onSaved,
+function PresetTemplateEditor({
+  label,
+  template,
+  drafts,
+  placeholder,
+  inheritedNames = [],
+  onTemplateChange,
+  onDraftsChange,
 }: {
-  readonly showId: ShowId;
-  readonly profileId: ProfileId;
-  readonly preset?: ChatPreset;
-  readonly onSaved: (preset: ChatPreset) => void;
+  readonly label: string;
+  readonly template: string;
+  readonly drafts: ReadonlyArray<ChatPresetFieldDraft>;
+  readonly placeholder: string;
+  readonly inheritedNames?: ReadonlyArray<string>;
+  readonly onTemplateChange: (value: string) => void;
+  readonly onDraftsChange: React.Dispatch<React.SetStateAction<Array<ChatPresetFieldDraft>>>;
 }) {
-  const atoms = chatAtoms(showId, profileId);
-  const createPreset = useAtomSet(atoms.createPreset, { mode: "promiseExit" });
-  const updatePreset = useAtomSet(atoms.updatePreset, { mode: "promiseExit" });
-  const [name, setName] = React.useState(preset?.name ?? "");
-  const [template, setTemplate] = React.useState(preset?.template ?? "");
-  const [drafts, setDrafts] = React.useState<Array<FieldDraft>>(
-    () =>
-      preset?.fields.map((field) => ({
-        name: field.name,
-        type: field.type,
-        options: field.type === "select" ? field.options.join(", ") : "",
-      })) ?? [],
-  );
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string>();
-
-  const changeTemplate = (value: string) => {
-    setTemplate(value);
-    setDrafts((current) => draftsForTemplate(value, current));
-  };
-  const fields = presetFieldsFromDrafts(drafts);
-  const definitionError = template.trim()
-    ? validateChatPresetDefinition({ template: template.trim(), fields })
-    : undefined;
-  const canSave = Boolean(name.trim() && template.trim() && !definitionError);
-
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!canSave || saving) return;
-    setSaving(true);
-    setError(undefined);
-    const common = {
-      showId,
-      name: name.trim() as ChatPresetName,
-      template: template.trim() as ChatPresetTemplate,
-      fields,
-    };
-    const exit = preset
-      ? await updatePreset({
-          payload: { ...common, presetId: preset.id },
-          reactivityKeys: chatsSyncKey(showId),
-        })
-      : await createPreset({ payload: common, reactivityKeys: chatsSyncKey(showId) });
-    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else onSaved(exit.value);
-    setSaving(false);
-  };
-
   return (
-    <form className="space-y-4" onSubmit={save}>
+    <div className="space-y-3">
       <label className="grid gap-1.5 text-sm">
-        <span className="font-medium">Preset name</span>
-        <Input
-          autoFocus
-          value={name}
-          maxLength={80}
-          placeholder="e.g. Monitor change"
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-      </label>
-      <label className="grid gap-1.5 text-sm">
-        <span className="font-medium">Message</span>
+        <span className="font-medium">{label}</span>
         <Textarea
           value={template}
           maxLength={4_000}
           rows={3}
-          placeholder="Put {{mic}} in {{mix}} at {{level}}"
-          onChange={(event) => changeTemplate(event.currentTarget.value)}
+          placeholder={placeholder}
+          onChange={(event) => onTemplateChange(event.currentTarget.value)}
         />
         <span className="text-xs text-muted-foreground">
           Wrap each changing detail in double braces.
         </span>
       </label>
+      {inheritedNames.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Filled from the message: {inheritedNames.map((name) => `{{${name}}}`).join(", ")}
+        </p>
+      )}
       {drafts.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">Details to fill</p>
@@ -632,31 +400,32 @@ function PresetEditor({
               <div className="min-w-0">
                 <code className="text-sm">{`{{${field.name}}}`}</code>
                 {field.type === "select" && (
-                  <div className="mt-2">
-                    <Input
-                      value={field.options}
-                      placeholder="Options, separated by commas"
-                      aria-label={`Options for ${field.name}`}
-                      onChange={(event) => {
-                        const options = event.currentTarget.value;
-                        setDrafts((current) =>
-                          current.map((item) =>
-                            item.name === field.name ? { ...item, options } : item,
-                          ),
-                        );
-                      }}
-                    />
-                  </div>
+                  <PresetOptionsEditor
+                    fieldName={field.name}
+                    options={field.options}
+                    onChange={(options) =>
+                      onDraftsChange((current) =>
+                        current.map((item) =>
+                          item.name === field.name ? { ...item, options } : item,
+                        ),
+                      )
+                    }
+                  />
                 )}
               </div>
               <Select
                 value={field.type}
                 onValueChange={(value) =>
                   value &&
-                  setDrafts((current) =>
+                  onDraftsChange((current) =>
                     current.map((item) =>
                       item.name === field.name
-                        ? { ...item, type: value as ChatPresetField["type"] }
+                        ? {
+                            ...item,
+                            type: value as ChatPresetField["type"],
+                            options:
+                              value === "select" && item.options.length === 0 ? [""] : item.options,
+                          }
                         : item,
                     ),
                   )
@@ -685,9 +454,201 @@ function PresetEditor({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PresetOptionsEditor({
+  fieldName,
+  options,
+  onChange,
+}: {
+  readonly fieldName: string;
+  readonly options: ReadonlyArray<string>;
+  readonly onChange: (options: ReadonlyArray<string>) => void;
+}) {
+  return (
+    <div className="mt-2 space-y-2">
+      {options.map((option, index) => (
+        <div key={index} className="flex gap-2">
+          <Input
+            value={option}
+            maxLength={120}
+            placeholder={`Option ${index + 1}`}
+            aria-label={`Option ${index + 1} for ${fieldName}`}
+            onChange={(event) =>
+              onChange(
+                options.map((item, itemIndex) =>
+                  itemIndex === index ? event.currentTarget.value : item,
+                ),
+              )
+            }
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Remove option ${index + 1} for ${fieldName}`}
+            onClick={() => onChange(options.filter((_, itemIndex) => itemIndex !== index))}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...options, ""])}>
+        <PlusIcon /> Add option
+      </Button>
+    </div>
+  );
+}
+
+function PresetEditor({
+  showId,
+  profileId,
+  preset,
+  onSaved,
+}: {
+  readonly showId: ShowId;
+  readonly profileId: ProfileId;
+  readonly preset?: ChatPreset;
+  readonly onSaved: (preset: ChatPreset) => void;
+}) {
+  const atoms = chatAtoms(showId, profileId);
+  const createPreset = useAtomSet(atoms.createPreset, { mode: "promiseExit" });
+  const updatePreset = useAtomSet(atoms.updatePreset, { mode: "promiseExit" });
+  const [name, setName] = React.useState(preset?.name ?? "");
+  const [template, setTemplate] = React.useState(preset?.template ?? "");
+  const [drafts, setDrafts] = React.useState<Array<ChatPresetFieldDraft>>(() =>
+    chatPresetFieldDrafts(preset?.fields ?? []),
+  );
+  const [answerEnabled, setAnswerEnabled] = React.useState(Boolean(preset?.answer));
+  const [answerTemplate, setAnswerTemplate] = React.useState(preset?.answer?.template ?? "");
+  const [answerDrafts, setAnswerDrafts] = React.useState<Array<ChatPresetFieldDraft>>(() =>
+    chatPresetFieldDrafts(preset?.answer?.fields ?? []),
+  );
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string>();
+
+  const changeTemplate = (value: string) => {
+    setTemplate(value);
+    setDrafts((current) => chatPresetDraftsForTemplate(value, current));
+    const messageNames = new Set(chatPresetPlaceholderNames(value));
+    setAnswerDrafts((current) =>
+      chatPresetDraftsForTemplate(answerTemplate, current, messageNames),
+    );
+  };
+  const changeAnswerTemplate = (value: string) => {
+    setAnswerTemplate(value);
+    setAnswerDrafts((current) =>
+      chatPresetDraftsForTemplate(value, current, new Set(chatPresetPlaceholderNames(template))),
+    );
+  };
+  const fields = chatPresetFieldsFromDrafts(drafts);
+  const answerFields = chatPresetFieldsFromDrafts(answerDrafts);
+  const messageFieldNames = chatPresetPlaceholderNames(template);
+  const answerFieldNames = new Set(answerFields.map((field) => field.name));
+  const inheritedAnswerNames = chatPresetPlaceholderNames(answerTemplate).filter(
+    (name) => messageFieldNames.includes(name) && !answerFieldNames.has(name),
+  );
+  const definitionError = template.trim()
+    ? validateChatPresetDefinition({ template: template.trim(), fields })
+    : undefined;
+  const answerDefinitionError =
+    answerEnabled && answerTemplate.trim()
+      ? validateChatPresetAnswerDefinition(
+          { template: answerTemplate.trim(), fields: answerFields },
+          messageFieldNames,
+        )
+      : undefined;
+  const canSave = Boolean(
+    name.trim() &&
+    template.trim() &&
+    !definitionError &&
+    (!answerEnabled || (answerTemplate.trim() && !answerDefinitionError)),
+  );
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError(undefined);
+    const common = {
+      showId,
+      name: name.trim() as ChatPresetName,
+      template: template.trim() as ChatPresetTemplate,
+      fields,
+      ...(answerEnabled
+        ? {
+            answer: {
+              template: answerTemplate.trim() as ChatPresetTemplate,
+              fields: answerFields,
+            } satisfies ChatPresetAnswer,
+          }
+        : {}),
+    };
+    const exit = preset
+      ? await updatePreset({
+          payload: { ...common, presetId: preset.id },
+          reactivityKeys: chatsSyncKey(showId),
+        })
+      : await createPreset({ payload: common, reactivityKeys: chatsSyncKey(showId) });
+    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+    else onSaved(exit.value);
+    setSaving(false);
+  };
+
+  return (
+    <form className="space-y-4" onSubmit={save}>
+      <label className="grid gap-1.5 text-sm">
+        <span className="font-medium">Preset name</span>
+        <Input
+          autoFocus
+          value={name}
+          maxLength={80}
+          placeholder="e.g. Monitor change"
+          onChange={(event) => setName(event.currentTarget.value)}
+        />
+      </label>
+      <PresetTemplateEditor
+        label="Message"
+        template={template}
+        drafts={drafts}
+        placeholder="Put {{mic}} in {{mix}} at {{level}}"
+        onTemplateChange={changeTemplate}
+        onDraftsChange={setDrafts}
+      />
+      <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+        <div>
+          <p className="text-sm font-medium">Request an answer</p>
+          <p className="text-xs text-muted-foreground">
+            Let recipients answer this message with a prepared response.
+          </p>
+        </div>
+        <Switch
+          checked={answerEnabled}
+          aria-label="Request an answer"
+          onCheckedChange={setAnswerEnabled}
+        />
+      </div>
+      {answerEnabled && (
+        <PresetTemplateEditor
+          label="Answer"
+          template={answerTemplate}
+          drafts={answerDrafts}
+          placeholder="{{mic}} is {{status}}"
+          inheritedNames={inheritedAnswerNames}
+          onTemplateChange={changeAnswerTemplate}
+          onDraftsChange={setAnswerDrafts}
+        />
+      )}
       {definitionError && template.trim() && (
         <p role="alert" className="text-xs text-destructive">
           {definitionError}
+        </p>
+      )}
+      {answerDefinitionError && answerTemplate.trim() && (
+        <p role="alert" className="text-xs text-destructive">
+          Answer: {answerDefinitionError}
         </p>
       )}
       {error && (

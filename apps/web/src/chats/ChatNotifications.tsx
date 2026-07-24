@@ -13,6 +13,8 @@ import type {
 import { chatAtoms, profileAtoms, showsAtom } from "@/client";
 import { publishNotificationBlink } from "@/notifications/NotificationCenter";
 import { useSelectedProfile } from "@/profiles";
+import { isChatAnswerDialogAvailable } from "./ChatAnswerDialogPresence";
+import { isPendingChatAnswerRequest } from "./ChatAnswerRequestPolicy";
 import { enqueueChatNotification } from "./ChatNotificationBatcher";
 import { isChatVisibleAtBottom } from "./ChatPresence";
 import {
@@ -102,6 +104,9 @@ function processChannel(
     channel,
     profileId: profile.id,
     visibleAtBottom: isChatVisibleAtBottom(show.id, channel.id, profile.id),
+    messageHandledElsewhere: (message) =>
+      isChatAnswerDialogAvailable(show.id, profile.id) &&
+      isPendingChatAnswerRequest(channel, message, profile.id),
   });
   const latestIncomingMessage = planned.latestIncomingMessage;
   if (planned.blink) {

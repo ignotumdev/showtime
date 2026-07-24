@@ -1,12 +1,17 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  bindChatPresetAnswer,
   chatPresetPlaceholderNames,
+  chatPresetTemplateIsSinglePlaceholder,
   ChatChannel,
   ChatMessageBody,
+  ChatMessageId,
+  ChatPresetTemplate,
   decodeStoredChatMessage,
   encodeStoredChatMessage,
   resolveChatPresetTemplate,
+  validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
   type ChatMessagePart,
 } from "./chat.js";
@@ -39,6 +44,14 @@ describe("ChatChannel", () => {
 });
 
 describe("chat presets", () => {
+  it("identifies templates that contain exactly one placeholder", () => {
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}}")).toBe(true);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{ status }}")).toBe(true);
+    expect(chatPresetTemplateIsSinglePlaceholder("Status: {{status}}")).toBe(false);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}}\n")).toBe(false);
+    expect(chatPresetTemplateIsSinglePlaceholder("{{status}} {{level}}")).toBe(false);
+  });
+
   it("extracts unique placeholders in message order and validates field definitions", () => {
     expect(chatPresetPlaceholderNames("Put {{ mic }} in {{mix}}, then check {{mic}}")).toEqual([
       "mic",
@@ -76,10 +89,59 @@ describe("chat presets", () => {
     )!;
     expect(resolved.body).toBe("Check Mic 7 (Lead), then mute Mic 7 (Lead).");
     const body = ChatMessageBody.make(resolved.body);
-    expect(decodeStoredChatMessage(encodeStoredChatMessage(body, resolved.parts))).toEqual({
+    expect(
+      decodeStoredChatMessage(encodeStoredChatMessage(body, { parts: resolved.parts })),
+    ).toEqual({
       body,
       parts: resolved.parts,
     });
+  });
+
+  it("inherits message values in answer templates", () => {
+    const microphone = {
+      type: "microphone",
+      id: MicrophoneId.make("mic_1234567890abcdef"),
+      number: MicrophoneNumber.make("7"),
+      color: "violet",
+      name: "Lead",
+      text: "Mic 7 (Lead)",
+    } as const satisfies ChatMessagePart;
+    const answer = {
+      template: ChatPresetTemplate.make("{{mic}} is {{status}}"),
+      fields: [{ name: "status", type: "select", options: ["Ready", "Not ready"] }],
+    } as const;
+
+    expect(validateChatPresetAnswerDefinition(answer, ["mic"])).toBeUndefined();
+    const bound = bindChatPresetAnswer(answer, new Map([["mic", microphone]]))!;
+    expect(bound.context).toEqual([{ name: "mic", part: microphone }]);
+    const resolved = resolveChatPresetTemplate(
+      bound.template,
+      new Map<string, ChatMessagePart>([
+        ["mic", microphone],
+        ["status", { type: "text", text: "Ready" } as const],
+      ]),
+    )!;
+    expect(resolved.body).toBe("Mic 7 (Lead) is Ready");
+    expect(resolved.parts[0]).toBe(microphone);
+  });
+
+  it("round-trips answer definitions and linked responses", () => {
+    const answer = {
+      template: ChatPresetTemplate.make("{{status}} at {{level}}"),
+      fields: [
+        { name: "status", type: "select", options: ["Done", "Working"] },
+        { name: "level", type: "number" },
+      ],
+    } as const;
+    const requestBody = ChatMessageBody.make("Set the monitor level");
+    const request = decodeStoredChatMessage(encodeStoredChatMessage(requestBody, { answer }));
+    expect(request).toEqual({ body: requestBody, answer });
+
+    const replyToMessageId = ChatMessageId.make("message_1234567890abcdef");
+    const replyBody = ChatMessageBody.make("Done at 5");
+    expect(
+      decodeStoredChatMessage(encodeStoredChatMessage(replyBody, { replyToMessageId })),
+    ).toEqual({ body: replyBody, replyToMessageId });
   });
 
   it("treats malformed rich envelopes as ordinary text", () => {
@@ -97,6 +159,16 @@ describe("chat presets", () => {
     });
   });
 
+  it("decodes version 2 envelopes already stored in history", () => {
+    const previous =
+      '__showtime_chat_v2__:{"kind":"rich","body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
+
+    expect(decodeStoredChatMessage(previous)).toEqual({
+      body: "Visible",
+      parts: [{ type: "text", text: "Visible" }],
+    });
+  });
+
   it("round-trips plain messages that look like legacy rich envelopes", () => {
     const body = ChatMessageBody.make(
       '__showtime_chat_v1__:{"body":"Rewritten","parts":[{"type":"text","text":"Rewritten"}]}',
@@ -105,7 +177,7 @@ describe("chat presets", () => {
     expect(decodeStoredChatMessage(encodeStoredChatMessage(body))).toEqual({ body });
   });
 
-  it("rejects current envelopes without an explicit encoding kind", () => {
+  it("rejects version 2 envelopes without an explicit encoding kind", () => {
     const ambiguous =
       '__showtime_chat_v2__:{"body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
 

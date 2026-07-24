@@ -9,6 +9,7 @@ import {
   type ChatMessageBody,
   type ChatMessageId,
   type ChatMessagePart,
+  type ChatPresetAnswer,
   type ProfileId,
   type ShowId,
 } from "@showtime/contracts";
@@ -31,6 +32,10 @@ export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channel
     async (
       messageBody: string,
       parts?: ReadonlyArray<ChatMessagePart>,
+      options?: {
+        readonly answer?: ChatPresetAnswer;
+        readonly replyToMessageId?: ChatMessageId;
+      },
     ): Promise<string | undefined> => {
       const trimmed = messageBody.trim();
       if (!trimmed) return "Write a message before sending.";
@@ -38,7 +43,12 @@ export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channel
       sendingRef.current = true;
       setSending(true);
       setError(undefined);
-      const key = JSON.stringify([trimmed, parts ?? null]);
+      const key = JSON.stringify([
+        trimmed,
+        parts ?? null,
+        options?.answer ?? null,
+        options?.replyToMessageId ?? null,
+      ]);
       const pending =
         pendingRef.current?.key === key
           ? pendingRef.current
@@ -56,6 +66,10 @@ export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channel
             body: trimmed as ChatMessageBody,
             messageId: pending.messageId,
             ...(parts === undefined ? {} : { parts }),
+            ...(options?.answer === undefined ? {} : { answer: options.answer }),
+            ...(options?.replyToMessageId === undefined
+              ? {}
+              : { replyToMessageId: options.replyToMessageId }),
           },
           reactivityKeys: chatsSyncKey(showId),
         });
