@@ -1,12 +1,16 @@
 import { Effect } from "effect";
 import { createServer } from "node:net";
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import {
+  normalizeShowtimeHostName,
+  type ShowtimeConnectionsState,
+  type ShowtimeHostnameLabel,
+} from "@showtime/shared";
 import { ConnectionManager, makeBackendRuntime } from "../index.js";
 import { makeLayer, MdnsAdvertiserError } from "./MdnsAdvertiser.js";
-import type { ShowtimeConnectionsState, ShowtimeHostnameLabel } from "@showtime/shared";
 
 const tempHomes = new Set<string>();
 
@@ -54,7 +58,7 @@ const createInvitation = (runtime: ReturnType<typeof makeBackendRuntime>) =>
   );
 
 describe("LocalDiscovery", () => {
-  it("announces after TCP is listening, prefers the hostname, persists it, and says goodbye", async () => {
+  it("announces after TCP is listening, persists the device-derived name, and says goodbye", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-discovery-home-"));
     tempHomes.add(homeDirectory);
     const port = await findAvailablePort();
@@ -79,63 +83,44 @@ describe("LocalDiscovery", () => {
     );
 
     await runtime.runPromise(Effect.void);
-    const pendingId = invitationId(await createInvitation(runtime));
-    const info = await waitForAnnouncement(runtime, pendingId);
+    const info = await waitForAnnouncement(runtime, invitationId(await createInvitation(runtime)));
+    const hostName = normalizeShowtimeHostName(os.hostname());
+    const label = `showtime-${hostName}`;
     expect(listeningStatus).toBe(404);
     expect(info.candidates[0]).toMatchObject({
       kind: "hostname",
-      label: "Recommended — showtime.local",
-      host: "showtime.local",
+      label: `Recommended — ${label}.local`,
+      host: `${label}.local`,
     });
     expect(info.candidates[0]?.url).toMatch(
       new RegExp(
-        `^http://showtime\\.local:${port}/#pair=[A-Za-z0-9_-]{43}&profile=profile_0000000000000000$`,
+        `^http://${label}\\.local:${port}/#pair=[A-Za-z0-9_-]{43}&profile=profile_0000000000000000$`,
       ),
     );
-    expect(preferred).toEqual(["showtime"]);
-
-    const discoveryPath = path.join(homeDirectory, ".showtime", "discovery.json");
-    let persisted = false;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      try {
-        expect(JSON.parse(await readFile(discoveryPath, "utf8"))).toEqual({
-          version: 1,
-          hostnameLabel: "showtime",
-        });
-        persisted = true;
-        break;
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    }
-    expect(persisted).toBe(true);
+    expect(preferred).toEqual([label]);
+    expect(
+      JSON.parse(await readFile(path.join(homeDirectory, ".showtime", "settings.json"), "utf8")),
+    ).toEqual({ version: 2, connectionsEnabled: true, hostName });
 
     await runtime.runPromise(
       Effect.flatMap(ConnectionManager, (_) => _.setConnectionsEnabled(false)),
     );
     expect(shutdowns).toBe(1);
-    const disabled = await runtime.runPromise(
-      Effect.flatMap(ConnectionManager, (_) => _.pairingInfo(pendingId)),
-    );
-    expect(disabled.discovery).toEqual({ kind: "disabled" });
-    expect(disabled.candidates.every((candidate) => candidate.kind === "ip-address")).toBe(true);
     await runtime.dispose();
     expect(shutdowns).toBe(1);
   });
 
-  it("quarantines malformed state and probes from the base label", async () => {
-    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-discovery-corrupt-"));
+  it("restarts on an explicit rename and revokes every old connection", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-discovery-rename-"));
     tempHomes.add(homeDirectory);
-    const directory = path.join(homeDirectory, ".showtime");
-    await mkdir(directory);
-    await writeFile(path.join(directory, "discovery.json"), "not-json");
     const advertised: Array<ShowtimeHostnameLabel> = [];
+    let shutdowns = 0;
     const advertiser = makeLayer(({ preferredLabel }) => {
       advertised.push(preferredLabel);
       return Effect.succeed({
         hostnameLabel: preferredLabel,
         nextEvent: Effect.never,
-        shutdown: Effect.void,
+        shutdown: Effect.sync(() => shutdowns++).pipe(Effect.asVoid),
       });
     });
     const runtime = makeBackendRuntime(
@@ -149,22 +134,34 @@ describe("LocalDiscovery", () => {
     );
 
     await runtime.runPromise(Effect.void);
+    const initial = await createInvitation(runtime);
+    await waitForAnnouncement(runtime, invitationId(initial));
+    const renamed = await runtime.runPromise(
+      Effect.flatMap(ConnectionManager, (_) => _.setHostName("main-stage")),
+    );
+    expect(renamed).toMatchObject({
+      hostName: "main-stage",
+      hostname: "showtime-main-stage.local",
+      clients: [],
+    });
     await waitForAnnouncement(runtime, invitationId(await createInvitation(runtime)));
-    expect(advertised).toEqual(["showtime"]);
-    expect(
-      (await readdir(directory)).some((name) => name.startsWith("discovery.json.corrupt-")),
-    ).toBe(true);
+    expect(advertised).toEqual([
+      `showtime-${normalizeShowtimeHostName(os.hostname())}`,
+      "showtime-main-stage",
+    ]);
+    expect(shutdowns).toBe(1);
     await runtime.dispose();
+    expect(shutdowns).toBe(2);
   });
 
-  it("retries degraded discovery from the persisted hostname", async () => {
+  it("retries degraded discovery without ever changing the persisted hostname", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-discovery-retry-"));
     tempHomes.add(homeDirectory);
     const directory = path.join(homeDirectory, ".showtime");
     await mkdir(directory);
     await writeFile(
-      path.join(directory, "discovery.json"),
-      JSON.stringify({ version: 1, hostnameLabel: "showtime-1" }),
+      path.join(directory, "settings.json"),
+      JSON.stringify({ version: 2, connectionsEnabled: true, hostName: "foh" }),
     );
     const advertised: Array<ShowtimeHostnameLabel> = [];
     const advertiser = makeLayer(({ preferredLabel }) => {
@@ -192,21 +189,9 @@ describe("LocalDiscovery", () => {
 
     await runtime.runPromise(Effect.void);
     const pendingId = invitationId(await createInvitation(runtime));
-    let degraded = false;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const info = await runtime.runPromise(
-        Effect.flatMap(ConnectionManager, (_) => _.pairingInfo(pendingId)),
-      );
-      if (info.discovery.kind === "degraded") {
-        degraded = true;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(degraded).toBe(true);
     const announced = await waitForAnnouncement(runtime, pendingId);
-    expect(announced.discovery).toEqual({ kind: "announced", hostname: "showtime-1.local" });
-    expect(advertised).toEqual(["showtime-1", "showtime-1"]);
+    expect(announced.discovery).toEqual({ kind: "announced", hostname: "showtime-foh.local" });
+    expect(advertised).toEqual(["showtime-foh", "showtime-foh"]);
     await runtime.dispose();
   });
 });

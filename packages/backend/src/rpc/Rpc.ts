@@ -68,6 +68,7 @@ const handlers = ShowtimeRpcs.toLayer(
         channelId,
         senderProfileId,
         body,
+        messageId,
         parts,
         answer,
         replyToMessageId,
@@ -79,6 +80,7 @@ const handlers = ShowtimeRpcs.toLayer(
             channelId,
             senderProfileId,
             body,
+            ...(messageId === undefined ? {} : { messageId }),
             ...(parts === undefined ? {} : { parts }),
             ...(answer === undefined ? {} : { answer }),
             ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
@@ -147,8 +149,11 @@ const handlers = ShowtimeRpcs.toLayer(
       "mixes.delete": ({ showId, id }) =>
         sync.mutation(mixesSyncKey(showId), mixes.delete({ showId, id })),
       "songs.list": ({ showId }) => sync.query(songsSyncKey(showId), songs.list(showId)),
-      "songs.create": ({ showId, name, artist }) =>
-        sync.mutation(songsSyncKey(showId), songs.create({ showId, name, artist })),
+      "songs.create": ({ showId, name, artist, insertAfterSongId }) =>
+        sync.mutation(
+          songsSyncKey(showId),
+          songs.create({ showId, name, artist, insertAfterSongId }),
+        ),
       "songs.edit": ({ showId, id, name, artist, notes, mixAssignments, microphoneNames }) =>
         sync.mutation(
           songsSyncKey(showId),

@@ -1,8 +1,20 @@
 diff --git a/lib/CiaoService.d.ts b/lib/CiaoService.d.ts
-index 278e31f0f396b0e098fef0bd448c5910c0a8b1b1..103dea57f53ea879ca9140d5f4ac84e2776dfea2 100644
+index 278e31f0f396b0e098fef0bd448c5910c0a8b1b1..0f026be4af4d387dec97eaa4cac449233bd5f2b7 100644
 --- a/lib/CiaoService.d.ts
 +++ b/lib/CiaoService.d.ts
-@@ -175,6 +175,7 @@ export type RecordsUpdateCallback = (error?: Error | null) => void;
+@@ -65,6 +65,11 @@ export interface ServiceOptions {
+      * If undefined the service name will be used as default.
+      */
+     hostname?: string;
++    /**
++     * Reject advertisement when the requested name is already in use instead of
++     * silently selecting a different name.
++     */
++    fixedName?: boolean;
+     /**
+      * If defined, a txt record will be published with the given service.
+      */
+@@ -175,6 +180,7 @@ export type RecordsUpdateCallback = (error?: Error | null) => void;
  export declare interface CiaoService {
      on(event: "name-change", listener: (name: string) => void): this;
      on(event: "hostname-change", listener: (hostname: string) => void): this;
@@ -11,19 +23,18 @@ index 278e31f0f396b0e098fef0bd448c5910c0a8b1b1..103dea57f53ea879ca9140d5f4ac84e2
       * @private
       */
 diff --git a/lib/CiaoService.js b/lib/CiaoService.js
-index a70f9b4906ccd9bd5d3d475eeef9d9ae076dacec..ecfbf462283e2e92a396204ab42850605ab1849f 100644
+index a70f9b4906ccd9bd5d3d475eeef9d9ae076dacec..5319f56b380c062c97802a23cf730e674133b78b 100644
 --- a/lib/CiaoService.js
 +++ b/lib/CiaoService.js
-@@ -21,7 +21,7 @@ const domainFormatter = tslib_1.__importStar(require("./util/domain-formatter"))
- const domain_formatter_1 = require("./util/domain-formatter");
- const debug = (0, debug_1.default)("ciao:CiaoService");
- const numberedServiceNamePattern = /^(.*) \((\d+)\)$/; // matches a name lik "My Service (2)"
--const numberedHostnamePattern = /^(.*)-\((\d+)\)(\.\w{2,}.)$/; // matches a hostname like "My-Computer-(2).local."
-+const numberedHostnamePattern = /^(.*)-([1-9]\d*)(\.\w{2,}.)$/; // Showtime patch: "showtime-1.local."
- /**
-  * This enum defines some commonly used service types.
-  * This is also referred to as service name (as of RFC 6763).
-@@ -473,11 +473,7 @@ class CiaoService extends events_1.EventEmitter {
+@@ -151,6 +151,7 @@ class CiaoService extends events_1.EventEmitter {
+         }
+         this.hostname = domainFormatter.formatHostname(options.hostname || this.name, this.serviceDomain)
+             .replace(/ /g, "-"); // replacing all spaces with dashes in the hostname
++        this.fixedName = options.fixedName === true;
+         this.loweredHostname = (0, dns_equal_1.dnsLowerCase)(this.hostname);
+         this.port = options.port;
+         if (options.restrictedAddresses) {
+@@ -473,11 +474,7 @@ class CiaoService extends events_1.EventEmitter {
              // thus, when sending the first request, the socket will be bound, and we don't need to wait here
              this.emit("republish" /* InternalServiceEvent.REPUBLISH */, error => {
                  if (error) {
@@ -36,29 +47,21 @@ index a70f9b4906ccd9bd5d3d475eeef9d9ae076dacec..ecfbf462283e2e92a396204ab4285060
                  }
              });
          }
-@@ -513,7 +509,7 @@ class CiaoService extends events_1.EventEmitter {
-         if (hostnameMatcher) { // if it matched. Extract the current nameNumber
-             hostnameBase = hostnameMatcher[1];
-             hostnameTLD = hostnameMatcher[3];
--            hostnameNumber = parseInt(hostnameMatcher[2]);
-+            hostnameNumber = parseInt(hostnameMatcher[2]) + 1; // external -1 is ciao's internal second name
-             (0, assert_1.default)(hostnameNumber, `Failed to extract hostname number from ${this.hostname}. Resulted in ${hostnameNumber}`);
-         }
-         else {
-@@ -531,7 +527,7 @@ class CiaoService extends events_1.EventEmitter {
-         const newNumber = Math.max(nameNumber, hostnameNumber);
-         // reassemble the name
-         this.name = newNumber === 1 ? nameBase : `${nameBase} (${newNumber})`;
--        this.hostname = newNumber === 1 ? `${hostnameBase}${hostnameTLD}` : `${hostnameBase}-(${newNumber})${hostnameTLD}`;
-+        this.hostname = newNumber === 1 ? `${hostnameBase}${hostnameTLD}` : `${hostnameBase}-${newNumber - 1}${hostnameTLD}`;
-         this.loweredHostname = (0, dns_equal_1.dnsLowerCase)(this.hostname);
-         this.fqdn = this.formatFQDN(); // update the fqdn
-         this.loweredFqdn = (0, dns_equal_1.dnsLowerCase)(this.fqdn);
 diff --git a/lib/Responder.js b/lib/Responder.js
-index 78b01f6e889cc33766dab335223f34a8aa7323b7..8640ef7c4e0d23a5cf7733f91e1c617c3567ef2c 100644
+index 78b01f6e889cc33766dab335223f34a8aa7323b7..700084f9c68ec42058d156ae3842121f747bff0f 100644
 --- a/lib/Responder.js
 +++ b/lib/Responder.js
-@@ -651,11 +651,7 @@ class Responder {
+@@ -240,6 +240,9 @@ class Responder {
+             if (reason === Prober_1.Prober.CANCEL_REASON) {
+                 callback();
+             }
++            else if (service.fixedName) {
++                callback(reason);
++            }
+             else { // other errors are only thrown when sockets error occur
+                 console.log(`[${service.getFQDN()}] failed probing with reason: ${reason}. Trying again in 2 seconds!`);
+                 return (0, promise_utils_1.PromiseTimeout)(2000).then(() => this.advertiseService(service, callback));
+@@ -651,11 +654,7 @@ class Responder {
                  // noinspection JSIgnoredPromiseFromCall
                  this.republishService(service, error => {
                      if (error) {
@@ -71,3 +74,18 @@ index 78b01f6e889cc33766dab335223f34a8aa7323b7..8640ef7c4e0d23a5cf7733f91e1c617c
                      }
                  }, true);
              }
+diff --git a/lib/responder/Prober.js b/lib/responder/Prober.js
+index fdbdb4aa2397fd775e77ce7e902e8ef1085476a9..404cfa20af659e4f9d2f351ee7eb4397314eece9 100644
+--- a/lib/responder/Prober.js
++++ b/lib/responder/Prober.js
+@@ -194,6 +194,10 @@ class Prober {
+     handleNameChange() {
+         this.endProbing(false); // reset the prober
+         this.service.serviceState = "unannounced" /* ServiceState.UNANNOUNCED */;
++        if (this.service.fixedName) {
++            this.promiseReject(new Error(`The fixed service name '${this.service.getHostname()}' is already in use`));
++            return;
++        }
+         this.service.incrementName();
+         this.service.serviceState = "probing" /* ServiceState.PROBING */;
+         this.serviceEncounteredNameChange = true;

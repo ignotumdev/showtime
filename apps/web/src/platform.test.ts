@@ -9,14 +9,14 @@ afterEach(() => {
 describe("browserRpcWebSocketUrl", () => {
   it("uses a non-authorized endpoint when the browser is not paired", () => {
     vi.stubGlobal("window", { localStorage: { getItem: () => null } });
-    expect(browserRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8080" })).toBe(
-      "ws://showtime.local:8080/rpc/unpaired",
+    expect(browserRpcWebSocketUrl({ protocol: "http:", host: "showtime-foh.local:8080" })).toBe(
+      "ws://showtime-foh.local:8080/rpc/unpaired",
     );
   });
   it("uses a secure websocket for HTTPS", () => {
     vi.stubGlobal("window", { localStorage: { getItem: () => null } });
-    expect(browserRpcWebSocketUrl({ protocol: "https:", host: "showtime.local" })).toBe(
-      "wss://showtime.local/rpc/unpaired",
+    expect(browserRpcWebSocketUrl({ protocol: "https:", host: "showtime-foh.local" })).toBe(
+      "wss://showtime-foh.local/rpc/unpaired",
     );
   });
 });
@@ -46,11 +46,13 @@ describe("resolveRpcWebSocketUrl", () => {
   it("uses the browser origin when no host or configured URL is available", async () => {
     vi.stubEnv("VITE_SHOWTIME_RPC_WEBSOCKET_URL", "");
     vi.stubGlobal("window", {
-      location: { protocol: "https:", host: "showtime.local:8443" },
+      location: { protocol: "https:", host: "showtime-foh.local:8443" },
       localStorage: { getItem: () => null },
     });
 
-    await expect(resolveRpcWebSocketUrl()).resolves.toBe("wss://showtime.local:8443/rpc/unpaired");
+    await expect(resolveRpcWebSocketUrl()).resolves.toBe(
+      "wss://showtime-foh.local:8443/rpc/unpaired",
+    );
   });
 
   it("falls back to configuration when the desktop bridge returns an empty URL", async () => {

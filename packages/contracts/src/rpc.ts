@@ -104,6 +104,7 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
       channelId: ChatChannelId,
       senderProfileId: ProfileId,
       body: ChatMessageBody,
+      messageId: Schema.optional(ChatMessageId),
       parts: Schema.optional(Schema.Array(ChatMessagePart)),
       answer: Schema.optional(ChatPresetAnswer),
       replyToMessageId: Schema.optional(ChatMessageId),
@@ -220,7 +221,12 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
     stream: true,
   }),
   Rpc.make("songs.create", {
-    payload: { showId: ShowId, name: SongName, artist: SongArtist },
+    payload: {
+      showId: ShowId,
+      name: SongName,
+      artist: SongArtist,
+      insertAfterSongId: Schema.optional(SongId),
+    },
     success: Song,
     error: RpcError,
   }),

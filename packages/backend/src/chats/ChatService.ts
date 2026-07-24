@@ -88,6 +88,7 @@ export class ChatService extends Context.Service<
       readonly channelId: ChatChannelId;
       readonly senderProfileId: ProfileId;
       readonly body: string;
+      readonly messageId?: ChatMessageId;
       readonly parts?: ReadonlyArray<ChatMessagePart>;
       readonly answer?: ChatPresetAnswer;
       readonly replyToMessageId?: ChatMessageId;
@@ -538,6 +539,7 @@ const make = Effect.gen(function* () {
     readonly channelId: ChatChannelId;
     readonly senderProfileId: ProfileId;
     readonly body: string;
+    readonly messageId?: ChatMessageId;
     readonly parts?: ReadonlyArray<ChatMessagePart>;
     readonly answer?: ChatPresetAnswer;
     readonly replyToMessageId?: ChatMessageId;
@@ -573,7 +575,7 @@ const make = Effect.gen(function* () {
         if (!decodeStoredChatMessage(request[0]!.body).answer)
           return yield* Effect.fail(rpcError("This message does not accept an answer."));
       }
-      const id = yield* ids.makeChatMessageId;
+      const id = params.messageId ?? (yield* ids.makeChatMessageId);
       const sentAt = yield* DateTime.now;
       const storedBody = encodeStoredChatMessage(body, {
         ...(params.parts?.length ? { parts: params.parts } : {}),
@@ -585,27 +587,47 @@ const make = Effect.gen(function* () {
       const inserted = (yield* sql`INSERT INTO chat_messages
           (id, show_id, channel_id, sender_profile_id, body, sent_at)
         VALUES (${id}, ${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${storedBody}, ${DateTime.formatIso(sentAt)})
+        ON CONFLICT(id) DO NOTHING
         RETURNING sequence`) as unknown as ReadonlyArray<{ sequence: number }>;
-      const sequence = Number(inserted[0]!.sequence) as ChatSequence;
+      let message: ChatMessage;
+      if (inserted.length > 0) {
+        message = {
+          id,
+          sequence: Number(inserted[0]!.sequence) as ChatSequence,
+          showId: params.showId,
+          channelId: params.channelId,
+          senderProfileId: params.senderProfileId,
+          body,
+          ...(params.parts?.length ? { parts: params.parts } : {}),
+          ...(params.answer === undefined ? {} : { answer: params.answer }),
+          ...(params.replyToMessageId === undefined
+            ? {}
+            : { replyToMessageId: params.replyToMessageId }),
+          sentAt,
+        };
+      } else {
+        const existing = (yield* sql`SELECT
+            id, sequence, show_id, channel_id, sender_profile_id, body, sent_at
+          FROM chat_messages
+          WHERE id = ${id}`) as unknown as ReadonlyArray<MessageRow>;
+        const row = existing[0];
+        if (
+          !row ||
+          row.show_id !== params.showId ||
+          row.channel_id !== params.channelId ||
+          row.sender_profile_id !== params.senderProfileId ||
+          row.body !== storedBody
+        )
+          return yield* Effect.fail(rpcError("Message id is already in use."));
+        message = toMessage(row);
+      }
+      const sequence = message.sequence;
       yield* sql`INSERT INTO chat_profile_channel_state
           (show_id, channel_id, profile_id, last_read_sequence, notifications_enabled)
         VALUES (${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${sequence}, 1)
         ON CONFLICT(show_id, channel_id, profile_id) DO UPDATE SET
           last_read_sequence = MAX(last_read_sequence, excluded.last_read_sequence)`;
-      return {
-        id,
-        sequence,
-        showId: params.showId,
-        channelId: params.channelId,
-        senderProfileId: params.senderProfileId,
-        body,
-        ...(params.parts?.length ? { parts: params.parts } : {}),
-        ...(params.answer === undefined ? {} : { answer: params.answer }),
-        ...(params.replyToMessageId === undefined
-          ? {}
-          : { replyToMessageId: params.replyToMessageId }),
-        sentAt,
-      } satisfies ChatMessage;
+      return message;
     }).pipe(
       sql.withTransaction,
       Effect.mapError((cause) =>

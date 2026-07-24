@@ -374,4 +374,54 @@ describe("ChatService", () => {
     expect(message).toMatchObject({ body: "Plain message" });
     expect(message).not.toHaveProperty("parts");
   });
+
+  it("deduplicates retries that use the same client-generated message id", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const result = await withService(
+      home,
+      Effect.gen(function* () {
+        const ids = yield* Ids.Ids;
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* ids.makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const channel = (yield* chats.state(showId, profileId)).channels[0]!;
+        const messageId = yield* ids.makeChatMessageId;
+        const first = yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "One logical message",
+          messageId,
+        });
+        const retried = yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "One logical message",
+          messageId,
+        });
+        const conflictingRetry = yield* Effect.exit(
+          chats.send({
+            showId,
+            channelId: channel.id,
+            senderProfileId: profileId,
+            body: "Different message",
+            messageId,
+          }),
+        );
+        const snapshot = yield* chats.state(showId, profileId);
+        return { first, retried, conflictingRetry, snapshot };
+      }),
+    );
+
+    expect(result.retried).toEqual(result.first);
+    expect(result.snapshot.channels[0]).toMatchObject({ messageCount: 1 });
+    expect(result.snapshot.channels[0]!.messages.map((message) => message.body)).toEqual([
+      "One logical message",
+    ]);
+    expect(Exit.isFailure(result.conflictingRetry)).toBe(true);
+  });
 });
