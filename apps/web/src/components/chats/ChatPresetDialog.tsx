@@ -398,9 +398,12 @@ function UsePreset({
     if (!resolved || sending) return;
     setSending(true);
     setError(undefined);
-    const nextError = await onSend(resolved.body, resolved.parts);
-    if (nextError) setError(nextError);
-    setSending(false);
+    try {
+      const nextError = await onSend(resolved.body, resolved.parts);
+      if (nextError) setError(nextError);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -581,21 +584,24 @@ function PresetEditor({
     if (!canSave || saving) return;
     setSaving(true);
     setError(undefined);
-    const common = {
-      showId,
-      name: name.trim() as ChatPresetName,
-      template: template.trim() as ChatPresetTemplate,
-      fields,
-    };
-    const exit = preset
-      ? await updatePreset({
-          payload: { ...common, presetId: preset.id },
-          reactivityKeys: chatsSyncKey(showId),
-        })
-      : await createPreset({ payload: common, reactivityKeys: chatsSyncKey(showId) });
-    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else onSaved(exit.value);
-    setSaving(false);
+    try {
+      const common = {
+        showId,
+        name: name.trim() as ChatPresetName,
+        template: template.trim() as ChatPresetTemplate,
+        fields,
+      };
+      const exit = preset
+        ? await updatePreset({
+            payload: { ...common, presetId: preset.id },
+            reactivityKeys: chatsSyncKey(showId),
+          })
+        : await createPreset({ payload: common, reactivityKeys: chatsSyncKey(showId) });
+      if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+      else onSaved(exit.value);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -726,13 +732,16 @@ function DeletePreset({
   const confirm = async () => {
     setDeleting(true);
     setError(undefined);
-    const exit = await remove({
-      payload: { showId, presetId: preset.id },
-      reactivityKeys: chatsSyncKey(showId),
-    });
-    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else onDeleted();
-    setDeleting(false);
+    try {
+      const exit = await remove({
+        payload: { showId, presetId: preset.id },
+        reactivityKeys: chatsSyncKey(showId),
+      });
+      if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+      else onDeleted();
+    } finally {
+      setDeleting(false);
+    }
   };
   return (
     <>

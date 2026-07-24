@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { AlertCircleIcon, SpeakerIcon } from "lucide-react";
 import type { ShowId } from "@showtime/contracts";
@@ -60,7 +61,7 @@ function RouteComponent() {
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
           {mixes.map((mix) => (
             <MixCard
-              key={mix.id}
+              key={`${mix.id}:${DateTime.toEpochMillis(mix.updatedAt)}`}
               mix={mix}
               mixes={mixes}
               showId={typedShowId}

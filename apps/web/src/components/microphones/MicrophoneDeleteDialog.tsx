@@ -37,14 +37,17 @@ export function MicrophoneDeleteDialog({
     if (!microphone) return;
     setIsDeleting(true);
     setDeleteError(undefined);
-    const result = await deleteMicrophone({
-      payload: { showId, id: microphone.id },
-      reactivityKeys: microphonesRpcReactivityKey(showId),
-    });
-    if (Exit.isSuccess(result)) {
-      onClose();
-    } else {
-      setDeleteError(rpcErrorMessageFromCause(result.cause));
+    try {
+      const result = await deleteMicrophone({
+        payload: { showId, id: microphone.id },
+        reactivityKeys: microphonesRpcReactivityKey(showId),
+      });
+      if (Exit.isSuccess(result)) {
+        onClose();
+      } else {
+        setDeleteError(rpcErrorMessageFromCause(result.cause));
+      }
+    } finally {
       setIsDeleting(false);
     }
   };

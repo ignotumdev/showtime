@@ -26,16 +26,6 @@ export function ConnectionLinkDialog({
   const [message, setMessage] = React.useState<string>();
   const [connectionUrl, setConnectionUrl] = React.useState("");
 
-  React.useEffect(() => {
-    if (!open) {
-      setConnectionUrl("");
-      return;
-    }
-    handledRef.current = false;
-    setState("idle");
-    setMessage(undefined);
-  }, [open]);
-
   const connect = React.useCallback(async (value: string) => {
     const standalone = isStandalonePwa();
     const pairingUrl = showtimePairingNavigationUrl(value, window.location.href, standalone);

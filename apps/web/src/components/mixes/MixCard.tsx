@@ -40,13 +40,6 @@ export function MixCard({
   const [name, setName] = React.useState(mix.name ?? "");
   const [color, setColor] = React.useState(mix.color);
   const [saveError, setSaveError] = React.useState<string>();
-  React.useEffect(() => {
-    setNumber(String(mix.number));
-    setName(mix.name ?? "");
-    setColor(mix.color);
-    setSaveError(undefined);
-  }, [mix.color, mix.name, mix.number]);
-
   const save = async (next: { number?: string; name?: string; color?: Color }) => {
     setSaveError(undefined);
     const result = await edit({

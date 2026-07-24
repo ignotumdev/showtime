@@ -57,39 +57,38 @@ export function ShowFormDialog() {
       if (trimmed.length === 0) {
         return;
       }
+      if (dialog.type !== "create" && dialog.type !== "edit") {
+        return;
+      }
 
       setIsSubmitting(true);
       setSubmitError(undefined);
 
-      const result =
-        dialog.type === "edit"
-          ? await editShow({
-              payload: {
-                id: dialog.show.id,
-                name: trimmed as ShowName,
-                color,
-              },
-              ...showMutationOptions,
-            })
-          : dialog.type === "create"
-            ? await createShow({
+      try {
+        const result =
+          dialog.type === "edit"
+            ? await editShow({
                 payload: {
+                  id: dialog.show.id,
                   name: trimmed as ShowName,
                   color,
                 },
                 ...showMutationOptions,
               })
-            : undefined;
+            : await createShow({
+                payload: {
+                  name: trimmed as ShowName,
+                  color,
+                },
+                ...showMutationOptions,
+              });
 
-      if (result === undefined) {
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (Exit.isSuccess(result)) {
-        close();
-      } else {
-        setSubmitError(rpcErrorMessageFromCause(result.cause));
+        if (Exit.isSuccess(result)) {
+          close();
+        } else {
+          setSubmitError(rpcErrorMessageFromCause(result.cause));
+        }
+      } finally {
         setIsSubmitting(false);
       }
     },

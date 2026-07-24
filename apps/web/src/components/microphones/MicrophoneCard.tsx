@@ -38,13 +38,6 @@ export function MicrophoneCard({
   const [name, setName] = React.useState(microphone.name ?? "");
   const [color, setColor] = React.useState(microphone.color);
   const [saveError, setSaveError] = React.useState<string>();
-  React.useEffect(() => {
-    setNumber(String(microphone.number));
-    setName(microphone.name ?? "");
-    setColor(microphone.color);
-    setSaveError(undefined);
-  }, [microphone.color, microphone.name, microphone.number]);
-
   const save = async (next: { number?: string; name?: string; color?: Color }) => {
     setSaveError(undefined);
     const result = await edit({

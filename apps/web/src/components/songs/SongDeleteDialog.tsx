@@ -35,17 +35,21 @@ export function SongDeleteDialog({
   const [error, setError] = React.useState<string>();
   const confirm = async () => {
     setIsDeleting(true);
-    const result = await deleteSong({
-      payload: { showId, id: songId },
-      reactivityKeys: songsRpcReactivityKey(showId),
-    });
-    if (Exit.isFailure(result)) {
-      setError(rpcErrorMessageFromCause(result.cause));
+    setError(undefined);
+    try {
+      const result = await deleteSong({
+        payload: { showId, id: songId },
+        reactivityKeys: songsRpcReactivityKey(showId),
+      });
+      if (Exit.isFailure(result)) {
+        setError(rpcErrorMessageFromCause(result.cause));
+        return;
+      }
+      onOpenChange(false);
+      void navigate({ to: "/shows/$showId/setlist", params: { showId } });
+    } finally {
       setIsDeleting(false);
-      return;
     }
-    onOpenChange(false);
-    void navigate({ to: "/shows/$showId/setlist", params: { showId } });
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

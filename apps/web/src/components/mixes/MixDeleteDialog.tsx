@@ -37,14 +37,17 @@ export function MixDeleteDialog({
     if (!mix) return;
     setIsDeleting(true);
     setDeleteError(undefined);
-    const result = await deleteMix({
-      payload: { showId, id: mix.id },
-      reactivityKeys: mixesRpcReactivityKey(showId),
-    });
-    if (Exit.isSuccess(result)) {
-      onClose();
-    } else {
-      setDeleteError(rpcErrorMessageFromCause(result.cause));
+    try {
+      const result = await deleteMix({
+        payload: { showId, id: mix.id },
+        reactivityKeys: mixesRpcReactivityKey(showId),
+      });
+      if (Exit.isSuccess(result)) {
+        onClose();
+      } else {
+        setDeleteError(rpcErrorMessageFromCause(result.cause));
+      }
+    } finally {
       setIsDeleting(false);
     }
   };

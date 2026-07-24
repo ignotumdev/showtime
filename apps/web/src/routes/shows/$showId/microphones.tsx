@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { AlertCircleIcon, Mic2Icon } from "lucide-react";
 import type { ShowId } from "@showtime/contracts";
@@ -63,7 +64,7 @@ function RouteComponent() {
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
           {microphones.map((microphone) => (
             <MicrophoneCard
-              key={microphone.id}
+              key={`${microphone.id}:${DateTime.toEpochMillis(microphone.updatedAt)}`}
               microphone={microphone}
               microphones={microphones}
               showId={typedShowId}

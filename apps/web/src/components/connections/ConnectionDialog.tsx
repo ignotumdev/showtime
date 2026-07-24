@@ -371,6 +371,7 @@ export function ConnectionDialog({
         profilesResult={profilesResult}
       />
       <HostNameDialog
+        key={hostNameOpen ? state.hostName : "closed"}
         manager={manager}
         open={hostNameOpen}
         currentState={state}
@@ -407,14 +408,6 @@ function HostNameDialog({
   const [confirming, setConfirming] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string>();
-
-  React.useEffect(() => {
-    if (!open) return;
-    setDraft(currentState.hostName);
-    setConfirming(false);
-    setSaving(false);
-    setError(undefined);
-  }, [open, currentState.hostName]);
 
   const candidate = draft.trim() ? normalizeShowtimeHostName(draft) : undefined;
   const hostname = candidate ? `showtime-${candidate}.local` : undefined;

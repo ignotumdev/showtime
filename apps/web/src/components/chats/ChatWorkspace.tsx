@@ -269,13 +269,16 @@ function ChannelTabs({
     if (!target || deleting || channels.length === 1) return;
     setDeleting(true);
     setError(undefined);
-    const exit = await deleteChannel({
-      payload: { showId, channelId: target.id },
-      ...mutationOptions,
-    });
-    if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
-    else setDeleteTarget(undefined);
-    setDeleting(false);
+    try {
+      const exit = await deleteChannel({
+        payload: { showId, channelId: target.id },
+        ...mutationOptions,
+      });
+      if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
+      else setDeleteTarget(undefined);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (

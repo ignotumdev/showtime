@@ -78,16 +78,17 @@ function ChatDrawerView({
     return () => query.removeEventListener("change", update);
   }, []);
 
+  const openRequestedChat = React.useEffectEvent(() => {
+    const request = consumeChatOpenRequest(showId);
+    if (!request) return;
+    selectChannel(request.channelId);
+    setOpen(true);
+  });
+
   React.useEffect(() => {
-    const openRequestedChat = () => {
-      const request = consumeChatOpenRequest(showId);
-      if (!request) return;
-      selectChannel(request.channelId);
-      setOpen(true);
-    };
     openRequestedChat();
     return subscribeChatOpenRequests(openRequestedChat);
-  }, [selectChannel, setOpen, showId]);
+  }, []);
 
   return (
     <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>

@@ -37,7 +37,11 @@ export function ConnectToShowtime({ error }: { readonly error?: string }) {
           </p>
         </EmptyContent>
       </Empty>
-      <ConnectionLinkDialog open={connectOpen} onOpenChange={setConnectOpen} />
+      <ConnectionLinkDialog
+        key={connectOpen ? "open" : "closed"}
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+      />
     </main>
   );
 }

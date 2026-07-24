@@ -64,24 +64,32 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
     setIsDeleting(true);
     setDeleteError(undefined);
 
-    const result = await deleteShow({
-      payload: {
-        id: deletingShowId,
-      },
-      ...showMutationOptions,
-    });
+    try {
+      const result = await deleteShow({
+        payload: {
+          id: deletingShowId,
+        },
+        ...showMutationOptions,
+      });
 
-    const currentDialog = dialogRef.current;
-    if (currentDialog.type !== "delete" || currentDialog.show.id !== deletingShowId) {
-      return;
-    }
+      const currentDialog = dialogRef.current;
+      if (currentDialog.type !== "delete" || currentDialog.show.id !== deletingShowId) {
+        return;
+      }
 
-    if (Exit.isSuccess(result)) {
-      close();
-      notifyDeleted();
-    } else {
-      setDeleteError(rpcErrorMessageFromCause(result.cause));
-      setIsDeleting(false);
+      if (Exit.isSuccess(result)) {
+        close();
+        notifyDeleted();
+      } else {
+        setDeleteError(rpcErrorMessageFromCause(result.cause));
+      }
+    } finally {
+      setIsDeleting((current) => {
+        const currentDialog = dialogRef.current;
+        return currentDialog.type === "delete" && currentDialog.show.id === deletingShowId
+          ? false
+          : current;
+      });
     }
   };
 
