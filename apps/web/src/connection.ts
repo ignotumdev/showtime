@@ -64,6 +64,36 @@ export type ConnectionProbeResult = "available" | "disabled" | "revoked" | "unre
 
 export const connectionStorageChangedEvent = "showtime:connection-storage-changed";
 
+export const parseShowtimePairingUrl = (value: string, baseUrl = window.location.href) => {
+  try {
+    const url = new URL(value, baseUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (url.username || url.password) return undefined;
+    if (!url.hash.startsWith(fragmentPrefix)) return undefined;
+    if (!pairingTokenPattern.test(url.hash.slice(fragmentPrefix.length))) return undefined;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+};
+
+export const showtimePairingNavigationUrl = (
+  value: string,
+  currentUrl = window.location.href,
+  stayOnCurrentOrigin = false,
+) => {
+  const pairingUrl = parseShowtimePairingUrl(value, currentUrl);
+  if (!pairingUrl || !stayOnCurrentOrigin) return pairingUrl;
+
+  // A standalone PWA cannot reliably navigate to an equivalent IP/hostname
+  // outside its installed scope. Redeem the server-specific token through the
+  // origin from which this PWA was installed instead.
+  const target = new URL(pairingUrl);
+  const current = new URL(currentUrl);
+  current.hash = target.hash;
+  return current.href;
+};
+
 const browserLocalStorage = (): Storage | undefined => {
   try {
     return window.localStorage;

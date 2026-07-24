@@ -59,7 +59,7 @@ export function MicrophoneName({
         }
       }}
       onClick={(event) => event.stopPropagation()}
-      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-sm font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
+      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-base leading-none font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
     />
   );
 }

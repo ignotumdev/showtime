@@ -20,7 +20,7 @@ function RouteComponent() {
     return (
       <React.Fragment>
         <TitleBar hideName={true} stack="above-content" />
-        <div className="h-screen overflow-hidden pt-10">
+        <div className="app-height overflow-hidden pt-[var(--title-bar-height)]">
           <Outlet />
         </div>
       </React.Fragment>
@@ -66,7 +66,7 @@ function LiveRouteContent({
         onLiveBack={() => endLiveSession(typedShowId)}
         stack="above-content"
       />
-      <div className="h-screen overflow-hidden pt-10">
+      <div className="app-height overflow-hidden pt-[var(--title-bar-height)]">
         <Outlet />
       </div>
       <LiveChatDrawer showId={typedShowId} />

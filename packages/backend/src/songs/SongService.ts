@@ -1,7 +1,8 @@
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer, Option } from "effect";
 import {
   decodeSongArtist,
   decodeSongName,
+  insertSongAfter,
   RpcError,
   type ShowId,
   type Song,
@@ -20,6 +21,7 @@ interface SongServiceShape {
     readonly showId: ShowId;
     readonly name: SongName;
     readonly artist: SongArtist;
+    readonly insertAfterSongId?: SongId;
   }) => Effect.Effect<Song, RpcError>;
   readonly edit: (params: {
     readonly showId: ShowId;
@@ -74,7 +76,19 @@ const make = Effect.fnUntraced(function* () {
       updatedAt: now,
     };
     yield* repository
-      .update(params.showId, (document) => ({ ...document, songs: [...document.songs, song] }))
+      .update(params.showId, (document) => {
+        if (
+          params.insertAfterSongId !== undefined &&
+          !document.songs.some(
+            (item) => item.id === params.insertAfterSongId && item.deletedAt === undefined,
+          )
+        ) {
+          throw new Error("The song to insert after no longer exists.");
+        }
+        const songs = insertSongAfter(document.songs, song, params.insertAfterSongId);
+        if (Option.isNone(songs)) throw new Error("The song to insert after no longer exists.");
+        return { ...document, songs: songs.value };
+      })
       .pipe(Effect.mapError(toRpcError("Could not add song.")));
     return song;
   });

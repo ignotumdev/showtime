@@ -288,7 +288,8 @@ describe("Showtime WebSocket RPC", () => {
       const settings = JSON.parse(
         await readFile(path.join(homeDirectory, ".showtime", "settings.json"), "utf8"),
       );
-      expect(settings).toEqual({ version: 1, connectionsEnabled: false });
+      expect(settings).toMatchObject({ version: 2, connectionsEnabled: false });
+      expect(settings.hostName).toMatch(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 
       await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) => connections.setConnectionsEnabled(true)),

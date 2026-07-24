@@ -25,9 +25,12 @@ const make = MdnsAdvertiser.of({
           if (!hasLanIpv4) throw new Error("No local IPv4 network interface is available");
           const responder = getResponder();
           const service = responder.createService({
-            name: "Showtime",
+            // Keep the DNS-SD service instance unique for the same reason as the host label.
+            // Otherwise two intentionally different Showtime hosts still conflict on "Showtime".
+            name: preferredLabel,
             type: ServiceType.HTTP,
             hostname: preferredLabel,
+            fixedName: true,
             port,
             disabledIpv6: true,
             txt: {},

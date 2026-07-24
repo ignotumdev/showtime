@@ -1,7 +1,8 @@
-import { DateTime } from "effect";
+import { DateTime, Option } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   makeTemporaryId,
+  insertSongAfter,
   songIdPrefix,
   type ShowId,
   type Song,
@@ -38,7 +39,8 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
             updatedAt: now,
             pending: true,
           };
-          return AsyncResult.success([...current.value, song]);
+          const inserted = insertSongAfter(current.value, song, input.payload.insertAfterSongId);
+          return Option.isSome(inserted) ? AsyncResult.success(inserted.value) : current;
         },
         fn: createSongMutation,
       }),

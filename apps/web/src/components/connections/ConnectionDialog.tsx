@@ -11,6 +11,8 @@ import type {
 import type { Profile } from "@showtime/contracts";
 import {
   hasShowtimeConnectionManagementScopes,
+  normalizeShowtimeHostName,
+  showtimeHostNameMaxLength,
   showtimeConnectionManagementScopes,
 } from "@showtime/shared";
 import { Button } from "@/components/ui/button";
@@ -54,13 +56,19 @@ import {
   type ConnectionManagementClient,
 } from "./connection-management";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/clipboard";
 import { profileAtoms } from "@/client";
 import { useProfileSelection } from "@/profiles";
 import { ProfileControl } from "@/components/profiles/ProfileSwitcher";
 import { currentProfilesState } from "@/profiles/currentProfilesState";
 import { showColorClassNames } from "@/components/shows/show-color";
 
-const emptyState: ShowtimeConnectionsState = { enabled: false, clients: [] };
+const emptyState: ShowtimeConnectionsState = {
+  enabled: false,
+  hostName: "device",
+  hostname: "showtime-device.local",
+  clients: [],
+};
 
 type PairClientState = {
   readonly candidates: ReadonlyArray<ShowtimeConnectionCandidate>;
@@ -87,6 +95,7 @@ type PairClientAction =
       readonly error?: string;
     }
   | { readonly type: "select"; readonly url: string }
+  | { readonly type: "prepare-qr-code" }
   | { readonly type: "qr-code"; readonly value?: string }
   | { readonly type: "copied" }
   | { readonly type: "error"; readonly message: string };
@@ -111,10 +120,12 @@ const reducePairClientState = (
     }
     case "select":
       return { ...state, selectedUrl: action.url, qrCode: undefined, copied: false };
+    case "prepare-qr-code":
+      return { ...state, qrCode: undefined, copied: false, error: undefined };
     case "qr-code":
       return { ...state, qrCode: action.value };
     case "copied":
-      return { ...state, copied: true };
+      return { ...state, copied: true, error: undefined };
     case "error":
       return { ...state, error: action.message };
   }
@@ -141,6 +152,7 @@ export function ConnectionDialog({
   const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [hostNameOpen, setHostNameOpen] = React.useState(false);
   const [pairingClient, setPairingClient] = React.useState<ShowtimePendingClient>();
   const [loadError, setLoadError] = React.useState<string>();
   const [error, setError] = React.useState<string>();
@@ -234,23 +246,41 @@ export function ConnectionDialog({
             </DialogDescription>
           </DialogHeader>
           {manager.isOwner && (
-            <Item variant="outline" render={<div />}>
-              <ItemContent>
-                <ItemTitle>Allow connections</ItemTitle>
-                <ItemDescription>
-                  Host the web app and let approved devices connect.
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Switch
-                  id="showtime-connections-enabled"
-                  aria-label="Allow connections"
-                  checked={state.enabled}
-                  disabled={loading}
-                  onCheckedChange={updateEnabled}
-                />
-              </ItemActions>
-            </Item>
+            <>
+              <Item variant="outline" render={<div />}>
+                <ItemContent>
+                  <ItemTitle>Allow connections</ItemTitle>
+                  <ItemDescription>
+                    Host the web app and let approved devices connect.
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Switch
+                    id="showtime-connections-enabled"
+                    aria-label="Allow connections"
+                    checked={state.enabled}
+                    disabled={loading}
+                    onCheckedChange={updateEnabled}
+                  />
+                </ItemActions>
+              </Item>
+              <Item variant="outline">
+                <ItemContent>
+                  <ItemTitle>Host name</ItemTitle>
+                  <ItemDescription>{state.hostname}</ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || !state.enabled}
+                    onClick={() => setHostNameOpen(true)}
+                  >
+                    Change
+                  </Button>
+                </ItemActions>
+              </Item>
+            </>
           )}
           <ItemGroup>
             {state.clients.map((client) => {
@@ -340,6 +370,16 @@ export function ConnectionDialog({
         profilesState={profilesState}
         profilesResult={profilesResult}
       />
+      <HostNameDialog
+        manager={manager}
+        open={hostNameOpen}
+        currentState={state}
+        onOpenChange={setHostNameOpen}
+        onChanged={(next) => {
+          setState(next);
+          setPairingClient(undefined);
+        }}
+      />
       <PairClientDialog
         manager={manager}
         key={pairingClient?.invitationId ?? "closed"}
@@ -347,6 +387,110 @@ export function ConnectionDialog({
         onOpenChange={(next) => !next && setPairingClient(undefined)}
       />
     </>
+  );
+}
+
+function HostNameDialog({
+  manager,
+  open,
+  currentState,
+  onOpenChange,
+  onChanged,
+}: {
+  readonly manager: ConnectionManagementClient;
+  readonly open: boolean;
+  readonly currentState: ShowtimeConnectionsState;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onChanged: (state: ShowtimeConnectionsState) => void;
+}) {
+  const [draft, setDraft] = React.useState(currentState.hostName);
+  const [confirming, setConfirming] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string>();
+
+  React.useEffect(() => {
+    if (!open) return;
+    setDraft(currentState.hostName);
+    setConfirming(false);
+    setSaving(false);
+    setError(undefined);
+  }, [open, currentState.hostName]);
+
+  const candidate = draft.trim() ? normalizeShowtimeHostName(draft) : undefined;
+  const hostname = candidate ? `showtime-${candidate}.local` : undefined;
+  const changed = candidate !== undefined && candidate !== currentState.hostName;
+
+  const save = async () => {
+    if (!candidate || !manager.setHostName) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      onChanged(await manager.setHostName(candidate));
+      onOpenChange(false);
+    } catch {
+      setError("Showtime could not change the host name.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{confirming ? "Change the host name?" : "Host name"}</DialogTitle>
+          <DialogDescription>
+            {confirming
+              ? "The old address will stop working. Every paired client and pending connection will be removed."
+              : "Choose the permanent local address people use to open this Showtime host."}
+          </DialogDescription>
+        </DialogHeader>
+        {!confirming ? (
+          <>
+            <Input
+              autoFocus
+              value={draft}
+              maxLength={showtimeHostNameMaxLength}
+              placeholder="For example, front-of-house"
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && changed && setConfirming(true)}
+            />
+            <p className="text-sm text-muted-foreground">
+              New address: {hostname ?? "Enter a host name"}
+            </p>
+            <Button type="button" disabled={!changed} onClick={() => setConfirming(true)}>
+              Continue
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm">
+              Change <strong>{currentState.hostname}</strong> to <strong>{hostname}</strong> and
+              remove {currentState.clients.length} connection
+              {currentState.clients.length === 1 ? "" : "s"}?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saving}
+                onClick={() => setConfirming(false)}
+              >
+                Back
+              </Button>
+              <Button type="button" variant="destructive" disabled={saving} onClick={save}>
+                {saving ? "Changing…" : "Change and remove connections"}
+              </Button>
+            </div>
+          </>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -561,7 +705,7 @@ function PairClientDialog({
     };
   }, [client, manager]);
   React.useEffect(() => {
-    dispatch({ type: "qr-code" });
+    dispatch({ type: "prepare-qr-code" });
     if (!selectedUrl) return;
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(
@@ -598,6 +742,20 @@ function PairClientDialog({
             </SelectContent>
           </Select>
         )}
+        {selectedUrl && (
+          <div className="grid gap-2">
+            <label htmlFor="generated-showtime-connection-url" className="text-sm font-medium">
+              Connection link
+            </label>
+            <Input
+              id="generated-showtime-connection-url"
+              type="url"
+              value={selectedUrl}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+        )}
         {qrCode && (
           <div className="grid justify-items-center">
             <img
@@ -621,8 +779,16 @@ function PairClientDialog({
           variant="outline"
           disabled={!selectedUrl}
           onClick={async () => {
-            await navigator.clipboard.writeText(selectedUrl);
-            dispatch({ type: "copied" });
+            try {
+              await copyText(selectedUrl);
+              dispatch({ type: "copied" });
+            } catch {
+              dispatch({
+                type: "error",
+                message:
+                  "Could not copy automatically. Press and hold the connection link above to copy it.",
+              });
+            }
           }}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}

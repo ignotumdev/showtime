@@ -7,6 +7,7 @@ import {
   desktopRemoveConnectionChannel,
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
+  desktopSetHostNameChannel,
   ShowtimeConnectionInfo,
   type ShowtimeHostBridge,
 } from "@showtime/shared";
@@ -23,6 +24,7 @@ const bridge: ShowtimeHostBridge = {
   removeConnection: (id) => ipcRenderer.invoke(desktopRemoveConnectionChannel, id),
   setConnectionsEnabled: (enabled) =>
     ipcRenderer.invoke(desktopSetConnectionsEnabledChannel, enabled),
+  setHostName: (hostName) => ipcRenderer.invoke(desktopSetHostNameChannel, hostName),
 };
 
 contextBridge.exposeInMainWorld("showtime", bridge);

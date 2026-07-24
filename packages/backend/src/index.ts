@@ -10,9 +10,12 @@ import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { createServer } from "node:http";
 import {
   showtimeLocalPort,
+  showtimeHostnameLabel,
+  showtimeLocalHostname,
   ShowtimeConnectionScopes,
   type ShowtimeConnectionInfo,
   type ShowtimeConnectionScope,
+  type ShowtimeHostName,
 } from "@showtime/shared";
 import { randomBytes } from "node:crypto";
 import * as ConnectionStore from "./connections/ConnectionStore.js";
@@ -77,6 +80,9 @@ export class ConnectionManager extends Context.Service<
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
     readonly setConnectionsEnabled: (
       enabled: boolean,
+    ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
+    readonly setHostName: (
+      hostName: ShowtimeHostName,
     ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
   }
 >()("@showtime/backend/ConnectionManager") {}
@@ -383,6 +389,8 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
       }).pipe(
         Effect.map(({ settings, clients, invitations, connectedClientIds }) => ({
           enabled: settings.connectionsEnabled,
+          hostName: settings.hostName,
+          hostname: showtimeLocalHostname(showtimeHostnameLabel(settings.hostName)),
           clients: [
             ...invitations.map(
               ({ invitationId, name, expiresAt, clientProfile, updatedAt, scopes }) => ({
@@ -463,6 +471,22 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
               ),
               Effect.andThen(state),
             ),
+          ),
+        setHostName: (hostName) =>
+          connectionTransition.withPermits(1)(
+            Effect.gen(function* () {
+              if ((yield* settings.get).hostName === hostName) return yield* state;
+              // Revoke credentials first so a crash can never retain credentials for an old URL.
+              yield* connections.removeAll;
+              yield* settings.setHostName(hostName);
+              yield* discovery.setHostName(hostName);
+              yield* Effect.logInfo("Changed the local host name and revoked all clients").pipe(
+                Effect.annotateLogs({
+                  hostname: showtimeLocalHostname(showtimeHostnameLabel(hostName)),
+                }),
+              );
+              return yield* state;
+            }),
           ),
       });
     }),

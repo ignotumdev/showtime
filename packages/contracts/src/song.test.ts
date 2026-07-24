@@ -1,6 +1,6 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
-import { Song } from "./song.js";
+import { insertSongAfter, Song, type SongId } from "./song.js";
 
 const valid = {
   id: "song_0123456789abcdef",
@@ -47,5 +47,31 @@ describe("Song", () => {
         microphoneNames: [valid.microphoneNames[0], valid.microphoneNames[0]],
       }),
     ).toThrow();
+  });
+});
+
+describe("insertSongAfter", () => {
+  const first = { id: "song_0123456789abcdef" as SongId };
+  const second = { id: "song_123456789abcdef0" as SongId };
+  const inserted = { id: "song_23456789abcdef01" as SongId };
+
+  it("inserts after the requested song", () => {
+    expect(Option.getOrThrow(insertSongAfter([first, second], inserted, first.id))).toEqual([
+      first,
+      inserted,
+      second,
+    ]);
+  });
+
+  it("appends when no insertion point is requested", () => {
+    expect(Option.getOrThrow(insertSongAfter([first, second], inserted))).toEqual([
+      first,
+      second,
+      inserted,
+    ]);
+  });
+
+  it("returns none when the requested song is absent", () => {
+    expect(Option.isNone(insertSongAfter([first], inserted, second.id))).toBe(true);
   });
 });

@@ -16,6 +16,9 @@ import { useBrowserConnectionIdentity } from "./browser-connection-state";
 import { NotificationProvider } from "./notifications/NotificationProvider";
 import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 import { configureChatNavigation } from "./chats/ChatNavigation";
+import { installMobileViewport } from "./mobile-viewport";
+import { registerServiceWorker, restorePwaConnectionHandoff } from "./pwa";
+import { ConnectToShowtime } from "./components/connections/ConnectToShowtime";
 
 configureChatNavigation({
   getActiveShowId: () => {
@@ -28,16 +31,17 @@ configureChatNavigation({
   navigateToShow: (showId) => router.navigate({ to: "/shows/$showId", params: { showId } }),
 });
 
+const uninstallMobileViewport = installMobileViewport();
+if (import.meta.hot) import.meta.hot.dispose(uninstallMobileViewport);
+restorePwaConnectionHandoff();
+void registerServiceWorker();
 const pairing = await capturePairingFragment();
 document.documentElement.classList.add("dark");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {pairing.status === "failed" ? (
-      <main className="grid min-h-screen place-content-center gap-2 bg-background p-6 text-center text-foreground">
-        <h1 className="text-lg font-semibold">Could not connect to Showtime</h1>
-        <p className="max-w-md text-sm text-muted-foreground">{pairing.message}</p>
-      </main>
+      <ConnectToShowtime error={pairing.message} />
     ) : (
       <SynchronizedApp />
     )}
@@ -66,7 +70,7 @@ function SynchronizedApp() {
           )}
           {!revoked && (
             <div
-              className="min-h-screen bg-[#0a0a0a]"
+              className="app-height bg-[#0a0a0a]"
               aria-hidden={expectsConnection && connection.status !== "connected"}
               inert={expectsConnection && connection.status !== "connected" ? true : undefined}
             >

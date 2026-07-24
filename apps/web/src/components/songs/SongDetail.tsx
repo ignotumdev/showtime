@@ -214,7 +214,7 @@ export function SongDetail({
                   if (artist.trim() !== song.artist) void save({ artist });
                 }}
                 onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                className="h-auto min-w-0 max-w-full w-auto border-0 bg-transparent p-0 text-xs shadow-none [field-sizing:content] focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
+                className="h-auto min-w-0 max-w-full w-auto border-0 bg-transparent p-0 text-base leading-none shadow-none [field-sizing:content] focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
               />
             </Badge>
           </div>

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Array, Option, Schema } from "effect";
 import { idAlphabet, idSuffixLength } from "./ids.js";
 import { MicrophoneId } from "./microphone.js";
 import { MixId } from "./mix.js";
@@ -72,6 +72,16 @@ export const Song = Schema.Struct({
   deletedAt: Schema.optional(Schema.DateTimeUtcFromString),
 });
 export type Song = typeof Song.Type;
+
+export const insertSongAfter = <A extends { readonly id: SongId }>(
+  songs: ReadonlyArray<A>,
+  song: A,
+  afterSongId?: SongId,
+): Option.Option<ReadonlyArray<A>> => {
+  if (afterSongId === undefined) return Option.some([...songs, song]);
+  const index = songs.findIndex((item) => item.id === afterSongId);
+  return index < 0 ? Option.none() : Array.insertAt(songs, index + 1, song);
+};
 
 export const decodeSongName = Schema.decodeUnknownEffect(SongName);
 export const decodeSongArtist = Schema.decodeUnknownEffect(SongArtist);

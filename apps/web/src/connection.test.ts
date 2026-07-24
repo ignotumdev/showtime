@@ -4,8 +4,10 @@ import { profileSelectionStorageKey } from "./profile-selection";
 import {
   capturePairingFragment,
   forgetBrowserConnection,
+  parseShowtimePairingUrl,
   probeStoredConnection,
   readStoredConnection,
+  showtimePairingNavigationUrl,
   storedRpcWebSocketUrl,
   updateConnectionProfile,
 } from "./connection";
@@ -17,6 +19,38 @@ const scopes = ["connections:read", "connections:create", "connections:delete"] 
 const clientProfile = "profile_0000000000000000";
 
 describe("browser connection persistence", () => {
+  it("accepts only safe Showtime connection links", () => {
+    expect(
+      parseShowtimePairingUrl(
+        `http://showtime-foh.local:8585/#pair=${pairingToken}`,
+        "https://app.example/",
+      ),
+    ).toBe(`http://showtime-foh.local:8585/#pair=${pairingToken}`);
+    expect(
+      parseShowtimePairingUrl(`/#pair=${pairingToken}`, "https://showtime.example/connect"),
+    ).toBe(`https://showtime.example/#pair=${pairingToken}`);
+    expect(parseShowtimePairingUrl("javascript:alert(1)", "https://app.example/")).toBeUndefined();
+    expect(
+      parseShowtimePairingUrl(
+        `https://user:password@showtime.example/#pair=${pairingToken}`,
+        "https://app.example/",
+      ),
+    ).toBeUndefined();
+    expect(
+      parseShowtimePairingUrl("https://showtime.example/#pair=not-a-token", "https://app.example/"),
+    ).toBeUndefined();
+  });
+
+  it("keeps pairing navigation inside an installed PWA origin", () => {
+    const pairingUrl = `http://192.168.1.20:8585/#pair=${pairingToken}`;
+    expect(
+      showtimePairingNavigationUrl(pairingUrl, "http://showtime-foh.local:8585/#/", true),
+    ).toBe(`http://showtime-foh.local:8585/#pair=${pairingToken}`);
+    expect(
+      showtimePairingNavigationUrl(pairingUrl, "http://showtime-foh.local:8585/#/", false),
+    ).toBe(pairingUrl);
+  });
+
   it("exchanges a valid single-use pairing fragment and removes it from history", async () => {
     const setItem = vi.fn();
     const removeItem = vi.fn();
@@ -131,8 +165,8 @@ describe("browser connection persistence", () => {
     });
     expect(connection).toEqual({ version: 1, clientId, capability, clientProfile, scopes });
     expect(
-      storedRpcWebSocketUrl({ protocol: "http:", host: "showtime.local:8585" }, connection!),
-    ).toBe(`ws://showtime.local:8585/rpc/${clientId}/${capability}`);
+      storedRpcWebSocketUrl({ protocol: "http:", host: "showtime-foh.local:8585" }, connection!),
+    ).toBe(`ws://showtime-foh.local:8585/rpc/${clientId}/${capability}`);
   });
 
   it("updates the authenticated client profile and then persists it locally", async () => {
