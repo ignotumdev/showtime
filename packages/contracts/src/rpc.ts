@@ -218,6 +218,9 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
   Rpc.make("songs.create", {
     payload: {
       showId: ShowId,
+      // Optional so a newly updated backend remains compatible with clients
+      // that were loaded before client-generated IDs were introduced.
+      id: Schema.optional(SongId),
       name: SongName,
       artist: SongArtist,
       insertAfterSongId: Schema.optional(SongId),

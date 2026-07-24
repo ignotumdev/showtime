@@ -1,9 +1,17 @@
 import * as React from "react";
 import { Exit } from "effect";
 import { useNavigate } from "@tanstack/react-router";
-import { type ShowId, type SongArtist, type SongId, type SongName } from "@showtime/contracts";
+import {
+  makeClientId,
+  songIdPrefix,
+  type ShowId,
+  type SongArtist,
+  type SongId,
+  type SongName,
+} from "@showtime/contracts";
 import { useAtomSet } from "@effect/atom-react";
 import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
+import { createdSongHandoff } from "./CreatedSongHandoff";
 
 export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
   const navigate = useNavigate();
@@ -15,9 +23,11 @@ export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
     if (isCreating) return;
     setIsCreating(true);
     setError(undefined);
+    const id = makeClientId(songIdPrefix) as SongId;
     const result = await create({
       payload: {
         showId,
+        id,
         name: "" as SongName,
         artist: "" as SongArtist,
         insertAfterSongId,
@@ -29,10 +39,15 @@ export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
       setIsCreating(false);
       return;
     }
-    await navigate({
-      to: "/shows/$showId/setlist/$songId",
-      params: { showId, songId: result.value.id },
-    });
+    createdSongHandoff.remember(showId, result.value, insertAfterSongId);
+    try {
+      await navigate({
+        to: "/shows/$showId/setlist/$songId",
+        params: { showId, songId: result.value.id },
+      });
+    } catch {
+      setError("The song was added, but its page could not be opened. Open it from the setlist.");
+    }
     setIsCreating(false);
   };
 

@@ -19,6 +19,7 @@ interface SongServiceShape {
   readonly list: (showId: ShowId) => Effect.Effect<ReadonlyArray<Song>, RpcError>;
   readonly create: (params: {
     readonly showId: ShowId;
+    readonly id?: SongId;
     readonly name: SongName;
     readonly artist: SongArtist;
     readonly insertAfterSongId?: SongId;
@@ -59,7 +60,7 @@ const make = Effect.fnUntraced(function* () {
   });
 
   const create: SongServiceShape["create"] = Effect.fnUntraced(function* (params) {
-    const id = yield* ids.makeSongId;
+    const id = params.id ?? (yield* ids.makeSongId);
     const name = yield* decodeSongName(params.name.trim()).pipe(
       Effect.mapError(toRpcError("Invalid song name.")),
     );
@@ -75,8 +76,14 @@ const make = Effect.fnUntraced(function* () {
       createdAt: now,
       updatedAt: now,
     };
-    yield* repository
+    const { document: updated } = yield* repository
       .update(params.showId, (document) => {
+        // The client owns the ID for new create requests. If a response is lost
+        // and the RPC is retried after persistence, return the original song
+        // instead of inserting a duplicate.
+        if (document.songs.some((item) => item.id === id && item.deletedAt === undefined)) {
+          return document;
+        }
         if (
           params.insertAfterSongId !== undefined &&
           !document.songs.some(
@@ -90,7 +97,7 @@ const make = Effect.fnUntraced(function* () {
         return { ...document, songs: songs.value };
       })
       .pipe(Effect.mapError(toRpcError("Could not add song.")));
-    return song;
+    return updated.songs.find((item) => item.id === id && item.deletedAt === undefined)!;
   });
 
   const edit: SongServiceShape["edit"] = Effect.fnUntraced(function* (params) {

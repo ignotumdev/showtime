@@ -36,6 +36,7 @@ import type { ChatChannelId, ShowId, SongId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
+import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
@@ -60,6 +61,11 @@ export function ShowLayout() {
     : AsyncResult.isFailure(songsResult)
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
+  React.useEffect(() => {
+    if (AsyncResult.isSuccess(songsResult)) {
+      createdSongHandoff.reconcile(typedShowId, songsResult.value);
+    }
+  }, [songsResult, typedShowId]);
   const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>

@@ -31,7 +31,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
           if (!AsyncResult.isSuccess(current)) return current;
           const now = DateTime.nowUnsafe();
           const song: SongListItem = {
-            id: makeTemporarySongId(),
+            id: input.payload.id ?? makeTemporarySongId(),
             name: input.payload.name.trim() as Song["name"],
             artist: input.payload.artist.trim() as Song["artist"],
             mixAssignments: [],

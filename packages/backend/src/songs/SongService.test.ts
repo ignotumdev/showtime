@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import type { SongArtist, SongName } from "@showtime/contracts";
+import type { SongArtist, SongId, SongName } from "@showtime/contracts";
 import * as Ids from "../ids/Ids.js";
 import * as ShowDiscovery from "../shows/ShowDiscovery.js";
 import * as ShowFile from "../shows/ShowFile.js";
@@ -128,6 +128,25 @@ describe("SongService", () => {
     );
 
     expect(result.map((song) => song.name)).toEqual(["First", "Inserted", "Second"]);
+  });
+
+  it("returns the existing song when a client-generated create request is retried", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const id = "song_0123456789abcdef" as SongId;
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const first = yield* songs.create({ showId: show.id, id, ...songInput("First") });
+        const retry = yield* songs.create({ showId: show.id, id, ...songInput("First") });
+        return { first, retry, listed: yield* songs.list(show.id) };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.retry).toEqual(result.first);
+    expect(result.listed).toEqual([result.first]);
   });
 
   it("stores a song-specific microphone name and removes it when it matches the inherited name", async () => {

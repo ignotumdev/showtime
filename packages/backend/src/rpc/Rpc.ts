@@ -122,10 +122,10 @@ const handlers = ShowtimeRpcs.toLayer(
       "mixes.delete": ({ showId, id }) =>
         sync.mutation(mixesSyncKey(showId), mixes.delete({ showId, id })),
       "songs.list": ({ showId }) => sync.query(songsSyncKey(showId), songs.list(showId)),
-      "songs.create": ({ showId, name, artist, insertAfterSongId }) =>
+      "songs.create": ({ showId, id, name, artist, insertAfterSongId }) =>
         sync.mutation(
           songsSyncKey(showId),
-          songs.create({ showId, name, artist, insertAfterSongId }),
+          songs.create({ showId, id, name, artist, insertAfterSongId }),
         ),
       "songs.edit": ({ showId, id, name, artist, notes, mixAssignments, microphoneNames }) =>
         sync.mutation(

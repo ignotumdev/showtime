@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Exit } from "effect";
+import { Exit, Option } from "effect";
 import { AlertCircleIcon, EllipsisIcon, MusicIcon, Trash2Icon } from "lucide-react";
 import {
   mainMixId,
@@ -52,6 +52,7 @@ import { mixAtoms } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
+import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,
@@ -63,13 +64,21 @@ function RouteComponent() {
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const mixesResult = useAtomValue(mixAtoms(typedShowId).mixes);
   const microphonesResult = useAtomValue(microphoneAtoms(typedShowId).microphones);
-  const songs = AsyncResult.getOrElse(songsResult, () => []);
+  const songs = AsyncResult.isSuccess(songsResult)
+    ? songsResult.value
+    : AsyncResult.isFailure(songsResult)
+      ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
+      : [];
   const songIndex = songs.findIndex((song) => song.id === songId);
-  const song = songs[songIndex];
+  const song = songs[songIndex] ?? createdSongHandoff.find(typedShowId, songId as SongId);
+  const songNumber =
+    songIndex >= 0
+      ? songIndex + 1
+      : createdSongHandoff.provisionalNumber(typedShowId, songId as SongId, songs);
   const mixes = AsyncResult.isSuccess(mixesResult) ? mixesResult.value : [];
   const microphones = AsyncResult.isSuccess(microphonesResult) ? microphonesResult.value : [];
 
-  if (AsyncResult.isInitial(songsResult)) {
+  if (AsyncResult.isInitial(songsResult) && !song) {
     return (
       <Empty>
         <EmptyHeader>
@@ -81,7 +90,7 @@ function RouteComponent() {
       </Empty>
     );
   }
-  if (AsyncResult.isFailure(songsResult) && songs.length === 0) {
+  if (AsyncResult.isFailure(songsResult) && songs.length === 0 && !song) {
     return (
       <Empty>
         <EmptyHeader>
@@ -112,7 +121,7 @@ function RouteComponent() {
     <SongDetail
       showId={typedShowId}
       song={song}
-      number={songIndex + 1}
+      number={songNumber}
       mixes={mixes}
       microphones={microphones}
     />
@@ -548,6 +557,7 @@ function SongDeleteDialog({
       setIsDeleting(false);
       return;
     }
+    createdSongHandoff.forget(showId, songId);
     onOpenChange(false);
     void navigate({ to: "/shows/$showId/setlist", params: { showId } });
   };
