@@ -54,6 +54,7 @@ export function ShowLayout() {
   const params = useParams({ strict: false });
   const currentSongId = typeof params.songId === "string" ? (params.songId as SongId) : undefined;
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
+  const syncedSongsResult = useAtomValue(songAtoms(typedShowId).syncedSongs);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
   const songs = AsyncResult.isSuccess(songsResult)
@@ -62,10 +63,10 @@ export function ShowLayout() {
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
   React.useEffect(() => {
-    if (AsyncResult.isSuccess(songsResult)) {
-      createdSongHandoff.reconcile(typedShowId, songsResult.value);
+    if (AsyncResult.isSuccess(syncedSongsResult)) {
+      createdSongHandoff.reconcile(typedShowId, syncedSongsResult.value, syncedSongsResult);
     }
-  }, [songsResult, typedShowId]);
+  }, [syncedSongsResult, typedShowId]);
   const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>

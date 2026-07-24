@@ -16,24 +16,25 @@ const song = Schema.decodeUnknownSync(Song)({
 describe("CreatedSongHandoff", () => {
   it("retains a confirmed creation until the streamed snapshot observes it", () => {
     const handoff = makeCreatedSongHandoff();
+    const baselineSnapshot = {};
 
-    handoff.remember(showId, song);
+    handoff.remember(showId, song, undefined, baselineSnapshot);
     expect(handoff.find(showId, song.id)).toBe(song);
 
-    handoff.reconcile(showId, []);
+    handoff.reconcile(showId, [], baselineSnapshot);
     expect(handoff.find(showId, song.id)).toBe(song);
 
-    handoff.reconcile(showId, [{ ...song, pending: true }]);
+    handoff.reconcile(showId, [{ ...song, pending: true }], {});
     expect(handoff.find(showId, song.id)).toBe(song);
 
-    handoff.reconcile(showId, [song]);
+    handoff.reconcile(showId, [song], {});
     expect(handoff.find(showId, song.id)).toBeUndefined();
   });
 
   it("can forget a creation after it is deleted before reconciliation", () => {
     const handoff = makeCreatedSongHandoff();
 
-    handoff.remember(showId, song);
+    handoff.remember(showId, song, undefined, {});
     handoff.forget(showId, song.id);
 
     expect(handoff.find(showId, song.id)).toBeUndefined();
@@ -47,8 +48,18 @@ describe("CreatedSongHandoff", () => {
       name: SongName.make("Anchor"),
     };
 
-    handoff.remember(showId, song, anchor.id);
+    handoff.remember(showId, song, anchor.id, {});
 
     expect(handoff.provisionalNumber(showId, song.id, [anchor])).toBe(2);
+  });
+
+  it("expires a confirmed creation when a newer authoritative snapshot omits it", () => {
+    const handoff = makeCreatedSongHandoff();
+    const baselineSnapshot = {};
+
+    handoff.remember(showId, song, undefined, baselineSnapshot);
+    handoff.reconcile(showId, [], {});
+
+    expect(handoff.find(showId, song.id)).toBeUndefined();
   });
 });

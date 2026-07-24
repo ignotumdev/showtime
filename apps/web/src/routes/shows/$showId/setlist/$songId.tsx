@@ -51,7 +51,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { mixAtoms } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
-import { rpcErrorMessageFromCause } from "@/client";
+import { asyncResultValueOrElse, rpcErrorMessageFromCause } from "@/client";
 import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
@@ -64,19 +64,17 @@ function RouteComponent() {
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const mixesResult = useAtomValue(mixAtoms(typedShowId).mixes);
   const microphonesResult = useAtomValue(microphoneAtoms(typedShowId).microphones);
-  const songs = AsyncResult.isSuccess(songsResult)
-    ? songsResult.value
-    : AsyncResult.isFailure(songsResult)
-      ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
-      : [];
+  const songs = asyncResultValueOrElse(songsResult, () => []);
   const songIndex = songs.findIndex((song) => song.id === songId);
   const song = songs[songIndex] ?? createdSongHandoff.find(typedShowId, songId as SongId);
   const songNumber =
     songIndex >= 0
       ? songIndex + 1
       : createdSongHandoff.provisionalNumber(typedShowId, songId as SongId, songs);
-  const mixes = AsyncResult.isSuccess(mixesResult) ? mixesResult.value : [];
-  const microphones = AsyncResult.isSuccess(microphonesResult) ? microphonesResult.value : [];
+  const mixes = asyncResultValueOrElse(mixesResult, () => []);
+  const microphones = asyncResultValueOrElse(microphonesResult, () => []);
+  const hasMixes = Option.isSome(AsyncResult.value(mixesResult));
+  const hasMicrophones = Option.isSome(AsyncResult.value(microphonesResult));
 
   if (AsyncResult.isInitial(songsResult) && !song) {
     return (
@@ -112,6 +110,22 @@ function RouteComponent() {
           </EmptyMedia>
           <EmptyTitle>Song not found</EmptyTitle>
           <EmptyDescription>It may have been removed from the setlist.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  if (!hasMixes || !hasMicrophones) {
+    const failed =
+      (AsyncResult.isFailure(mixesResult) && !hasMixes) ||
+      (AsyncResult.isFailure(microphonesResult) && !hasMicrophones);
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">{failed ? <AlertCircleIcon /> : <Spinner />}</EmptyMedia>
+          <EmptyTitle>
+            {failed ? "Song details could not be loaded" : "Loading song details"}
+          </EmptyTitle>
+          {failed && <EmptyDescription>Check your connection and try again.</EmptyDescription>}
         </EmptyHeader>
       </Empty>
     );

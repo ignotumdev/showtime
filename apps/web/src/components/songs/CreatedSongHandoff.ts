@@ -3,10 +3,22 @@ import type { ShowId, Song, SongId } from "@showtime/contracts";
 const keyFor = (showId: ShowId, songId: SongId) => `${showId}:${songId}`;
 
 export const makeCreatedSongHandoff = () => {
-  const confirmed = new Map<string, { readonly song: Song; readonly insertAfterSongId?: SongId }>();
+  const confirmed = new Map<
+    string,
+    {
+      readonly song: Song;
+      readonly insertAfterSongId?: SongId;
+      readonly baselineSnapshot: object;
+    }
+  >();
 
-  const remember = (showId: ShowId, song: Song, insertAfterSongId?: SongId) => {
-    confirmed.set(keyFor(showId, song.id), { song, insertAfterSongId });
+  const remember = (
+    showId: ShowId,
+    song: Song,
+    insertAfterSongId: SongId | undefined,
+    baselineSnapshot: object,
+  ) => {
+    confirmed.set(keyFor(showId, song.id), { song, insertAfterSongId, baselineSnapshot });
   };
 
   const find = (showId: ShowId, songId: SongId) => confirmed.get(keyFor(showId, songId))?.song;
@@ -25,9 +37,18 @@ export const makeCreatedSongHandoff = () => {
   const reconcile = (
     showId: ShowId,
     songs: ReadonlyArray<Song & { readonly pending?: boolean }>,
+    snapshot: object,
   ) => {
-    for (const song of songs) {
-      if (!song.pending) forget(showId, song.id);
+    if (songs.some((song) => song.pending)) return;
+
+    const syncedIds = new Set(songs.map((song) => song.id));
+    for (const [key, entry] of confirmed) {
+      if (
+        key.startsWith(`${showId}:`) &&
+        (syncedIds.has(entry.song.id) || snapshot !== entry.baselineSnapshot)
+      ) {
+        confirmed.delete(key);
+      }
     }
   };
 

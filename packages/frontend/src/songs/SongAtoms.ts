@@ -96,7 +96,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
         fn: reorderSongsMutation,
       }),
     );
-    return { songs, create, edit, delete: deleteSong, reorder } as const;
+    return { syncedSongs: query, songs, create, edit, delete: deleteSong, reorder } as const;
   });
 
   return { songAtoms } as const;

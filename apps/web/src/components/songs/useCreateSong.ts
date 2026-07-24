@@ -9,18 +9,20 @@ import {
   type SongId,
   type SongName,
 } from "@showtime/contracts";
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
 import { createdSongHandoff } from "./CreatedSongHandoff";
 
 export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
   const navigate = useNavigate();
+  const songsSnapshot = useAtomValue(songAtoms(showId).syncedSongs);
   const create = useAtomSet(songAtoms(showId).create, { mode: "promiseExit" });
   const [isCreating, setIsCreating] = React.useState(false);
   const [error, setError] = React.useState<string>();
 
   const createSong = async () => {
     if (isCreating) return;
+    const baselineSnapshot = songsSnapshot;
     setIsCreating(true);
     setError(undefined);
     const id = makeClientId(songIdPrefix) as SongId;
@@ -39,7 +41,7 @@ export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
       setIsCreating(false);
       return;
     }
-    createdSongHandoff.remember(showId, result.value, insertAfterSongId);
+    createdSongHandoff.remember(showId, result.value, insertAfterSongId, baselineSnapshot);
     try {
       await navigate({
         to: "/shows/$showId/setlist/$songId",
