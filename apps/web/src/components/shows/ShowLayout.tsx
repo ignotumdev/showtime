@@ -36,6 +36,7 @@ import type { ChatChannelId, ShowId, SongId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
+import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 import { ShowPageAction } from "./ShowPageAction";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
@@ -53,6 +54,7 @@ export function ShowLayout() {
   const params = useParams({ strict: false });
   const currentSongId = typeof params.songId === "string" ? (params.songId as SongId) : undefined;
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
+  const syncedSongsResult = useAtomValue(songAtoms(typedShowId).syncedSongs);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
   const songs = AsyncResult.isSuccess(songsResult)
@@ -60,6 +62,11 @@ export function ShowLayout() {
     : AsyncResult.isFailure(songsResult)
       ? (Option.getOrUndefined(songsResult.previousSuccess)?.value ?? [])
       : [];
+  React.useEffect(() => {
+    if (AsyncResult.isSuccess(syncedSongsResult)) {
+      createdSongHandoff.reconcile(typedShowId, syncedSongsResult.value, syncedSongsResult);
+    }
+  }, [syncedSongsResult, typedShowId]);
   const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>
