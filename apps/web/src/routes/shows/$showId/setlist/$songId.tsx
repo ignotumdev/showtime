@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Exit } from "effect";
+import { Exit, Option } from "effect";
 import { AlertCircleIcon, EllipsisIcon, MusicIcon, Trash2Icon } from "lucide-react";
 import {
   mainMixId,
@@ -51,7 +51,8 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { mixAtoms } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
-import { rpcErrorMessageFromCause } from "@/client";
+import { asyncResultValueOrElse, rpcErrorMessageFromCause } from "@/client";
+import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,
@@ -63,13 +64,19 @@ function RouteComponent() {
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const mixesResult = useAtomValue(mixAtoms(typedShowId).mixes);
   const microphonesResult = useAtomValue(microphoneAtoms(typedShowId).microphones);
-  const songs = AsyncResult.getOrElse(songsResult, () => []);
+  const songs = asyncResultValueOrElse(songsResult, () => []);
   const songIndex = songs.findIndex((song) => song.id === songId);
-  const song = songs[songIndex];
-  const mixes = AsyncResult.isSuccess(mixesResult) ? mixesResult.value : [];
-  const microphones = AsyncResult.isSuccess(microphonesResult) ? microphonesResult.value : [];
+  const song = songs[songIndex] ?? createdSongHandoff.find(typedShowId, songId as SongId);
+  const songNumber =
+    songIndex >= 0
+      ? songIndex + 1
+      : createdSongHandoff.provisionalNumber(typedShowId, songId as SongId, songs);
+  const mixes = asyncResultValueOrElse(mixesResult, () => []);
+  const microphones = asyncResultValueOrElse(microphonesResult, () => []);
+  const hasMixes = Option.isSome(AsyncResult.value(mixesResult));
+  const hasMicrophones = Option.isSome(AsyncResult.value(microphonesResult));
 
-  if (AsyncResult.isInitial(songsResult)) {
+  if (AsyncResult.isInitial(songsResult) && !song) {
     return (
       <Empty>
         <EmptyHeader>
@@ -81,7 +88,7 @@ function RouteComponent() {
       </Empty>
     );
   }
-  if (AsyncResult.isFailure(songsResult) && songs.length === 0) {
+  if (AsyncResult.isFailure(songsResult) && songs.length === 0 && !song) {
     return (
       <Empty>
         <EmptyHeader>
@@ -107,12 +114,28 @@ function RouteComponent() {
       </Empty>
     );
   }
+  if (!hasMixes || !hasMicrophones) {
+    const failed =
+      (AsyncResult.isFailure(mixesResult) && !hasMixes) ||
+      (AsyncResult.isFailure(microphonesResult) && !hasMicrophones);
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">{failed ? <AlertCircleIcon /> : <Spinner />}</EmptyMedia>
+          <EmptyTitle>
+            {failed ? "Song details could not be loaded" : "Loading song details"}
+          </EmptyTitle>
+          {failed && <EmptyDescription>Check your connection and try again.</EmptyDescription>}
+        </EmptyHeader>
+      </Empty>
+    );
+  }
 
   return (
     <SongDetail
       showId={typedShowId}
       song={song}
-      number={songIndex + 1}
+      number={songNumber}
       mixes={mixes}
       microphones={microphones}
     />
@@ -548,6 +571,7 @@ function SongDeleteDialog({
       setIsDeleting(false);
       return;
     }
+    createdSongHandoff.forget(showId, songId);
     onOpenChange(false);
     void navigate({ to: "/shows/$showId/setlist", params: { showId } });
   };

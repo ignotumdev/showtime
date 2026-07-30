@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { Schema } from "effect";
-import { idSuffixLength, makeTemporaryId } from "./ids.js";
+import { idSuffixLength, makeClientId, makeTemporaryId } from "./ids.js";
 import { ShowId } from "./show.js";
 
 const decode = Schema.decodeUnknownSync(ShowId);
@@ -30,5 +30,13 @@ describe("makeTemporaryId", () => {
     const id = makeTemporaryId("pending_");
 
     expect(id).toMatch(new RegExp(`^pending_[0-9a-z]{${idSuffixLength}}$`));
+  });
+});
+
+describe("makeClientId", () => {
+  it("generates stable-format IDs suitable for create request payloads", () => {
+    const id = makeClientId("song_");
+
+    expect(id).toMatch(new RegExp(`^song_[0-9a-z]{${idSuffixLength}}$`));
   });
 });
