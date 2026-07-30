@@ -34,13 +34,7 @@ export const makeCreatedSongHandoff = () => {
     confirmed.delete(keyFor(showId, songId));
   };
 
-  const reconcile = (
-    showId: ShowId,
-    songs: ReadonlyArray<Song & { readonly pending?: boolean }>,
-    snapshot: object,
-  ) => {
-    if (songs.some((song) => song.pending)) return;
-
+  const reconcile = (showId: ShowId, songs: ReadonlyArray<Song>, snapshot: object) => {
     const syncedIds = new Set(songs.map((song) => song.id));
     for (const [key, entry] of confirmed) {
       if (

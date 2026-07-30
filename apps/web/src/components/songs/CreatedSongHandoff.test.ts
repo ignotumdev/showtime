@@ -24,9 +24,6 @@ describe("CreatedSongHandoff", () => {
     handoff.reconcile(showId, [], baselineSnapshot);
     expect(handoff.find(showId, song.id)).toBe(song);
 
-    handoff.reconcile(showId, [{ ...song, pending: true }], {});
-    expect(handoff.find(showId, song.id)).toBe(song);
-
     handoff.reconcile(showId, [song], {});
     expect(handoff.find(showId, song.id)).toBeUndefined();
   });
