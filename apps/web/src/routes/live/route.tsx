@@ -9,6 +9,15 @@ import type { ShowId } from "@showtime/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import React from "react";
 import { LiveChatDrawer } from "@/components/live/LiveChatDrawer";
+import { useLivePresence } from "@/lib/useLivePresence";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 
 export const Route = createFileRoute("/live")({
   component: RouteComponent,
@@ -38,6 +47,7 @@ function LiveRouteContent({
   readonly showId: ShowId;
 }) {
   const typedShowId = showId;
+  const liveRegistered = useLivePresence(typedShowId);
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const songs = AsyncResult.getOrElse(songsResult, () => []).filter((song) => !song.deletedAt);
   const search = useRouterState({ select: (state) => state.location.search });
@@ -67,9 +77,23 @@ function LiveRouteContent({
         stack="above-content"
       />
       <div className="app-height overflow-hidden pt-[var(--title-bar-height)]">
-        <Outlet />
+        {liveRegistered ? (
+          <Outlet />
+        ) : (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Spinner />
+              </EmptyMedia>
+              <EmptyTitle>Preparing Live</EmptyTitle>
+              <EmptyDescription>
+                Confirming that Showtime will remain available for this show.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
       </div>
-      <LiveChatDrawer showId={typedShowId} />
+      {liveRegistered && <LiveChatDrawer showId={typedShowId} />}
     </React.Fragment>
   );
 }

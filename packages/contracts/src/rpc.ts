@@ -11,6 +11,7 @@ import {
   SongName,
 } from "./song.js";
 import { Color, ShowId, ShowName, ShowSummary } from "./show.js";
+import { LiveSessionId } from "./live.js";
 import { Profile, ProfileId, ProfileName, ProfilesState } from "./profile.js";
 import {
   ChatChannel,
@@ -36,6 +37,16 @@ export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
 }) {}
 
 export const ShowtimeRpcs = EffectRpcGroup.make(
+  Rpc.make("live.heartbeat", {
+    payload: { sessionId: LiveSessionId, showId: ShowId },
+    success: Schema.Boolean,
+    error: RpcError,
+  }),
+  Rpc.make("live.release", {
+    payload: { sessionId: LiveSessionId },
+    success: Schema.Void,
+    error: RpcError,
+  }),
   Rpc.make("shows.list", { success: Schema.Array(ShowSummary), error: RpcError, stream: true }),
   Rpc.make("shows.create", {
     payload: { name: ShowName, color: Color },

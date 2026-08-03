@@ -40,6 +40,9 @@ import * as ProfileService from "./profiles/ProfileService.js";
 import { ProfileId } from "@showtime/contracts";
 import * as ChatService from "./chats/ChatService.js";
 import * as ChatDatabase from "./chats/ChatDatabase.js";
+import * as LiveGuardModule from "./live/LiveGuard.js";
+
+export { LiveGuard } from "./live/LiveGuard.js";
 
 const ShowBackendLive = ShowDiscovery.layer.pipe(
   Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
@@ -511,9 +514,14 @@ export const makeBackendLayer = (
   const ConnectionManagerLive = makeConnectionManagerLayer(options, desktopCapability).pipe(
     Layer.provideMerge(LocalDiscoveryLive),
   );
+  const LiveGuardLive = LiveGuardModule.layer;
   return Layer.mergeAll(
-    makeServerLive(options, desktopCapability).pipe(Layer.provide(ConnectionManagerLive)),
+    makeServerLive(options, desktopCapability).pipe(
+      Layer.provide(ConnectionManagerLive),
+      Layer.provide(LiveGuardLive),
+    ),
     ConnectionManagerLive,
+    LiveGuardLive,
   ).pipe(
     Layer.provideMerge(HttpServerLive),
     Layer.provideMerge(makeConnectionLayers()),

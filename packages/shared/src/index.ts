@@ -7,6 +7,9 @@ export const desktopSetConnectionsEnabledChannel = "showtime:set-connections-ena
 export const desktopSetHostNameChannel = "showtime:set-host-name";
 export const showtimeConnectionStorageKey = "showtime.connection.v1";
 export * from "./local-endpoint.js";
+export * from "./desktop-update.js";
+
+import type { ShowtimeDesktopUpdateState } from "./desktop-update.js";
 
 import { Schema } from "effect";
 import { ShowtimeHostnameLabel } from "./local-endpoint.js";
@@ -126,4 +129,9 @@ export interface ShowtimeHostBridge {
   readonly setHostName: (
     hostName: import("./local-endpoint.js").ShowtimeHostName,
   ) => Promise<ShowtimeConnectionsState>;
+  readonly updateState: () => Promise<ShowtimeDesktopUpdateState>;
+  readonly checkForUpdates: () => Promise<ShowtimeDesktopUpdateState>;
+  readonly downloadUpdate: () => Promise<ShowtimeDesktopUpdateState>;
+  readonly installUpdate: () => Promise<ShowtimeDesktopUpdateState>;
+  readonly onUpdateState: (listener: (state: ShowtimeDesktopUpdateState) => void) => () => void;
 }

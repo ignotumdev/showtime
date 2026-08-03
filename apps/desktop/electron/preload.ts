@@ -8,7 +8,13 @@ import {
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
   desktopSetHostNameChannel,
+  desktopCheckForUpdatesChannel,
+  desktopDownloadUpdateChannel,
+  desktopInstallUpdateChannel,
+  desktopUpdateStateChangedChannel,
+  desktopUpdateStateChannel,
   ShowtimeConnectionInfo,
+  type ShowtimeDesktopUpdateState,
   type ShowtimeHostBridge,
 } from "@showtime/shared";
 
@@ -25,6 +31,16 @@ const bridge: ShowtimeHostBridge = {
   setConnectionsEnabled: (enabled) =>
     ipcRenderer.invoke(desktopSetConnectionsEnabledChannel, enabled),
   setHostName: (hostName) => ipcRenderer.invoke(desktopSetHostNameChannel, hostName),
+  updateState: () => ipcRenderer.invoke(desktopUpdateStateChannel),
+  checkForUpdates: () => ipcRenderer.invoke(desktopCheckForUpdatesChannel),
+  downloadUpdate: () => ipcRenderer.invoke(desktopDownloadUpdateChannel),
+  installUpdate: () => ipcRenderer.invoke(desktopInstallUpdateChannel),
+  onUpdateState: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: ShowtimeDesktopUpdateState) =>
+      listener(state);
+    ipcRenderer.on(desktopUpdateStateChangedChannel, handler);
+    return () => ipcRenderer.removeListener(desktopUpdateStateChangedChannel, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("showtime", bridge);
