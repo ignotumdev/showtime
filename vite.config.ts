@@ -1,6 +1,8 @@
+import path from "node:path";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  resolve: { alias: { "@": path.resolve(__dirname, "./apps/web/src") } },
   test: {
     environment: "node",
     exclude: [".repos/**", "node_modules/**"],

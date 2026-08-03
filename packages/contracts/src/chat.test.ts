@@ -74,6 +74,30 @@ describe("chat presets", () => {
     ).toContain("Every template placeholder");
   });
 
+  it("accepts and resolves preset messages without placeholders", () => {
+    const template = ChatPresetTemplate.make("Soundcheck starts in five minutes.");
+
+    expect(validateChatPresetDefinition({ template, fields: [] })).toBeUndefined();
+    expect(resolveChatPresetTemplate(template, new Map())).toEqual({
+      body: "Soundcheck starts in five minutes.",
+      parts: [{ type: "text", text: "Soundcheck starts in five minutes." }],
+    });
+  });
+
+  it("accepts, binds, and resolves preset answers without placeholders", () => {
+    const answer = {
+      template: ChatPresetTemplate.make("Acknowledged."),
+      fields: [],
+    } as const;
+
+    expect(validateChatPresetAnswerDefinition(answer, [])).toBeUndefined();
+    expect(bindChatPresetAnswer(answer, new Map())).toEqual(answer);
+    expect(resolveChatPresetTemplate(answer.template, new Map())).toEqual({
+      body: "Acknowledged.",
+      parts: [{ type: "text", text: "Acknowledged." }],
+    });
+  });
+
   it("resolves repeated placeholders and round-trips rich stored messages", () => {
     const microphone = {
       type: "microphone",
