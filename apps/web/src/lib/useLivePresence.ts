@@ -2,10 +2,8 @@ import * as React from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { nanoid } from "nanoid";
-import type { LiveSessionId, ShowId } from "@showtime/contracts";
+import { liveHeartbeatIntervalMs, type LiveSessionId, type ShowId } from "@showtime/contracts";
 import { livePresenceAtoms } from "@/client";
-
-const heartbeatIntervalMs = 5_000;
 
 export function useLivePresence(showId: ShowId): boolean {
   const heartbeat = useAtomSet(livePresenceAtoms.heartbeat, { mode: "promiseExit" });
@@ -29,7 +27,7 @@ export function useLivePresence(showId: ShowId): boolean {
     };
 
     void renew();
-    const interval = window.setInterval(renew, heartbeatIntervalMs);
+    const interval = window.setInterval(renew, liveHeartbeatIntervalMs);
     return () => {
       active = false;
       window.clearInterval(interval);

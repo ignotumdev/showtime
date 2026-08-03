@@ -39,22 +39,28 @@ export function DesktopUpdateDialog() {
   const [state, setState] = React.useState<ShowtimeDesktopUpdateState>();
   const [open, setOpen] = React.useState(false);
   const [confirmInstall, setConfirmInstall] = React.useState(false);
+  const applyState = React.useCallback((nextState: ShowtimeDesktopUpdateState) => {
+    setState(nextState);
+    if (nextState.kind === "blocked-live" || nextState.kind === "error") {
+      setConfirmInstall(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!bridge) return;
-    const unsubscribe = bridge.onUpdateState(setState);
-    void bridge.updateState().then(setState);
+    const unsubscribe = bridge.onUpdateState(applyState);
+    void bridge.updateState().then(applyState);
     return unsubscribe;
-  }, [bridge]);
+  }, [applyState, bridge]);
 
   if (!bridge || !state) return null;
   const label = triggerLabel(state);
   if (!label) return null;
 
   const version = "version" in state ? state.version : undefined;
-  const download = () => void bridge.downloadUpdate().then(setState);
-  const check = () => void bridge.checkForUpdates().then(setState);
-  const install = () => void bridge.installUpdate().then(setState);
+  const download = () => void bridge.downloadUpdate().then(applyState);
+  const check = () => void bridge.checkForUpdates().then(applyState);
+  const install = () => void bridge.installUpdate().then(applyState);
 
   return (
     <Dialog
@@ -103,8 +109,20 @@ export function DesktopUpdateDialog() {
               Try again
             </Button>
           ) : state.kind === "error" ? (
-            <Button onClick={state.retry === "check" ? check : download}>
-              {state.retry === "check" ? "Check again" : "Retry download"}
+            <Button
+              onClick={
+                state.retry === "check"
+                  ? check
+                  : state.retry === "install"
+                    ? () => setConfirmInstall(true)
+                    : download
+              }
+            >
+              {state.retry === "check"
+                ? "Check again"
+                : state.retry === "install"
+                  ? "Retry install"
+                  : "Retry download"}
             </Button>
           ) : null}
         </DialogFooter>

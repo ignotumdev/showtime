@@ -33,6 +33,6 @@ export type ShowtimeDesktopUpdateState =
       readonly kind: "error";
       readonly currentVersion: string;
       readonly message: string;
-      readonly retry: "check" | "download";
+      readonly retry: "check" | "download" | "install";
       readonly version?: string;
     };

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
-import type { LiveSessionId, ShowId } from "@showtime/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { liveLeaseLifetimeMs, type LiveSessionId, type ShowId } from "@showtime/contracts";
 import { layer, LiveGuard } from "./LiveGuard.js";
 
 const session = "live-session" as LiveSessionId;
@@ -34,5 +34,27 @@ describe("LiveGuard", () => {
         expect(yield* guard.heartbeat(session, show)).toBe(true);
       }),
     );
+  });
+
+  it("keeps a lease active through its exact expiry boundary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    try {
+      await run(
+        Effect.gen(function* () {
+          const guard = yield* LiveGuard;
+          yield* guard.heartbeat(session, show);
+
+          yield* Effect.sync(() => vi.setSystemTime(liveLeaseLifetimeMs));
+          expect(yield* guard.hasActiveSessions).toBe(true);
+
+          yield* Effect.sync(() => vi.setSystemTime(liveLeaseLifetimeMs + 1));
+          expect(yield* guard.hasActiveSessions).toBe(false);
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

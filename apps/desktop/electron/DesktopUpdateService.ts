@@ -42,6 +42,9 @@ export class DesktopUpdateService {
   #available?: ShowtimeUpdateVersionInfo;
   #downloadCancellation?: CancellationToken;
   #downloadGuardTimer?: ReturnType<typeof setInterval>;
+  #downloadInProgress = false;
+  #installInProgress = false;
+  #installRecovery?: Promise<void>;
   #cancelledForLive = false;
 
   constructor(options: DesktopUpdateServiceOptions, updater = electronUpdater.autoUpdater) {
@@ -82,6 +85,10 @@ export class DesktopUpdateService {
     });
     this.#updater.on("error", () => {
       this.#stopDownloadGuard();
+      if (this.#installInProgress) {
+        void this.#recoverFromInstallFailure();
+        return;
+      }
       if (this.#cancelledForLive) {
         this.#setBlocked("download");
         return;
@@ -119,60 +126,68 @@ export class DesktopUpdateService {
   }
 
   async download(): Promise<ShowtimeDesktopUpdateState> {
-    if (!this.#options.packaged || !this.#available) return this.#state;
-    let liveSessionActive = true;
-    try {
-      liveSessionActive = await this.#options.hasActiveLiveSessions();
-    } catch {
-      // Fail closed: an unavailable guard must never allow update work to start.
-    }
-    if (liveSessionActive) {
-      this.#setBlocked("download");
+    if (!this.#options.packaged || !this.#available || this.#downloadInProgress) {
       return this.#state;
     }
 
-    this.#cancelledForLive = false;
-    this.#downloadCancellation = new CancellationToken();
-    this.#setState({
-      kind: "downloading",
-      currentVersion: this.#options.currentVersion,
-      ...this.#available,
-      percent: 0,
-      bytesPerSecond: 0,
-      transferred: 0,
-      total: 0,
-    });
-    this.#downloadGuardTimer = setInterval(() => {
-      void this.#options
-        .hasActiveLiveSessions()
-        .then((active) => {
-          if (!active || !this.#downloadCancellation) return;
-          this.#cancelledForLive = true;
-          this.#downloadCancellation.cancel();
-        })
-        .catch(() => {
-          // Losing the guard is treated like Live starting: stop the download.
-          if (!this.#downloadCancellation) return;
-          this.#cancelledForLive = true;
-          this.#downloadCancellation.cancel();
-        });
-    }, 1_000);
-
+    this.#downloadInProgress = true;
     try {
-      await this.#updater.downloadUpdate(this.#downloadCancellation);
-    } catch {
-      if (this.#cancelledForLive) this.#setBlocked("download");
-      else {
-        this.#setState({
-          kind: "error",
-          currentVersion: this.#options.currentVersion,
-          message: messageFor("download"),
-          retry: "download",
-          version: this.#available.version,
-        });
+      let liveSessionActive = true;
+      try {
+        liveSessionActive = await this.#options.hasActiveLiveSessions();
+      } catch {
+        // Fail closed: an unavailable guard must never allow update work to start.
+      }
+      if (liveSessionActive) {
+        this.#setBlocked("download");
+        return this.#state;
+      }
+
+      this.#cancelledForLive = false;
+      this.#downloadCancellation = new CancellationToken();
+      this.#setState({
+        kind: "downloading",
+        currentVersion: this.#options.currentVersion,
+        ...this.#available,
+        percent: 0,
+        bytesPerSecond: 0,
+        transferred: 0,
+        total: 0,
+      });
+      this.#downloadGuardTimer = setInterval(() => {
+        void this.#options
+          .hasActiveLiveSessions()
+          .then((active) => {
+            if (!active || !this.#downloadCancellation) return;
+            this.#cancelledForLive = true;
+            this.#downloadCancellation.cancel();
+          })
+          .catch(() => {
+            // Losing the guard is treated like Live starting: stop the download.
+            if (!this.#downloadCancellation) return;
+            this.#cancelledForLive = true;
+            this.#downloadCancellation.cancel();
+          });
+      }, 1_000);
+
+      try {
+        await this.#updater.downloadUpdate(this.#downloadCancellation);
+      } catch {
+        if (this.#cancelledForLive) this.#setBlocked("download");
+        else {
+          this.#setState({
+            kind: "error",
+            currentVersion: this.#options.currentVersion,
+            message: messageFor("download"),
+            retry: "download",
+            version: this.#available.version,
+          });
+        }
+      } finally {
+        this.#stopDownloadGuard();
       }
     } finally {
-      this.#stopDownloadGuard();
+      this.#downloadInProgress = false;
     }
     return this.#state;
   }
@@ -180,8 +195,9 @@ export class DesktopUpdateService {
   async install(): Promise<ShowtimeDesktopUpdateState> {
     const installable =
       this.#state.kind === "ready" ||
-      (this.#state.kind === "blocked-live" && this.#state.action === "install");
-    if (!installable) return this.#state;
+      (this.#state.kind === "blocked-live" && this.#state.action === "install") ||
+      (this.#state.kind === "error" && this.#state.retry === "install");
+    if (!installable || !this.#available || this.#installInProgress) return this.#state;
 
     let maintenanceStarted = false;
     try {
@@ -194,20 +210,36 @@ export class DesktopUpdateService {
       return this.#state;
     }
 
+    this.#installInProgress = true;
     try {
       await this.#options.prepareForUpdate();
       this.#updater.quitAndInstall(false, true);
     } catch {
-      await this.#options.endMaintenance().catch(() => undefined);
-      this.#setState({
-        kind: "error",
-        currentVersion: this.#options.currentVersion,
-        message: "Showtime could not prepare the update. The app is still running normally.",
-        retry: "download",
-        ...(this.#available ? { version: this.#available.version } : {}),
-      });
+      await this.#recoverFromInstallFailure();
     }
     return this.#state;
+  }
+
+  #recoverFromInstallFailure(): Promise<void> {
+    if (this.#installRecovery) return this.#installRecovery;
+
+    this.#installRecovery = this.#options
+      .endMaintenance()
+      .catch(() => undefined)
+      .then(() => {
+        this.#installInProgress = false;
+        this.#setState({
+          kind: "error",
+          currentVersion: this.#options.currentVersion,
+          message: "Showtime could not install the update. The app is still running normally.",
+          retry: "install",
+          ...(this.#available ? { version: this.#available.version } : {}),
+        });
+      })
+      .finally(() => {
+        this.#installRecovery = undefined;
+      });
+    return this.#installRecovery;
   }
 
   #onDownloadProgress(progress: ProgressInfo) {

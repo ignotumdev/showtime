@@ -106,4 +106,71 @@ describe("DesktopUpdateService", () => {
     expect(prepareForUpdate).toHaveBeenCalledOnce();
     expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true);
   });
+
+  it("does not start a second download while the first request is pending", async () => {
+    let resolveDownload: (() => void) | undefined;
+    const { service, updater } = setup();
+    updater.downloadUpdate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDownload = () => {
+            updater.emit("update-downloaded", updateInfo);
+            resolve([]);
+          };
+        }),
+    );
+    await service.check();
+
+    const first = service.download();
+    const second = service.download();
+    await second;
+
+    expect(updater.downloadUpdate).toHaveBeenCalledOnce();
+    expect(service.state()).toMatchObject({ kind: "downloading", version: "0.2.0" });
+
+    resolveDownload?.();
+    await first;
+    expect(service.state()).toMatchObject({ kind: "ready", version: "0.2.0" });
+  });
+
+  it("offers an install retry without downloading again when installation throws", async () => {
+    const endMaintenance = vi.fn(async () => undefined);
+    const { service, updater } = setup({ endMaintenance });
+    updater.quitAndInstall.mockImplementationOnce(() => {
+      throw new Error("quit failed");
+    });
+    await service.check();
+    await service.download();
+
+    await service.install();
+
+    expect(endMaintenance).toHaveBeenCalledOnce();
+    expect(service.state()).toMatchObject({ kind: "error", retry: "install", version: "0.2.0" });
+
+    await service.install();
+    expect(updater.quitAndInstall).toHaveBeenCalledTimes(2);
+    expect(updater.downloadUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("releases maintenance and offers an install retry for updater error events", async () => {
+    const endMaintenance = vi.fn(async () => undefined);
+    const { service, updater } = setup({ endMaintenance });
+    updater.quitAndInstall.mockImplementationOnce(() => {
+      updater.emit("error", new Error("installer launch failed"));
+    });
+    await service.check();
+    await service.download();
+
+    await service.install();
+    await vi.waitFor(() => {
+      expect(service.state()).toMatchObject({
+        kind: "error",
+        retry: "install",
+        version: "0.2.0",
+      });
+    });
+
+    expect(endMaintenance).toHaveBeenCalledOnce();
+    expect(updater.downloadUpdate).toHaveBeenCalledOnce();
+  });
 });

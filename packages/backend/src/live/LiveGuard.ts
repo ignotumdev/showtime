@@ -1,7 +1,5 @@
 import { Clock, Context, Effect, Layer, Ref } from "effect";
-import type { LiveSessionId, ShowId } from "@showtime/contracts";
-
-export const liveLeaseLifetimeMs = 15_000;
+import { liveLeaseLifetimeMs, type LiveSessionId, type ShowId } from "@showtime/contracts";
 
 interface LiveLease {
   readonly showId: ShowId;
@@ -14,7 +12,7 @@ interface LiveGuardState {
 }
 
 const activeLeases = (state: LiveGuardState, now: number) =>
-  new Map([...state.leases].filter(([, lease]) => lease.expiresAt > now));
+  new Map([...state.leases].filter(([, lease]) => lease.expiresAt >= now));
 
 export class LiveGuard extends Context.Service<
   LiveGuard,

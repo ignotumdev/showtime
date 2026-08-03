@@ -48,6 +48,12 @@ function LiveRouteContent({
 }) {
   const typedShowId = showId;
   const liveRegistered = useLivePresence(typedShowId);
+  const [liveReady, setLiveReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (liveRegistered) setLiveReady(true);
+  }, [liveRegistered]);
+
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const songs = AsyncResult.getOrElse(songsResult, () => []).filter((song) => !song.deletedAt);
   const search = useRouterState({ select: (state) => state.location.search });
@@ -77,7 +83,7 @@ function LiveRouteContent({
         stack="above-content"
       />
       <div className="app-height overflow-hidden pt-[var(--title-bar-height)]">
-        {liveRegistered ? (
+        {liveReady ? (
           <Outlet />
         ) : (
           <Empty>
@@ -93,7 +99,7 @@ function LiveRouteContent({
           </Empty>
         )}
       </div>
-      {liveRegistered && <LiveChatDrawer showId={typedShowId} />}
+      {liveReady && <LiveChatDrawer showId={typedShowId} />}
     </React.Fragment>
   );
 }

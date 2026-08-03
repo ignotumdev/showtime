@@ -67,12 +67,9 @@ const updateService = new DesktopUpdateService({
     backendRuntime.runPromise(Effect.flatMap(LiveGuard, (_) => _.beginMaintenance)),
   endMaintenance: () =>
     backendRuntime.runPromise(Effect.flatMap(LiveGuard, (_) => _.endMaintenance)),
-  prepareForUpdate: async () => {
-    if (!backendStarted || backendShutdownStarted) return;
-    backendShutdownStarted = true;
-    await backendRuntime.dispose();
-    backendStarted = false;
-  },
+  // The before-quit handler owns backend shutdown. Keeping preparation side-effect free
+  // ensures a synchronous quitAndInstall failure cannot strand the running app without RPC.
+  prepareForUpdate: async () => undefined,
   publish: (state) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(desktopUpdateStateChangedChannel, state);
