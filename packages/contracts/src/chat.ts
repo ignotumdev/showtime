@@ -204,7 +204,6 @@ const validateChatPresetDefinitionWithContext = (
   contextNames: ReadonlySet<string>,
 ): string | undefined => {
   const placeholders = chatPresetPlaceholderNames(input.template);
-  if (placeholders.length === 0) return "Add at least one placeholder such as {{mic}}.";
   const fieldNames = input.fields.map((field) => field.name);
   if (new Set(fieldNames).size !== fieldNames.length)
     return "Each placeholder can only be defined once.";
@@ -238,8 +237,6 @@ export const validateChatPresetAnswerDefinition = (
   },
   messageFieldNames: ReadonlyArray<string>,
 ): string | undefined => {
-  if (answer.fields.length === 0)
-    return "Add at least one answer placeholder for recipients to fill.";
   if (new Set(messageFieldNames).size !== messageFieldNames.length)
     return "Each inherited message placeholder can only be supplied once.";
   return validateChatPresetDefinitionWithContext(answer, new Set(messageFieldNames));
