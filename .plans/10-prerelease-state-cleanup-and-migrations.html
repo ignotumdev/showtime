@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime unified SQLite state plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, sans-serif;
+        line-height: 1.55;
+      }
+      body {
+        max-width: 74rem;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+      }
+      section {
+        margin-block: 2.25rem;
+      }
+      code {
+        background: color-mix(in srgb, CanvasText 10%, transparent);
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.25rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+        padding: 0.65rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .decision,
+      .warning {
+        padding: 0.8rem 1rem;
+        border-left: 0.3rem solid;
+      }
+      .decision {
+        border-color: #4f8cff;
+      }
+      .warning {
+        border-color: #d68b00;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Unified SQLite state, prerelease reset, and migrations</h1>
+      <p>
+        Replace Showtime's backend JSON files, per-show documents, and separate chat database with
+        one authoritative <code>.showtime/showtime.db</code>. Build it on Effect SQL's Node SQLite
+        client and migrator, establish the complete current schema as migration 1, reject every
+        prerelease state format, and remove code made obsolete by the new architecture.
+      </p>
+
+      <section>
+        <h2>Decisions</h2>
+        <p class="decision">
+          This is a clean cutover, not a data conversion. Showtime must never import, decode,
+          rewrite, or otherwise accept <code>settings.json</code>, <code>profiles.json</code>,
+          <code>connections.json</code>, <code>chats.db</code>, show JSON files, old stored-chat
+          envelopes, or any earlier experimental <code>showtime.db</code> schema.
+        </p>
+        <ul>
+          <li>
+            A fresh <code>showtime.db</code> is initialized exclusively by
+            <code>0001_initial</code>. This is the version-1 first-release baseline.
+          </li>
+          <li>
+            If any known prerelease backend state exists, startup fails with an actionable
+            developer-facing reset message, even when a current database also exists. It does not
+            silently ignore, delete, or import that state.
+          </li>
+          <li>
+            An existing <code>showtime.db</code> is accepted only when Effect's migration ledger and
+            current-schema validation agree. Unknown, missing, renamed, or future migration state
+            fails closed.
+          </li>
+          <li>
+            After the first public release, only versions of <code>showtime.db</code> produced by a
+            released Showtime build may migrate forward. Prerelease JSON and database formats never
+            become migration sources.
+          </li>
+          <li>
+            Browser local storage remains device-local because remote browsers cannot access the
+            host database. It stores credentials and device preferences only; it is not an
+            authoritative copy of backend state. Its current payloads are strict version 1.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>1. One Effect SQL database</h2>
+        <h3>Database layer</h3>
+        <ol>
+          <li>
+            Replace <code>ChatDatabase</code> with a backend-wide database module that resolves
+            <code>.showtime/showtime.db</code> from <code>HomeDirectory</code> and returns
+            <code>SqliteClient.layer</code> through <code>Layer.unwrap</code>.
+          </li>
+          <li>
+            Use the <code>@effect/sql-sqlite-node</code> client directly. Its single connection is
+            already serialized, scoped, cached, and WAL-enabled by default; do not add another
+            connection pool or global write mutex.
+          </li>
+          <li>
+            Configure <code>PRAGMA foreign_keys = ON</code>,
+            <code>PRAGMA busy_timeout = 5000</code>, and the selected durability policy before the
+            migrator runs. Prefer <code>synchronous = FULL</code> for Showtime's reliability-first
+            requirements and verify its soundcheck/live performance.
+          </li>
+          <li>
+            Compose configuration, migrations, baseline bootstrap, and current-schema validation as
+            layers. Provide a <code>DatabaseReady</code> service only after all four succeed. Every
+            repository and server layer depends on that readiness boundary.
+          </li>
+          <li>
+            Keep database acquisition and shutdown scoped. Use the SQLite client's native
+            <code>backup</code> Effect for consistent backups instead of copying a live database and
+            WAL files manually.
+          </li>
+        </ol>
+
+        <h3>Canonical schema</h3>
+        <table>
+          <thead>
+            <tr><th>Area</th><th>Tables and invariants</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Application settings</td>
+              <td>
+                A singleton <code>app_settings</code> row contains connection enablement, host name,
+                and the default profile foreign key. A database constraint enforces its singleton
+                identity.
+              </td>
+            </tr>
+            <tr>
+              <td>Profiles</td>
+              <td>
+                <code>profiles</code> stores typed IDs, unique normalized names, colors, and UTC
+                timestamps. The default profile cannot be removed while referenced by settings.
+              </td>
+            </tr>
+            <tr>
+              <td>Connections</td>
+              <td>
+                <code>connection_clients</code>, <code>connection_invitations</code>, and normalized
+                scope tables preserve capabilities, expiry, profile ownership, and least privilege.
+                Capabilities and tokens never appear in logs.
+              </td>
+            </tr>
+            <tr>
+              <td>Shows</td>
+              <td>
+                <code>shows</code>, <code>microphones</code>, <code>mixes</code>,
+                <code>songs</code>, <code>song_mix_assignments</code>, and
+                <code>song_microphone_names</code> replace the show documents. Foreign keys and
+                ordering columns preserve ownership and stable UI order. Soft-delete columns retain
+                the current domain semantics.
+              </td>
+            </tr>
+            <tr>
+              <td>Chat</td>
+              <td>
+                Keep the existing channel, message, profile-channel-state, and preset concepts in
+                the same database. Store current message metadata in explicit columns or strict JSON
+                columns validated with Effect Schema; do not retain v1/v2/v3 string prefixes.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Use foreign-key cascades only when deletion is unquestionably owned by the parent. Use
+          explicit service operations when revocation, soft deletion, or user confirmation is part
+          of the domain behavior. Add indexes for every foreign key and hot list/order query. Do not
+          copy the JSON files' per-document version fields into relational rows; migration
+          <code>0001_initial</code> is the database-wide schema version.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. Effect-native repositories and transactions</h2>
+        <ol>
+          <li>
+            Keep domain repositories as <code>Context.Service</code> classes with focused
+            <code>layerNoDeps</code> layers requiring <code>SqlClient</code> and
+            <code>DatabaseReady</code>. Compose live dependencies with <code>Layer.provide</code> or
+            <code>Layer.provideMerge</code>; avoid hidden runtimes inside services.
+          </li>
+          <li>
+            Define reusable request and result schemas at SQL boundaries. Use
+            <code>SqlSchema.findAll</code>, <code>findOne</code>, <code>findOneOption</code>, and
+            <code>void</code> so parameters are encoded and unknown rows are decoded through Effect
+            Schema in the typed error channel.
+          </li>
+          <li>
+            Implement effectful methods with named <code>Effect.fn</code> functions. Use
+            <code>Schema.TaggedErrorClass</code> for database, persistence, and consistency errors,
+            then translate them to <code>RpcError</code> only at the service/RPC boundary.
+          </li>
+          <li>
+            Wrap every multi-statement mutation in <code>SqlClient.withTransaction</code>. Rely on
+            Effect SQL's nested savepoints rather than home-grown nested locking. Return results
+            only after commit.
+          </li>
+          <li>
+            Remove persisted <code>Ref</code> mirrors from shows, profiles, settings, and
+            connections. Query SQLite as the authority. Keep <code>Ref</code> only for truly
+            ephemeral process state such as active WebSocket session handles.
+          </li>
+          <li>
+            Adapt <code>SyncEngine</code> so a mutation runs its SQL transaction before publishing
+            reactivity invalidations. Queries no longer need its global semaphore. A failed or
+            rolled-back transaction must never emit a new snapshot.
+          </li>
+          <li>
+            Preserve the current client-generated song ID and idempotent retry behavior, but make
+            <code>songs.create.id</code> required and enforce uniqueness in SQLite.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>3. Baseline migration and startup</h2>
+        <ol>
+          <li>
+            Add <code>packages/backend/src/database/migrations/0001_initial.ts</code>. It creates the
+            entire current schema, constraints, and indexes in one migration Effect requiring
+            <code>SqlClient</code>.
+          </li>
+          <li>
+            Load it with Effect's <code>SqliteMigrator.fromGlob</code> when the desktop build is
+            verified to include migration modules; otherwise use
+            <code>SqliteMigrator.fromRecord</code> with static imports. Do not implement a custom
+            migration loader or ledger.
+          </li>
+          <li>
+            Run <code>SqliteMigrator.layer</code> after the client and PRAGMAs and before repositories.
+            Effect owns <code>effect_sql_migrations</code>, duplicate detection, locking,
+            transactions, spans, and pending-step selection.
+          </li>
+          <li>
+            Follow migrations with an idempotent bootstrap transaction that creates the first
+            profile and singleton settings row only in a fresh baseline database. Host-derived
+            values and generated IDs do not belong in DDL migration modules.
+          </li>
+          <li>
+            Validate the exact current migration ledger and critical schema invariants before
+            providing <code>DatabaseReady</code>. Migration success is not permission to accept an
+            unknown prerelease database that merely has similarly named tables.
+          </li>
+        </ol>
+        <p class="warning">
+          There is no JSON-to-SQL import step. Legacy-file detection is a guard that fails startup;
+          it is not migration 0. Tests must prove that placing any old file beside a missing current
+          database never creates or populates <code>showtime.db</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Remove obsolete and dead code</h2>
+        <table>
+          <thead>
+            <tr><th>Code</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>JsonFile.ts</code>, JSON settings/profiles/connections persistence</td>
+              <td>Delete after their services use SQL repositories.</td>
+            </tr>
+            <tr>
+              <td><code>ShowFile</code>, <code>ShowPaths</code>, <code>ShowDiscovery</code></td>
+              <td>
+                Delete filesystem persistence/discovery and their tests. Remove path-bearing
+                repository entries and show-file persistence errors/contracts that have no planned
+                import/export consumer.
+              </td>
+            </tr>
+            <tr>
+              <td><code>ChatDatabase</code> and inline chat DDL/<code>ALTER TABLE</code></td>
+              <td>Replace with the shared database layer and migration-owned schema.</td>
+            </tr>
+            <tr>
+              <td>Stored chat envelope compatibility</td>
+              <td>
+                Remove all prefix codecs and raw/v1/v2/v3 fallback branches. Model current message
+                data directly in the baseline schema.
+              </td>
+            </tr>
+            <tr>
+              <td>Connection scope decoding default and optional song ID</td>
+              <td>Remove both prerelease compatibility paths.</td>
+            </tr>
+            <tr>
+              <td>Manual browser storage decoders</td>
+              <td>
+                Decode complete connection and profile-selection records with Effect Schema and
+                require version 1. Invalid or differently versioned records are rejected as
+                unpaired/unselected; they are never upgraded.
+              </td>
+            </tr>
+            <tr>
+              <td><code>ShowComingSoon</code>, <code>subscribeNotifications</code> listener path</td>
+              <td>Delete the unused component and unused notification subscription machinery.</td>
+            </tr>
+            <tr>
+              <td><code>parseShowId</code>, <code>MAIN_DIST</code></td>
+              <td>Remove the unused exports.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Retain JSON only as a future explicit import/export format if product requirements call
+          for portable shows. Such files are not watched, discovered, or accepted as application
+          state, and no prerelease show document is implicitly importable.
+        </p>
+      </section>
+
+      <section>
+        <h2>5. Security, durability, and operations</h2>
+        <ul>
+          <li>
+            Create the data directory and database with owner-only permissions where supported.
+            Verify permissions for the database plus <code>-wal</code> and <code>-shm</code> files.
+          </li>
+          <li>
+            Keep capability comparison and revocation server-side. Parameterize every query; never
+            interpolate capabilities, tokens, IDs, or user input into SQL text.
+          </li>
+          <li>
+            Add startup <code>PRAGMA quick_check</code> or a deliberately scheduled integrity check
+            whose latency is measured on realistic show databases. Surface failure before serving
+            RPC.
+          </li>
+          <li>
+            Provide a scoped backup service around <code>SqliteClient.backup</code>. Define retention
+            and restore separately before release; do not mix backup policy into migrations.
+          </li>
+          <li>
+            Annotate migrations and repository operations with non-sensitive structured metadata and
+            spans. Never log row payloads from chat or connection tables.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Implementation sequence</h2>
+        <ol>
+          <li>
+            Add rejection tests for every prerelease file/database shape and strict version-1
+            browser records before changing persistence.
+          </li>
+          <li>
+            Build the shared SQLite client, PRAGMA, migrator, bootstrap, validation, and test layers.
+            Prove fresh startup, repeated startup, failure, and packaged migration loading.
+          </li>
+          <li>
+            Add migration 1 with all tables, constraints, and indexes. Exercise foreign keys and
+            transaction rollback in isolated temporary databases.
+          </li>
+          <li>
+            Port settings, profiles, and connections first so host-name changes and credential
+            revocation become one transaction.
+          </li>
+          <li>
+            Port show, microphone, mix, and song repositories; preserve stable ordering, soft
+            deletion, optimistic mutation results, and idempotent song creation.
+          </li>
+          <li>
+            Move chat onto the shared client and current relational representation. Remove its
+            inline schema setup and encoded-body compatibility.
+          </li>
+          <li>
+            Rewire backend layers so migrations/bootstrap gate repositories and network startup,
+            then delete obsolete persistence and confirmed dead code.
+          </li>
+          <li>
+            Update <code>docs/migrations.md</code> alongside any implementation detail that changes
+            during the work.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <ul>
+          <li>
+            Use <code>@effect/vitest</code> Effect tests and temporary scoped database layers. Avoid
+            shared mutable fixtures between persistence tests.
+          </li>
+          <li>
+            Verify migration 1 on an empty path, no-op restart on a current database, concurrent
+            startup locking, transaction rollback, foreign-key enforcement, and future/unknown
+            ledger rejection.
+          </li>
+          <li>
+            Verify every known prerelease JSON file, show document, chat database, chat envelope,
+            and experimental database is rejected and never imported or modified.
+          </li>
+          <li>
+            Run repository contract suites against SQLite for profiles, settings, connections,
+            shows, songs, microphones, mixes, and chats.
+          </li>
+          <li>
+            Stress rapid concurrent live mutations and streamed snapshots. Confirm committed order,
+            no duplicate songs/messages, bounded latency, and recovery after interruption.
+          </li>
+          <li>
+            Package the desktop application and verify migration discovery, fresh startup,
+            restart, backup, and startup-error presentation outside the source tree.
+          </li>
+          <li>Run <code>pnpm ready</code> and repeat the dead-export/orphan-module scan.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Completion criteria</h2>
+        <ul>
+          <li><code>showtime.db</code> is the only authoritative backend state store.</li>
+          <li>Migration <code>0001_initial</code> represents the complete current schema.</li>
+          <li>No prerelease state is read, imported, rewritten, or silently ignored.</li>
+          <li>All repositories use Effect SQL and schema-validated query boundaries.</li>
+          <li>All multi-table domain changes are transactional and publish only after commit.</li>
+          <li>Repositories and network services cannot start before <code>DatabaseReady</code>.</li>
+          <li>Obsolete JSON/show/chat persistence and confirmed dead code are removed.</li>
+          <li><code>docs/migrations.md</code> matches the implemented release policy.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
