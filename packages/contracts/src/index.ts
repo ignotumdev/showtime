@@ -7,3 +7,4 @@ export * from "./rpc.js";
 export * from "./sync.js";
 export * from "./profile.js";
 export * from "./chat.js";
+export * from "./live.js";

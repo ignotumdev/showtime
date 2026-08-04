@@ -12,6 +12,7 @@ import { isDesktopHost } from "@/platform";
 import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ShowPageAction } from "@/components/shows/ShowPageAction";
 import { PwaInstallButton } from "@/components/connections/PwaInstallButton";
+import { DesktopUpdateDialog } from "@/components/updates/DesktopUpdateDialog";
 
 type TitleBarProps = {
   className?: string;
@@ -106,6 +107,7 @@ export function TitleBar({
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
         {actions}
+        {desktopHost && !isLiveRoute && <DesktopUpdateDialog />}
         {!desktopHost && isShowsRoute && <PwaInstallButton compact />}
         {!isLiveRoute && (
           <>

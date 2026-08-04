@@ -2,20 +2,26 @@ import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Effect, Schema } from "effect";
-import { ConnectionManager, makeBackendRuntime } from "@showtime/backend";
+import { ConnectionManager, LiveGuard, makeBackendRuntime } from "@showtime/backend";
 import {
+  desktopCheckForUpdatesChannel,
   desktopConnectionsStateChannel,
   desktopCreateInvitationChannel,
+  desktopDownloadUpdateChannel,
+  desktopInstallUpdateChannel,
   desktopPairingInfoChannel,
   desktopRemoveConnectionChannel,
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
   desktopSetHostNameChannel,
+  desktopUpdateStateChangedChannel,
+  desktopUpdateStateChannel,
   ShowtimeHostName,
   showtimeLocalPort,
   type ShowtimeConnectionScope,
 } from "@showtime/shared";
 import { formatStartupError } from "./startup-error.js";
+import { DesktopUpdateService } from "./DesktopUpdateService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +57,24 @@ const backendRuntime = makeBackendRuntime({
   port: rpcPort,
   webRoot: RENDERER_DIST,
   localDiscovery: true,
+});
+const updateService = new DesktopUpdateService({
+  currentVersion: app.getVersion(),
+  packaged: app.isPackaged,
+  hasActiveLiveSessions: () =>
+    backendRuntime.runPromise(Effect.flatMap(LiveGuard, (_) => _.hasActiveSessions)),
+  beginMaintenance: () =>
+    backendRuntime.runPromise(Effect.flatMap(LiveGuard, (_) => _.beginMaintenance)),
+  endMaintenance: () =>
+    backendRuntime.runPromise(Effect.flatMap(LiveGuard, (_) => _.endMaintenance)),
+  // The before-quit handler owns backend shutdown. Keeping preparation side-effect free
+  // ensures a synchronous quitAndInstall failure cannot strand the running app without RPC.
+  prepareForUpdate: async () => undefined,
+  publish: (state) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(desktopUpdateStateChangedChannel, state);
+    }
+  },
 });
 
 function getAppIconPath() {
@@ -186,8 +210,13 @@ if (gotSingleInstanceLock) {
             ),
           ),
         );
+        ipcMain.handle(desktopUpdateStateChannel, () => updateService.state());
+        ipcMain.handle(desktopCheckForUpdatesChannel, () => updateService.check());
+        ipcMain.handle(desktopDownloadUpdateChannel, () => updateService.download());
+        ipcMain.handle(desktopInstallUpdateChannel, () => updateService.install());
         backendStarted = true;
         createWindow();
+        void updateService.check();
       })
       .catch((error: unknown) => {
         console.error("Showtime backend startup failed", error);
