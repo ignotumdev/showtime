@@ -199,6 +199,7 @@ export class DesktopUpdateService {
       (this.#state.kind === "error" && this.#state.retry === "install");
     if (!installable || !this.#available || this.#installInProgress) return this.#state;
 
+    this.#installInProgress = true;
     let maintenanceStarted = false;
     try {
       maintenanceStarted = await this.#options.beginMaintenance();
@@ -206,11 +207,11 @@ export class DesktopUpdateService {
       // Fail closed if the backend cannot prove that no Live session is active.
     }
     if (!maintenanceStarted) {
+      this.#installInProgress = false;
       this.#setBlocked("install");
       return this.#state;
     }
 
-    this.#installInProgress = true;
     try {
       await this.#options.prepareForUpdate();
       this.#updater.quitAndInstall(false, true);
@@ -223,9 +224,8 @@ export class DesktopUpdateService {
   #recoverFromInstallFailure(): Promise<void> {
     if (this.#installRecovery) return this.#installRecovery;
 
-    this.#installRecovery = this.#options
-      .endMaintenance()
-      .catch(() => undefined)
+    this.#installRecovery = Promise.resolve()
+      .then(() => this.#options.endMaintenance())
       .then(() => {
         this.#installInProgress = false;
         this.#setState({
@@ -233,6 +233,15 @@ export class DesktopUpdateService {
           currentVersion: this.#options.currentVersion,
           message: "Showtime could not install the update. The app is still running normally.",
           retry: "install",
+          ...(this.#available ? { version: this.#available.version } : {}),
+        });
+      })
+      .catch(() => {
+        this.#setState({
+          kind: "recovery-required",
+          currentVersion: this.#options.currentVersion,
+          message:
+            "Showtime could not restore normal operation after the update failed. Restart Showtime before going Live or trying the update again.",
           ...(this.#available ? { version: this.#available.version } : {}),
         });
       })

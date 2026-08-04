@@ -35,4 +35,10 @@ export type ShowtimeDesktopUpdateState =
       readonly message: string;
       readonly retry: "check" | "download" | "install";
       readonly version?: string;
+    }
+  | {
+      readonly kind: "recovery-required";
+      readonly currentVersion: string;
+      readonly message: string;
+      readonly version?: string;
     };

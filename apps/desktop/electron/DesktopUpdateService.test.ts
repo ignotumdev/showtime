@@ -133,6 +133,49 @@ describe("DesktopUpdateService", () => {
     expect(service.state()).toMatchObject({ kind: "ready", version: "0.2.0" });
   });
 
+  it("does not let a concurrent install request replace the active install state", async () => {
+    let resolveMaintenance: ((started: boolean) => void) | undefined;
+    const beginMaintenance = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveMaintenance = resolve;
+        }),
+    );
+    const prepareForUpdate = vi.fn(async () => undefined);
+    const { service, updater } = setup({ beginMaintenance, prepareForUpdate });
+    await service.check();
+    await service.download();
+
+    const first = service.install();
+    const second = service.install();
+    await second;
+
+    expect(beginMaintenance).toHaveBeenCalledOnce();
+    expect(service.state()).toMatchObject({ kind: "ready", version: "0.2.0" });
+
+    resolveMaintenance?.(true);
+    await first;
+    expect(prepareForUpdate).toHaveBeenCalledOnce();
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+  });
+
+  it("releases the install reservation when maintenance cannot start", async () => {
+    const beginMaintenance = vi
+      .fn<DesktopUpdateServiceOptions["beginMaintenance"]>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const { service, updater } = setup({ beginMaintenance });
+    await service.check();
+    await service.download();
+
+    await service.install();
+    expect(service.state()).toMatchObject({ kind: "blocked-live", action: "install" });
+
+    await service.install();
+    expect(beginMaintenance).toHaveBeenCalledTimes(2);
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+  });
+
   it("offers an install retry without downloading again when installation throws", async () => {
     const endMaintenance = vi.fn(async () => undefined);
     const { service, updater } = setup({ endMaintenance });
@@ -172,5 +215,29 @@ describe("DesktopUpdateService", () => {
 
     expect(endMaintenance).toHaveBeenCalledOnce();
     expect(updater.downloadUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("does not offer an install retry when maintenance cleanup fails", async () => {
+    const beginMaintenance = vi.fn(async () => true);
+    const endMaintenance = vi.fn(async () => Promise.reject(new Error("backend unavailable")));
+    const { service, updater } = setup({ beginMaintenance, endMaintenance });
+    updater.quitAndInstall.mockImplementationOnce(() => {
+      throw new Error("quit failed");
+    });
+    await service.check();
+    await service.download();
+
+    await service.install();
+
+    expect(endMaintenance).toHaveBeenCalledOnce();
+    expect(service.state()).toMatchObject({
+      kind: "recovery-required",
+      version: "0.2.0",
+      message: expect.stringContaining("Restart Showtime"),
+    });
+
+    await service.install();
+    expect(beginMaintenance).toHaveBeenCalledOnce();
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce();
   });
 });

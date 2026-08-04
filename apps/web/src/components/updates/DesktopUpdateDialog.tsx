@@ -23,6 +23,7 @@ const triggerLabel = (state: ShowtimeDesktopUpdateState) => {
     case "blocked-live":
       return "Update paused";
     case "error":
+    case "recovery-required":
       return "Update issue";
     default:
       return undefined;
@@ -41,7 +42,11 @@ export function DesktopUpdateDialog() {
   const [confirmInstall, setConfirmInstall] = React.useState(false);
   const applyState = React.useCallback((nextState: ShowtimeDesktopUpdateState) => {
     setState(nextState);
-    if (nextState.kind === "blocked-live" || nextState.kind === "error") {
+    if (
+      nextState.kind === "blocked-live" ||
+      nextState.kind === "error" ||
+      nextState.kind === "recovery-required"
+    ) {
       setConfirmInstall(false);
     }
   }, []);
@@ -152,7 +157,9 @@ function UpdateStatus({ state }: { readonly state: ShowtimeDesktopUpdateState })
       </p>
     );
   }
-  if (state.kind === "error") return <p role="alert">{state.message}</p>;
+  if (state.kind === "error" || state.kind === "recovery-required") {
+    return <p role="alert">{state.message}</p>;
+  }
   if ((state.kind === "available" || state.kind === "ready") && state.releaseNotes) {
     return (
       <div className="grid gap-2">
