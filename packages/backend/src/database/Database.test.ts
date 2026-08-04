@@ -51,31 +51,29 @@ const workerRunTimeout = 20_000;
 const workerStopTimeout = 5_000;
 const concurrencyTestTimeout = workerStartupTimeout + workerRunTimeout + workerStopTimeout + 5_000;
 
-const waitFor = async <A>(promise: Promise<A>, timeout: number, message: string) => {
+const raceWithTimeout = async <A>(promise: Promise<A>, timeout: number, onTimeout: () => A) => {
   const timer = new AbortController();
   try {
     return await Promise.race([
       promise,
-      delay(timeout, undefined, { signal: timer.signal }).then(() => {
-        throw new Error(message);
-      }),
+      delay(timeout, undefined, { signal: timer.signal }).then(onTimeout),
     ]);
   } finally {
     timer.abort();
   }
 };
 
-const settlesWithin = async (promise: Promise<unknown>, timeout: number) => {
-  const timer = new AbortController();
-  try {
-    return await Promise.race([
-      promise.then(() => true),
-      delay(timeout, undefined, { signal: timer.signal }).then(() => false),
-    ]);
-  } finally {
-    timer.abort();
-  }
-};
+const waitFor = <A>(promise: Promise<A>, timeout: number, message: string) =>
+  raceWithTimeout(promise, timeout, () => {
+    throw new Error(message);
+  });
+
+const settlesWithin = (promise: Promise<unknown>, timeout: number) =>
+  raceWithTimeout(
+    promise.then(() => true),
+    timeout,
+    () => false,
+  );
 
 const runStartupProcess = (home: string, barrier: string, workerId: string) => {
   const child = spawn(
