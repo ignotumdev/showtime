@@ -12,6 +12,7 @@ import {
   type Song,
   type SongArtist,
   type SongId,
+  type SongMixName,
   type SongMicrophoneName,
   type SongMixAssignment,
   type SongName,
@@ -165,6 +166,7 @@ function SongDetail({
   const [microphoneNames, setMicrophoneNames] = React.useState<ReadonlyArray<SongMicrophoneName>>(
     song.microphoneNames ?? [],
   );
+  const [mixNames, setMixNames] = React.useState<ReadonlyArray<SongMixName>>(song.mixNames ?? []);
   const [isSaving, setIsSaving] = React.useState(false);
   const isSavingRef = React.useRef(false);
   const [saveError, setSaveError] = React.useState<string>();
@@ -181,6 +183,7 @@ function SongDetail({
     setNotes(song.notes ?? "");
     setAssignments(song.mixAssignments);
     setMicrophoneNames(song.microphoneNames ?? []);
+    setMixNames(song.mixNames ?? []);
   }, [song]);
 
   React.useLayoutEffect(() => {
@@ -208,6 +211,7 @@ function SongDetail({
       readonly notes?: string;
       readonly assignments?: ReadonlyArray<SongMixAssignment>;
       readonly microphoneNames?: ReadonlyArray<SongMicrophoneName>;
+      readonly mixNames?: ReadonlyArray<SongMixName>;
     },
     blockUi = true,
   ) => {
@@ -224,6 +228,9 @@ function SongDetail({
     const normalizedMicrophoneNames = (next?.microphoneNames ?? microphoneNames).filter((item) =>
       activeMicrophoneIds.has(item.microphoneId),
     );
+    const normalizedMixNames = (next?.mixNames ?? mixNames).filter((item) =>
+      activeMixIds.has(item.mixId),
+    );
     if (blockUi) {
       isSavingRef.current = true;
       setIsSaving(true);
@@ -238,6 +245,7 @@ function SongDetail({
         notes: next?.notes ?? notes,
         mixAssignments: normalizedAssignments,
         microphoneNames: normalizedMicrophoneNames,
+        mixNames: normalizedMixNames,
       },
       reactivityKeys: songsRpcReactivityKey(showId),
     });
@@ -252,6 +260,7 @@ function SongDetail({
       setNotes(song.notes ?? "");
       setAssignments(song.mixAssignments);
       setMicrophoneNames(song.microphoneNames ?? []);
+      setMixNames(song.mixNames ?? []);
       return false;
     }
     return true;
@@ -392,9 +401,27 @@ function SongDetail({
                         >
                           {mix.number}
                         </span>
-                        <span className="truncate">
-                          {mix.name || (mix.id === mainMixId ? "Main mix" : "Mix")}
-                        </span>
+                        <ChannelNameEditor
+                          displayedName={
+                            mixNames.find((item) => item.mixId === mix.id)?.name ?? mix.name ?? ""
+                          }
+                          placeholder={mix.id === mainMixId ? "Main mix" : "Add name"}
+                          ariaLabel={`Name override for mix ${mix.number}`}
+                          disabled={isSaving}
+                          inputClassName="min-w-0 pl-1 pr-2.5 text-left"
+                          persistentInput
+                          onSave={(value) => {
+                            const trimmed = value.trim();
+                            const override =
+                              trimmed && trimmed !== (mix.name?.trim() ?? "") ? trimmed : undefined;
+                            const nextMixNames = [
+                              ...mixNames.filter((item) => item.mixId !== mix.id),
+                              ...(override ? [{ mixId: mix.id, name: override }] : []),
+                            ];
+                            setMixNames(nextMixNames);
+                            void save({ mixNames: nextMixNames }, false);
+                          }}
+                        />
                         {mix.id === mainMixId && <Badge>Main mix</Badge>}
                       </CardTitle>
                     </CardHeader>
@@ -489,50 +516,99 @@ function MicrophoneName({
   const inheritedName = microphone.name ?? "";
   const displayedName =
     microphoneNames.find((item) => item.microphoneId === microphone.id)?.name ?? inheritedName;
+  return (
+    <ChannelNameEditor
+      displayedName={displayedName}
+      placeholder="Add name"
+      ariaLabel={`Name override for microphone ${microphone.number}`}
+      disabled={disabled}
+      className="w-full truncate text-center text-sm"
+      inputClassName="w-full text-center"
+      onSave={onSave}
+      stopPropagation
+    />
+  );
+}
+
+function ChannelNameEditor({
+  displayedName,
+  placeholder,
+  ariaLabel,
+  disabled,
+  className,
+  inputClassName,
+  onSave,
+  stopPropagation = false,
+  persistentInput = false,
+}: {
+  readonly displayedName: string;
+  readonly placeholder: string;
+  readonly ariaLabel: string;
+  readonly disabled: boolean;
+  readonly className?: string;
+  readonly inputClassName?: string;
+  readonly onSave: (value: string) => void;
+  readonly stopPropagation?: boolean;
+  readonly persistentInput?: boolean;
+}) {
   const [editing, setEditing] = React.useState(false);
   const [value, setValue] = React.useState(displayedName);
+  const cancelSaveRef = React.useRef(false);
 
   React.useEffect(() => setValue(displayedName), [displayedName]);
 
-  if (!editing) {
+  if (!editing && !persistentInput) {
     return (
       <button
         type="button"
-        className="block w-full truncate text-center text-sm font-medium"
+        className={cn("block font-medium", className)}
         disabled={disabled}
         onClick={(event) => {
-          event.stopPropagation();
+          if (stopPropagation) event.stopPropagation();
           setValue(displayedName);
           setEditing(true);
         }}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => stopPropagation && event.stopPropagation()}
       >
-        {displayedName || "Add name"}
+        {displayedName || placeholder}
       </button>
     );
   }
 
   return (
     <Input
-      autoFocus
-      aria-label={`Name override for microphone ${microphone.number}`}
+      autoFocus={!persistentInput}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
       value={value}
       disabled={disabled}
+      onFocus={() => {
+        cancelSaveRef.current = false;
+        setEditing(true);
+      }}
       onChange={(event) => setValue(event.currentTarget.value)}
       onBlur={() => {
         setEditing(false);
-        if (value.trim() !== displayedName) onSave(value);
+        if (!cancelSaveRef.current && value.trim() !== displayedName) onSave(value);
+        cancelSaveRef.current = false;
       }}
       onKeyDown={(event) => {
-        event.stopPropagation();
+        if (stopPropagation) event.stopPropagation();
         if (event.key === "Enter") event.currentTarget.blur();
         if (event.key === "Escape") {
+          cancelSaveRef.current = true;
           setValue(displayedName);
-          setEditing(false);
+          event.currentTarget.blur();
         }
       }}
-      onClick={(event) => event.stopPropagation()}
-      className="h-auto min-w-0 border-transparent bg-transparent p-0 text-center text-base leading-none font-medium shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30"
+      onClick={(event) => stopPropagation && event.stopPropagation()}
+      className={cn(
+        "h-auto min-w-0 text-base leading-none font-medium",
+        persistentInput
+          ? "border-transparent bg-transparent shadow-none focus-visible:bg-input/30 dark:bg-transparent dark:focus-visible:bg-input/30"
+          : "border-transparent bg-transparent p-0 shadow-none focus-visible:bg-input/30 focus-visible:ring-0 dark:bg-transparent dark:focus-visible:bg-input/30",
+        inputClassName,
+      )}
     />
   );
 }

@@ -17,6 +17,8 @@ import { ShowService } from "../shows/ShowService.js";
 import * as ShowServiceLayer from "../shows/ShowService.js";
 import { MicrophoneService } from "../microphones/MicrophoneService.js";
 import * as MicrophoneServiceLayer from "../microphones/MicrophoneService.js";
+import { MixService } from "../mixes/MixService.js";
+import * as MixServiceLayer from "../mixes/MixService.js";
 import { SongService } from "./SongService.js";
 import * as SongServiceLayer from "./SongService.js";
 
@@ -31,6 +33,7 @@ const makeLayer = (home: string) => {
     ShowServiceLayer.layer,
     SongServiceLayer.layer,
     MicrophoneServiceLayer.layer,
+    MixServiceLayer.layer,
   ).pipe(
     Layer.provideMerge(Layer.mergeAll(Ids.layer, ShowRepository.layer)),
     Layer.provide(makeDatabaseTestLayer(home)),
@@ -65,6 +68,7 @@ describe("SongService", () => {
           artist: "" as SongArtist,
           mixAssignments: [],
           microphoneNames: [],
+          mixNames: [],
         });
       }).pipe(Effect.provide(makeLayer(home))),
     );
@@ -92,6 +96,7 @@ describe("SongService", () => {
           notes: "  Opening cue  ",
           mixAssignments: [{ mixId: "mix_main" as never, microphoneIds: [microphone.id] }],
           microphoneNames: [],
+          mixNames: [],
         });
         const reordered = yield* songs.reorder({
           showId: show.id,
@@ -175,6 +180,7 @@ describe("SongService", () => {
           artist: song.artist,
           mixAssignments: [],
           microphoneNames: [{ microphoneId: microphone.id, name: "Keys" }],
+          mixNames: [],
         });
         const inherited = yield* songs.edit({
           showId: show.id,
@@ -183,6 +189,7 @@ describe("SongService", () => {
           artist: song.artist,
           mixAssignments: [],
           microphoneNames: [{ microphoneId: microphone.id, name: "  Lead  " }],
+          mixNames: [],
         });
         return { overridden, inherited };
       }).pipe(Effect.provide(makeLayer(home))),
@@ -192,6 +199,45 @@ describe("SongService", () => {
       { microphoneId: expect.any(String), name: "Keys" },
     ]);
     expect(result.inherited.microphoneNames).toBeUndefined();
+  });
+
+  it("stores a song-specific mix name and removes it when it matches the inherited name", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const mixes = yield* MixService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const song = yield* songs.create({ showId: show.id, ...songInput("First") });
+        const main = (yield* mixes.list(show.id))[0]!;
+        const overridden = yield* songs.edit({
+          showId: show.id,
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          mixAssignments: [],
+          microphoneNames: [],
+          mixNames: [{ mixId: main.id, name: "House" }],
+        });
+        const persisted = (yield* songs.list(show.id))[0]!;
+        const inherited = yield* songs.edit({
+          showId: show.id,
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          mixAssignments: [],
+          microphoneNames: [],
+          mixNames: [{ mixId: main.id, name: "  Main  " }],
+        });
+        return { overridden, persisted, inherited };
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.overridden.mixNames).toEqual([{ mixId: "mix_main", name: "House" }]);
+    expect(result.persisted.mixNames).toEqual([{ mixId: "mix_main", name: "House" }]);
+    expect(result.inherited.mixNames).toBeUndefined();
   });
 
   it("rejects incomplete reorder payloads without changing the setlist", async () => {

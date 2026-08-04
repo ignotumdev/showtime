@@ -32,6 +32,7 @@ const criticalTables = [
   "song_mix_assignments",
   "song_mix_assignment_microphones",
   "song_microphone_names",
+  "song_mix_names",
   "chat_channels",
   "chat_messages",
   "chat_profile_channel_state",
@@ -100,6 +101,7 @@ const expectedColumns: Readonly<Record<(typeof criticalTables)[number], Readonly
   song_mix_assignments: ["song_id", "show_id", "mix_id", "position"],
   song_mix_assignment_microphones: ["song_id", "mix_id", "microphone_id", "position"],
   song_microphone_names: ["song_id", "microphone_id", "name", "position"],
+  song_mix_names: ["song_id", "show_id", "mix_id", "name", "position"],
   chat_channels: ["id", "show_id", "name", "created_at"],
   chat_messages: [
     "sequence",

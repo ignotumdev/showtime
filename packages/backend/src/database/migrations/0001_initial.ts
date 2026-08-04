@@ -139,6 +139,17 @@ const initial = Effect.fn("ShowtimeMigration0001Initial")(function* () {
     UNIQUE (song_id, position)
   )`;
   yield* sql`CREATE INDEX song_microphone_names_microphone ON song_microphone_names(microphone_id)`;
+  yield* sql`CREATE TABLE song_mix_names (
+    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    show_id TEXT NOT NULL,
+    mix_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    PRIMARY KEY (song_id, mix_id),
+    UNIQUE (song_id, position),
+    FOREIGN KEY (show_id, mix_id) REFERENCES mixes(show_id, id) ON DELETE CASCADE
+  )`;
+  yield* sql`CREATE INDEX song_mix_names_show_mix ON song_mix_names(show_id, mix_id)`;
 
   yield* sql`CREATE TABLE chat_channels (
     id TEXT PRIMARY KEY NOT NULL,

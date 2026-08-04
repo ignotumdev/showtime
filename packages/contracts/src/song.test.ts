@@ -8,6 +8,7 @@ const valid = {
   artist: "Coldplay",
   mixAssignments: [{ mixId: "mix_main", microphoneIds: ["mic_0123456789abcdef"] }],
   microphoneNames: [{ microphoneId: "mic_0123456789abcdef", name: "Lead" }],
+  mixNames: [{ mixId: "mix_main", name: "House" }],
   createdAt: "2026-07-10T20:00:00.000Z",
   updatedAt: "2026-07-10T20:00:00.000Z",
 };
@@ -28,6 +29,12 @@ describe("Song", () => {
       decode({
         ...valid,
         mixAssignments: [valid.mixAssignments[0], valid.mixAssignments[0]],
+      }),
+    ).toThrow();
+    expect(() =>
+      decode({
+        ...valid,
+        mixNames: [valid.mixNames[0], valid.mixNames[0]],
       }),
     ).toThrow();
     expect(() =>

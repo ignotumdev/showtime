@@ -35,6 +35,7 @@ const song = {
     { mixId: unused.id, microphoneIds: [] },
   ],
   microphoneNames: [{ microphoneId: leadId, name: "Chris" }],
+  mixNames: [{ mixId: monitor.id, name: "Alex vocal" }],
 } as unknown as Song;
 
 describe("projectLiveSong", () => {
@@ -53,6 +54,11 @@ describe("projectLiveSong", () => {
       "Chris",
       "Microphone 4",
     ]);
+  });
+
+  it("resolves song-specific mix names", () => {
+    const view = projectLiveSong(song, 3, 12, [monitor], [guitar]);
+    expect(view.mixes[0]?.name).toBe("Alex vocal");
   });
 
   it("trims optional display content while preserving note line breaks", () => {

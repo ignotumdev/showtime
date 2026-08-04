@@ -16,6 +16,7 @@ import {
   type Microphone,
   type Mix,
   type Song,
+  type SongMixName,
   type SongMicrophoneName,
   type SongMixAssignment,
 } from "@showtime/contracts";
@@ -92,6 +93,12 @@ const MicrophoneNameRow = Schema.Struct({
   name: Schema.String,
   position: Schema.Int,
 });
+const MixNameRow = Schema.Struct({
+  songId: SongId,
+  mixId: MixId,
+  name: Schema.String,
+  position: Schema.Int,
+});
 
 const rpcError = (message: string, cause?: unknown) =>
   new RpcError({ message, ...(cause === undefined ? {} : { cause }) });
@@ -152,11 +159,19 @@ const make = Effect.fn("ShowRepository.make")(function* () {
       FROM song_microphone_names n INNER JOIN songs s ON s.id = n.song_id
       WHERE s.show_id = ${showId} ORDER BY n.song_id, n.position`,
   });
+  const findMixNames = SqlSchema.findAll({
+    Request: ShowId,
+    Result: MixNameRow,
+    execute: (showId) => sql`SELECT n.song_id AS songId, n.mix_id AS mixId,
+        n.name, n.position
+      FROM song_mix_names n INNER JOIN songs s ON s.id = n.song_id
+      WHERE s.show_id = ${showId} ORDER BY n.song_id, n.position`,
+  });
 
   const loadDocument = Effect.fn("ShowRepository.loadDocument")(function* (
     row: typeof ShowRow.Type,
   ) {
-    const [microphoneRows, mixRows, songRows, assignmentRows, microphoneNameRows] =
+    const [microphoneRows, mixRows, songRows, assignmentRows, microphoneNameRows, mixNameRows] =
       yield* Effect.all(
         [
           findMicrophones(row.id),
@@ -164,6 +179,7 @@ const make = Effect.fn("ShowRepository.make")(function* () {
           findSongs(row.id),
           findAssignments(row.id),
           findMicrophoneNames(row.id),
+          findMixNames(row.id),
         ],
         { concurrency: "unbounded" },
       );
@@ -206,8 +222,15 @@ const make = Effect.fn("ShowRepository.make")(function* () {
       names.push({ microphoneId: row.microphoneId, name: row.name });
       namesBySong.set(row.songId, names);
     }
+    const mixNamesBySong = new Map<SongId, Array<SongMixName>>();
+    for (const row of mixNameRows) {
+      const names = mixNamesBySong.get(row.songId) ?? [];
+      names.push({ mixId: row.mixId, name: row.name });
+      mixNamesBySong.set(row.songId, names);
+    }
     const songs: ReadonlyArray<Song> = songRows.map((item) => {
       const microphoneNames = namesBySong.get(item.id) ?? [];
+      const mixNames = mixNamesBySong.get(item.id) ?? [];
       return {
         id: item.id,
         name: item.name,
@@ -217,6 +240,7 @@ const make = Effect.fn("ShowRepository.make")(function* () {
         updatedAt: item.updatedAt,
         ...(item.notes === null ? {} : { notes: item.notes }),
         ...(microphoneNames.length === 0 ? {} : { microphoneNames }),
+        ...(mixNames.length === 0 ? {} : { mixNames }),
         ...(item.deletedAt === null ? {} : { deletedAt: item.deletedAt }),
       };
     });
@@ -275,6 +299,9 @@ const make = Effect.fn("ShowRepository.make")(function* () {
       for (const [namePosition, name] of (song.microphoneNames ?? []).entries())
         yield* sql`INSERT INTO song_microphone_names (song_id, microphone_id, name, position)
           VALUES (${song.id}, ${name.microphoneId}, ${name.name}, ${namePosition})`;
+      for (const [namePosition, name] of (song.mixNames ?? []).entries())
+        yield* sql`INSERT INTO song_mix_names (song_id, show_id, mix_id, name, position)
+          VALUES (${song.id}, ${showId}, ${name.mixId}, ${name.name}, ${namePosition})`;
     }
   });
 
