@@ -158,7 +158,16 @@ const handlers = ShowtimeRpcs.toLayer(
           songsSyncKey(showId),
           songs.create({ showId, id, name, artist, insertAfterSongId }),
         ),
-      "songs.edit": ({ showId, id, name, artist, notes, mixAssignments, microphoneNames }) =>
+      "songs.edit": ({
+        showId,
+        id,
+        name,
+        artist,
+        notes,
+        mixAssignments,
+        microphoneNames,
+        mixNames,
+      }) =>
         sync.mutation(
           songsSyncKey(showId),
           songs.edit({
@@ -168,6 +177,7 @@ const handlers = ShowtimeRpcs.toLayer(
             artist,
             mixAssignments,
             microphoneNames,
+            mixNames,
             ...(notes === undefined ? {} : { notes }),
           }),
         ),

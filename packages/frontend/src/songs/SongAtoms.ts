@@ -60,6 +60,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
                     artist: input.payload.artist.trim() as Song["artist"],
                     mixAssignments: input.payload.mixAssignments,
                     microphoneNames: input.payload.microphoneNames,
+                    mixNames: input.payload.mixNames,
                     updatedAt,
                     ...(notes ? { notes } : { notes: undefined }),
                   }

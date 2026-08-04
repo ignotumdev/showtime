@@ -7,6 +7,7 @@ import {
   SongArtist,
   SongId,
   SongMicrophoneName,
+  SongMixName,
   SongMixAssignment,
   SongName,
 } from "./song.js";
@@ -251,6 +252,7 @@ export const ShowtimeRpcs = EffectRpcGroup.make(
       notes: Schema.optional(Schema.String),
       mixAssignments: Schema.Array(SongMixAssignment),
       microphoneNames: Schema.Array(SongMicrophoneName),
+      mixNames: Schema.Array(SongMixName),
     },
     success: Song,
     error: RpcError,

@@ -8,6 +8,7 @@ import {
   type Song,
   type SongArtist,
   type SongId,
+  type SongMixName,
   type SongMicrophoneName,
   type SongMixAssignment,
   type SongName,
@@ -31,6 +32,7 @@ interface SongServiceShape {
     readonly notes?: string;
     readonly mixAssignments: ReadonlyArray<SongMixAssignment>;
     readonly microphoneNames: ReadonlyArray<SongMicrophoneName>;
+    readonly mixNames: ReadonlyArray<SongMixName>;
   }) => Effect.Effect<Song, RpcError>;
   readonly reorder: (params: {
     readonly showId: ShowId;
@@ -139,6 +141,12 @@ const make = Effect.fnUntraced(function* () {
         new RpcError({ message: "A named microphone is invalid or no longer exists." }),
       );
     }
+    if (new Set(params.mixNames.map((item) => item.mixId)).size !== params.mixNames.length) {
+      return yield* Effect.fail(new RpcError({ message: "A mix was named more than once." }));
+    }
+    if (params.mixNames.some((item) => !activeMixIds.has(item.mixId))) {
+      return yield* Effect.fail(new RpcError({ message: "A named mix no longer exists." }));
+    }
 
     const requestedByMix = new Map(params.mixAssignments.map((item) => [item.mixId, item]));
     const mixAssignments: Array<SongMixAssignment> = found.mixes
@@ -161,6 +169,15 @@ const make = Effect.fnUntraced(function* () {
         ? [{ microphoneId: microphone.id, name: requestedName }]
         : [];
     });
+    const mixNames = found.mixes
+      .filter((mix) => mix.deletedAt === undefined)
+      .flatMap((mix) => {
+        const requestedName = params.mixNames.find((item) => item.mixId === mix.id)?.name.trim();
+        const inheritedName = mix.name?.trim() ?? "";
+        return requestedName && requestedName !== inheritedName
+          ? [{ mixId: mix.id, name: requestedName }]
+          : [];
+      });
     const name = yield* decodeSongName(params.name.trim()).pipe(
       Effect.mapError(toRpcError("Invalid song name.")),
     );
@@ -190,7 +207,8 @@ const make = Effect.fnUntraced(function* () {
               !currentMixIds.has(assignment.mixId) ||
               assignment.microphoneIds.some((id) => !currentMicrophoneIds.has(id)),
           ) ||
-          microphoneNames.some((item) => !currentMicrophoneIds.has(item.microphoneId))
+          microphoneNames.some((item) => !currentMicrophoneIds.has(item.microphoneId)) ||
+          mixNames.some((item) => !currentMixIds.has(item.mixId))
         ) {
           throw new Error("A referenced mix or microphone no longer exists.");
         }
@@ -201,6 +219,7 @@ const make = Effect.fnUntraced(function* () {
           artist,
           mixAssignments,
           ...(microphoneNames.length ? { microphoneNames } : {}),
+          ...(mixNames.length ? { mixNames } : {}),
           createdAt: current.createdAt,
           updatedAt: now,
           ...(notes ? { notes } : {}),
