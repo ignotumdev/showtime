@@ -14,6 +14,10 @@ export const databaseFileName = "showtime.db";
 export const migrationTableName = "effect_sql_migrations";
 export const currentMigrations = [[1, "initial"]] as const;
 
+const initializationLockFileName = `${databaseFileName}.initialize.lock`;
+const initializationLockWaitMilliseconds = 20_000;
+const malformedLockGraceMilliseconds = 2_000;
+
 const criticalTables = [
   "app_settings",
   "profiles",
@@ -175,21 +179,33 @@ const inspectExistingDatabase = (filename: string) =>
     try: () => {
       const db = new DatabaseSync(filename, { readOnly: true });
       try {
-        // Read-only preflight can overlap another process changing WAL or committing bootstrap.
-        // Install the same lock wait used by the main client before inspecting any schema state.
+        // The initialization lock serializes startup, but an already-running Showtime process can
+        // still be writing this WAL database while another process performs the cutoff check.
         db.exec("PRAGMA busy_timeout = 5000");
-        const ledgerExists = db
-          .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
-          .get(migrationTableName);
-        if (!ledgerExists) throw new Error("The Effect migration ledger is missing.");
-        const ledger = db
-          .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
-          .all() as unknown as ReadonlyArray<{ migration_id: number; name: string }>;
-        if (!isCurrentLedger(ledger))
-          throw new Error("The migration ledger is not the released baseline.");
         const objects = db
           .prepare("SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index')")
           .all() as unknown as ReadonlyArray<{ type: string; name: string }>;
+        const applicationObjects = objects.filter((row) => !row.name.startsWith("sqlite_"));
+        const ledgerExists = db
+          .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
+          .get(migrationTableName);
+        // Opening a database creates an empty file before initialization takes the cross-process
+        // lock. An empty file (or the empty ledger left if a process exited just after the Effect
+        // migrator created it) contains no prerelease state and is safe to finish initializing.
+        if (!ledgerExists) {
+          if (applicationObjects.length === 0) return;
+          throw new Error("The Effect migration ledger is missing.");
+        }
+        const ledger = db
+          .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
+          .all() as unknown as ReadonlyArray<{ migration_id: number; name: string }>;
+        if (
+          ledger.length === 0 &&
+          applicationObjects.every((row) => row.type === "table" && row.name === migrationTableName)
+        )
+          return;
+        if (!isCurrentLedger(ledger))
+          throw new Error("The migration ledger is not the released baseline.");
         const tables = new Set(
           objects.filter((row) => row.type === "table").map((row) => row.name),
         );
@@ -274,10 +290,121 @@ const prepareDatabasePath = Effect.fn("ShowtimeDatabasePreflight")(function* () 
       message: resetMessage(found),
       paths: found,
     });
-  if (yield* fs.exists(filename)) yield* inspectExistingDatabase(filename);
   yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
   return { directory, filename } as const;
 });
+
+interface InitializationLockOwner {
+  readonly pid: number;
+  readonly token: string;
+}
+
+const parseInitializationLockOwner = (contents: string): InitializationLockOwner | undefined => {
+  try {
+    const parsed = JSON.parse(contents) as Partial<InitializationLockOwner>;
+    return typeof parsed.pid === "number" &&
+      Number.isInteger(parsed.pid) &&
+      parsed.pid > 0 &&
+      typeof parsed.token === "string" &&
+      parsed.token.length > 0
+      ? { pid: parsed.pid, token: parsed.token }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const processIsRunning = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (cause) {
+    return (cause as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+
+const lockError = (message: string, cause?: unknown) =>
+  new DatabaseInitializationError({
+    message,
+    stage: "initialization-lock",
+    cause,
+  });
+
+const acquireInitializationLock = Effect.fn("ShowtimeDatabaseAcquireInitializationLock")(function* (
+  lockPath: string,
+) {
+  const fs = yield* FileSystem;
+  const token = customAlphabet(idAlphabet, idSuffixLength)();
+  const owner = { pid: process.pid, token } satisfies InitializationLockOwner;
+  const startedAt = Date.now();
+
+  while (true) {
+    const acquired = yield* fs
+      .writeFileString(lockPath, JSON.stringify(owner), { flag: "wx", mode: 0o600 })
+      .pipe(
+        Effect.as(true),
+        Effect.catch((cause) =>
+          cause.reason._tag === "AlreadyExists"
+            ? Effect.succeed(false)
+            : Effect.fail(lockError("Could not create the database initialization lock.", cause)),
+        ),
+      );
+    if (acquired) return owner;
+
+    const existingOwner = yield* fs.readFileString(lockPath).pipe(
+      Effect.map(parseInitializationLockOwner),
+      Effect.catch((cause) =>
+        cause.reason._tag === "NotFound"
+          ? Effect.succeed(undefined)
+          : Effect.fail(lockError("Could not read the database initialization lock.", cause)),
+      ),
+    );
+    const elapsed = Date.now() - startedAt;
+    const reclaim = existingOwner
+      ? !processIsRunning(existingOwner.pid)
+      : elapsed >= malformedLockGraceMilliseconds;
+
+    if (reclaim) {
+      const stalePath = `${lockPath}.stale-${token}`;
+      const renamed = yield* fs.rename(lockPath, stalePath).pipe(
+        Effect.as(true),
+        Effect.catch((cause) =>
+          cause.reason._tag === "NotFound"
+            ? Effect.succeed(false)
+            : Effect.fail(
+                lockError("Could not reclaim a stale database initialization lock.", cause),
+              ),
+        ),
+      );
+      if (renamed)
+        yield* fs
+          .remove(stalePath, { force: true })
+          .pipe(
+            Effect.mapError((cause) =>
+              lockError("Could not remove a stale database initialization lock.", cause),
+            ),
+          );
+      continue;
+    }
+
+    if (elapsed >= initializationLockWaitMilliseconds)
+      return yield* lockError(
+        "Timed out waiting for another Showtime process to initialize the database.",
+      );
+    yield* Effect.sleep("25 millis");
+  }
+});
+
+const releaseInitializationLock = (lockPath: string, owner: InitializationLockOwner) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem;
+    const existingOwner = yield* fs.readFileString(lockPath).pipe(
+      Effect.map(parseInitializationLockOwner),
+      Effect.catch(() => Effect.succeed(undefined)),
+    );
+    if (existingOwner?.token === owner.token)
+      yield* fs.remove(lockPath, { force: true }).pipe(Effect.ignore);
+  });
 
 const clientLayer = Layer.unwrap(
   prepareDatabasePath().pipe(
@@ -402,25 +529,39 @@ const validateCurrentSchema = Effect.fn("ShowtimeDatabaseValidate")(function* ()
 });
 
 const initialize = Effect.fn("ShowtimeDatabaseInitialize")(function* () {
-  const sql = yield* SqlClient.SqlClient;
-  // Install the lock wait before any pragma that may need to change database-wide state.
-  yield* sql`PRAGMA busy_timeout = 5000`;
-  yield* sql`PRAGMA foreign_keys = ON`;
-  yield* sql`PRAGMA journal_mode = WAL`;
-  yield* sql`PRAGMA synchronous = FULL`;
-  yield* SqliteMigrator.run({
-    loader: SqliteMigrator.fromRecord({ "0001_initial": initial }),
-    table: migrationTableName,
-  });
-  yield* sql.withTransaction(bootstrap().pipe(Effect.withSpan("Showtime database bootstrap")));
-  yield* validateCurrentSchema();
   const fs = yield* FileSystem;
   const path = yield* Path.Path;
   const home = yield* HomeDirectory.HomeDirectory;
   const filename = path.join(yield* home.homeDirectory, ".showtime", databaseFileName);
-  for (const candidate of [filename, `${filename}-wal`, `${filename}-shm`])
-    if (yield* fs.exists(candidate)) yield* fs.chmod(candidate, 0o600).pipe(Effect.ignore);
-  return DatabaseReady.of({});
+  const lockPath = path.join(path.dirname(filename), initializationLockFileName);
+
+  return yield* Effect.acquireUseRelease(
+    acquireInitializationLock(lockPath),
+    () =>
+      Effect.gen(function* () {
+        // The read-only cutoff check and every idempotent initialization write are covered by the
+        // same process lock. A second process therefore observes either an empty database or the
+        // fully migrated and bootstrapped baseline, never an intermediate schema.
+        yield* inspectExistingDatabase(filename);
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`PRAGMA busy_timeout = 5000`;
+        yield* sql`PRAGMA foreign_keys = ON`;
+        yield* sql`PRAGMA journal_mode = WAL`;
+        yield* sql`PRAGMA synchronous = FULL`;
+        yield* SqliteMigrator.run({
+          loader: SqliteMigrator.fromRecord({ "0001_initial": initial }),
+          table: migrationTableName,
+        });
+        yield* sql.withTransaction(
+          bootstrap().pipe(Effect.withSpan("Showtime database bootstrap")),
+        );
+        yield* validateCurrentSchema();
+        for (const candidate of [filename, `${filename}-wal`, `${filename}-shm`])
+          if (yield* fs.exists(candidate)) yield* fs.chmod(candidate, 0o600).pipe(Effect.ignore);
+        return DatabaseReady.of({});
+      }),
+    (owner) => releaseInitializationLock(lockPath, owner),
+  );
 });
 
 const readyLayer = Layer.effect(DatabaseReady, initialize()).pipe(Layer.provideMerge(clientLayer));
