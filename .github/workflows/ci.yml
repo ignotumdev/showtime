@@ -45,10 +45,5 @@ jobs:
       - name: Run tests
         run: pnpm exec vp run -r test
 
-      - name: Build web application
-        run: pnpm --filter @showtime/web build
-
       - name: Build desktop application
-        run: |
-          pnpm --filter @showtime/desktop exec tsc
-          pnpm --filter @showtime/desktop exec vp build --config electron.vite.config.ts
+        run: pnpm --filter @showtime/desktop build
