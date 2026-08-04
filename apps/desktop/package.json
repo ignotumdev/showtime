@@ -1,6 +1,6 @@
 {
   "name": "@showtime/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Showtime supports live sound engineers during shows and soundchecks.",
   "license": "MIT",
@@ -9,13 +9,17 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vp run web#build && vp dev --config electron.vite.config.ts",
-    "build": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder"
+    "build": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder",
+    "release:build": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder --publish never",
+    "release": "vp run web#build && tsc && vp build --config electron.vite.config.ts && electron-builder --publish always",
+    "test": "vp test run"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@showtime/backend": "workspace:*",
     "@showtime/shared": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@types/node": "catalog:",

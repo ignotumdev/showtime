@@ -17,6 +17,7 @@ import { SongService } from "../songs/SongService.js";
 import { SyncEngine } from "../sync/SyncEngine.js";
 import { ProfileService } from "../profiles/ProfileService.js";
 import { ChatService } from "../chats/ChatService.js";
+import { LiveGuard } from "../live/LiveGuard.js";
 
 const handlers = ShowtimeRpcs.toLayer(
   Effect.gen(function* () {
@@ -28,7 +29,10 @@ const handlers = ShowtimeRpcs.toLayer(
     const sync = yield* SyncEngine;
     const profiles = yield* ProfileService;
     const chats = yield* ChatService;
+    const live = yield* LiveGuard;
     return ShowtimeRpcs.of({
+      "live.heartbeat": ({ sessionId, showId }) => live.heartbeat(sessionId, showId),
+      "live.release": ({ sessionId }) => live.release(sessionId),
       "shows.list": () => sync.query(showsSyncKey, shows.list),
       "shows.create": ({ name, color }) =>
         sync.mutation(showsSyncKey, shows.create({ name, color })),

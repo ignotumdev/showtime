@@ -7,6 +7,11 @@
   directories: {
     output: "release/${version}",
   },
+  publish: {
+    provider: "github",
+    owner: "johannesschiessl",
+    repo: "showtime",
+  },
   toolsets: {
     // The legacy winCodeSign archive includes macOS symlinks and cannot be
     // extracted by an unprivileged Windows process. The current toolset uses
@@ -27,7 +32,8 @@
   ],
   icon: "../../assets/icon.png",
   mac: {
-    target: ["dmg"],
+    target: ["dmg", "zip"],
+    notarize: true,
     artifactName: "${productName}-Mac-${version}-Installer.${ext}",
   },
   win: {

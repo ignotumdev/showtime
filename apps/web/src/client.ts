@@ -32,6 +32,7 @@ export const {
   songAtoms,
   profileAtoms,
   chatAtoms,
+  livePresenceAtoms,
 } = frontend;
 
 export * from "@showtime/frontend";

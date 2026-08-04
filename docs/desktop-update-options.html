@@ -1,0 +1,1350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Showtime desktop updates: options and recommendation</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #18211d;
+        --muted: #5f6d65;
+        --paper: #f3f0e9;
+        --surface: #fffdf7;
+        --surface-strong: #ffffff;
+        --line: #d7d6cc;
+        --green: #17724e;
+        --green-soft: #dff2e8;
+        --amber: #9a5b08;
+        --amber-soft: #fff0cc;
+        --red: #a33a32;
+        --red-soft: #fbe5e1;
+        --blue: #285a8a;
+        --blue-soft: #e4eef8;
+        --shadow: 0 18px 55px rgb(26 36 31 / 9%);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 8% 0%, rgb(23 114 78 / 11%), transparent 24rem), var(--paper);
+        font-size: 16px;
+        line-height: 1.58;
+      }
+
+      a {
+        color: var(--blue);
+        text-underline-offset: 0.18em;
+      }
+
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+
+      code {
+        padding: 0.12rem 0.32rem;
+        border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+        border-radius: 0.3rem;
+        background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+        font-size: 0.9em;
+      }
+
+      .page {
+        width: min(76rem, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 1rem 0 5rem;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(2rem, 6vw, 5rem);
+        border: 1px solid var(--line);
+        border-radius: 1.6rem;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .hero::after {
+        position: absolute;
+        right: -7rem;
+        bottom: -9rem;
+        width: 24rem;
+        height: 24rem;
+        border: 4.5rem solid var(--green-soft);
+        border-radius: 50%;
+        content: "";
+        opacity: 0.8;
+        pointer-events: none;
+      }
+
+      .eyebrow,
+      .kicker {
+        margin: 0 0 0.8rem;
+        color: var(--green);
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.12;
+        letter-spacing: -0.025em;
+      }
+
+      h1 {
+        position: relative;
+        z-index: 1;
+        max-width: 17ch;
+        font-size: clamp(2.35rem, 7vw, 5.2rem);
+      }
+
+      h2 {
+        font-size: clamp(1.7rem, 4vw, 2.6rem);
+      }
+
+      h3 {
+        font-size: 1.2rem;
+      }
+
+      .lede {
+        position: relative;
+        z-index: 1;
+        max-width: 63ch;
+        margin: 1.35rem 0 0;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 2vw, 1.24rem);
+      }
+
+      .badges {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1.5rem;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.34rem 0.68rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-strong);
+        color: var(--muted);
+        font-size: 0.83rem;
+        font-weight: 700;
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem 1.1rem;
+        margin: 1rem 0 0;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: color-mix(in srgb, var(--surface) 88%, transparent);
+      }
+
+      nav a {
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      main > section {
+        padding: clamp(3.5rem, 8vw, 6.5rem) 0 0;
+      }
+
+      .section-intro {
+        max-width: 68ch;
+        margin: 0.85rem 0 1.6rem;
+        color: var(--muted);
+      }
+
+      .decision {
+        display: grid;
+        grid-template-columns: 0.32fr 1fr;
+        gap: 1.4rem;
+        padding: clamp(1.35rem, 4vw, 2.3rem);
+        border: 1px solid color-mix(in srgb, var(--green) 36%, var(--line));
+        border-radius: 1.25rem;
+        background: linear-gradient(135deg, var(--green-soft), var(--surface) 70%);
+      }
+
+      .decision-mark {
+        display: grid;
+        width: 4rem;
+        height: 4rem;
+        place-items: center;
+        border-radius: 1rem;
+        background: var(--green);
+        color: white;
+        font-size: 1.7rem;
+        font-weight: 900;
+      }
+
+      .decision p {
+        margin: 0.7rem 0 0;
+      }
+
+      .plain-list {
+        margin: 1rem 0 0;
+        padding-left: 1.15rem;
+      }
+
+      .plain-list li + li {
+        margin-top: 0.48rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .card {
+        padding: 1.3rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--surface);
+      }
+
+      .card p {
+        margin: 0.55rem 0 0;
+        color: var(--muted);
+      }
+
+      .card .value {
+        display: block;
+        margin-top: 1rem;
+        color: var(--ink);
+        font-size: 1.12rem;
+        font-weight: 800;
+      }
+
+      .callout {
+        margin-top: 1rem;
+        padding: 1.1rem 1.2rem;
+        border-left: 0.34rem solid var(--amber);
+        border-radius: 0.25rem 0.8rem 0.8rem 0.25rem;
+        background: var(--amber-soft);
+      }
+
+      .callout strong {
+        display: block;
+        margin-bottom: 0.2rem;
+      }
+
+      .callout.danger {
+        border-left-color: var(--red);
+        background: var(--red-soft);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--surface);
+      }
+
+      table {
+        width: 100%;
+        min-width: 58rem;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 0.95rem;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: color-mix(in srgb, var(--surface) 80%, var(--paper));
+        color: var(--muted);
+        font-size: 0.75rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .score {
+        white-space: nowrap;
+        color: var(--green);
+        font-weight: 800;
+      }
+
+      .score.low {
+        color: var(--red);
+      }
+
+      .score.medium {
+        color: var(--amber);
+      }
+
+      .option-stack {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .option {
+        display: grid;
+        grid-template-columns: 3.5rem minmax(0, 1fr);
+        gap: 1.1rem;
+        padding: 1.35rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--surface);
+      }
+
+      .option.recommended {
+        border-color: color-mix(in srgb, var(--green) 46%, var(--line));
+        box-shadow: 0 10px 30px rgb(23 114 78 / 8%);
+      }
+
+      .option-number {
+        display: grid;
+        width: 3.1rem;
+        height: 3.1rem;
+        place-items: center;
+        border-radius: 0.85rem;
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-weight: 900;
+      }
+
+      .recommended .option-number {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .option-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+
+      .tag {
+        padding: 0.18rem 0.48rem;
+        border-radius: 999px;
+        background: var(--green-soft);
+        color: var(--green);
+        font-size: 0.7rem;
+        font-weight: 850;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .option p {
+        margin: 0.55rem 0 0;
+        color: var(--muted);
+      }
+
+      .pros-cons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.8rem;
+        margin-top: 1rem;
+      }
+
+      .pros-cons > div {
+        padding: 0.85rem;
+        border-radius: 0.7rem;
+        background: color-mix(in srgb, var(--paper) 72%, transparent);
+      }
+
+      .pros-cons strong {
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .pros-cons ul {
+        margin: 0.45rem 0 0;
+        padding-left: 1rem;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.65rem;
+        margin-top: 1.5rem;
+      }
+
+      .flow-step {
+        position: relative;
+        min-height: 8.5rem;
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--surface);
+      }
+
+      .flow-step:not(:last-child)::after {
+        position: absolute;
+        z-index: 2;
+        top: 50%;
+        right: -0.72rem;
+        width: 1.35rem;
+        height: 1.35rem;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--surface-strong);
+        color: var(--green);
+        content: "→";
+        line-height: 1.22rem;
+        text-align: center;
+      }
+
+      .flow-step span {
+        color: var(--green);
+        font-size: 0.72rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-top: 0.45rem;
+      }
+
+      .flow-step p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .contract {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .contract > div {
+        padding: 1.2rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--surface);
+      }
+
+      .contract .never {
+        border-top: 0.35rem solid var(--red);
+      }
+
+      .contract .only {
+        border-top: 0.35rem solid var(--green);
+      }
+
+      .contract ul {
+        margin: 0.75rem 0 0;
+        padding-left: 1.15rem;
+      }
+
+      .architecture {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0.7rem;
+        margin-top: 1rem;
+      }
+
+      .architecture > div {
+        padding: 1rem;
+        border-radius: 0.85rem;
+        background: var(--blue-soft);
+      }
+
+      .architecture strong {
+        display: block;
+        color: var(--blue);
+      }
+
+      .architecture p {
+        margin: 0.45rem 0 0;
+        font-size: 0.9rem;
+      }
+
+      .steps {
+        display: grid;
+        gap: 0.75rem;
+        margin: 1.2rem 0 0;
+        padding: 0;
+        counter-reset: rollout;
+        list-style: none;
+      }
+
+      .steps li {
+        display: grid;
+        grid-template-columns: 2.6rem 1fr;
+        gap: 0.9rem;
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--surface);
+        counter-increment: rollout;
+      }
+
+      .steps li::before {
+        display: grid;
+        width: 2.4rem;
+        height: 2.4rem;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--ink);
+        color: var(--surface);
+        content: counter(rollout);
+        font-weight: 850;
+      }
+
+      .steps strong {
+        display: block;
+      }
+
+      .steps p {
+        margin: 0.2rem 0 0;
+        color: var(--muted);
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.8rem;
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .sources li {
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        background: var(--surface);
+      }
+
+      .sources span {
+        display: block;
+        margin-top: 0.3rem;
+        color: var(--muted);
+        font-size: 0.87rem;
+      }
+
+      footer {
+        margin-top: 4rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      @media (max-width: 850px) {
+        .grid,
+        .architecture {
+          grid-template-columns: 1fr;
+        }
+
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .flow-step {
+          min-height: auto;
+        }
+
+        .flow-step:not(:last-child)::after {
+          top: auto;
+          right: 50%;
+          bottom: -0.72rem;
+          transform: rotate(90deg) translateY(-50%);
+        }
+      }
+
+      @media (max-width: 650px) {
+        .page {
+          width: min(100% - 1rem, 76rem);
+        }
+
+        .decision,
+        .option,
+        .contract,
+        .pros-cons,
+        .sources {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          border-radius: 1rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .page {
+          width: 100%;
+          padding: 0;
+        }
+
+        .hero,
+        .card,
+        .option,
+        .flow-step,
+        .steps li,
+        .sources li {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+
+        nav {
+          display: none;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #eef5f0;
+          --muted: #aebdb4;
+          --paper: #111714;
+          --surface: #18211d;
+          --surface-strong: #202b26;
+          --line: #37443d;
+          --green: #7bd7aa;
+          --green-soft: #173b2c;
+          --amber: #f2bd65;
+          --amber-soft: #3d2c13;
+          --red: #f1988f;
+          --red-soft: #3b201f;
+          --blue: #91bce8;
+          --blue-soft: #1c3044;
+          --shadow: 0 18px 55px rgb(0 0 0 / 24%);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <p class="eyebrow">Showtime · Desktop distribution research</p>
+        <h1>Updates that wait for the engineer</h1>
+        <p class="lede">
+          A comparison of Electron update strategies, grounded in Showtime's current packaging and
+          its highest-risk constraint: update downloads and installation must never consume show
+          resources, stop the local backend, disconnect clients, or restart the app unless the
+          engineer explicitly asks.
+        </p>
+        <div class="badges" aria-label="Document scope">
+          <span class="badge">Windows · NSIS</span>
+          <span class="badge">macOS · DMG</span>
+          <span class="badge">Linux · AppImage</span>
+          <span class="badge">Research checked 3 August 2026</span>
+        </div>
+      </header>
+
+      <nav aria-label="Page contents">
+        <a href="#decision">Decision</a>
+        <a href="#context">Codebase context</a>
+        <a href="#comparison">Options</a>
+        <a href="#safety">Show-safety contract</a>
+        <a href="#implementation">Implementation shape</a>
+        <a href="#rollout">Path to shipping</a>
+        <a href="#sources">Sources</a>
+      </nav>
+
+      <main>
+        <section id="decision">
+          <p class="kicker">Recommended direction</p>
+          <div class="decision">
+            <div class="decision-mark" aria-hidden="true">✓</div>
+            <div>
+              <h2>Use <code>electron-updater</code> with a launch check and manual updates</h2>
+              <p>
+                Keep <code>electron-builder</code> and the current NSIS, DMG, and AppImage targets.
+                Publish signed artifacts and builder-generated update metadata to public GitHub
+                Releases initially. Check availability once in the background on launch, then put
+                download and installation behind user actions and a backend-owned live-session
+                guard.
+              </p>
+              <ul class="plain-list">
+                <li>
+                  Check once after launch without delaying startup. Do not poll or schedule further
+                  checks during the session.
+                </li>
+                <li>
+                  Discovery only updates a passive status indicator. Separate
+                  <strong>Download</strong> and <strong>Install &amp; restart</strong> buttons keep
+                  costly or disruptive work explicit.
+                </li>
+                <li>
+                  Refuse and cancel downloads while any Live session is active; re-check the guard
+                  atomically before installation and immediately before quitting.
+                </li>
+                <li>
+                  Start with GitHub Releases because the repository is already public; move the same
+                  metadata and artifacts to static object storage later without replacing the update
+                  client.
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout danger">
+            <strong>The library defaults still do not meet Showtime's policy.</strong>
+            In the currently configured electron-builder generation, automatic download and
+            install-on-quit are enabled by default. Set <code>autoDownload = false</code> and
+            <code>autoInstallOnAppQuit = false</code>. If the project upgrades to electron-updater 7
+            / electron-builder 27, use <code>autoInstallEvent = "manual"</code>. Do not use the
+            convenience method <code>checkForUpdatesAndNotify()</code>; call
+            <code>checkForUpdates()</code> once and handle its result in Showtime's own passive UI.
+          </div>
+        </section>
+
+        <section id="context">
+          <p class="kicker">Why this fits this repository</p>
+          <h2>What the codebase already decides for us</h2>
+          <p class="section-intro">
+            The update mechanism is not an isolated desktop feature. Showtime's main process owns
+            the backend that browsers and mobile devices use during a show, so installation is a
+            coordinated service shutdown.
+          </p>
+          <div class="grid">
+            <article class="card">
+              <h3>Packaging is already aligned</h3>
+              <p>
+                <code>apps/desktop/electron-builder.json5</code> produces NSIS on Windows, DMG on
+                macOS, and AppImage on Linux—the targets supported directly by
+                <code>electron-updater</code>.
+              </p>
+              <span class="value">Keep the packaging stack</span>
+            </article>
+            <article class="card">
+              <h3>A restart stops more than the UI</h3>
+              <p>
+                <code>apps/desktop/electron/main.ts</code> starts the Effect backend, binds port
+                <code>8585</code>, advertises local discovery, serves the web app, and disposes that
+                runtime during quit.
+              </p>
+              <span class="value">Install = client outage</span>
+            </article>
+            <article class="card">
+              <h3>Live state is now authoritative</h3>
+              <p>
+                Renewable backend leases now represent every connected Live session. The desktop
+                updater queries the same guard and fails closed if the backend cannot confirm that
+                no show is Live.
+              </p>
+              <span class="value">Implemented: backend Live guard</span>
+            </article>
+            <article class="card">
+              <h3>Release identity has a starting point</h3>
+              <p>
+                <code>apps/desktop/package.json</code> now reports version <code>0.1.0</code>, and
+                the release workflow requires an exact matching <code>v0.1.0</code>-style tag before
+                it will publish.
+              </p>
+              <span class="value">Implemented: tag-matched semver</span>
+            </article>
+            <article class="card">
+              <h3>GitHub Releases is the update channel</h3>
+              <p>
+                A checked-in matrix workflow builds Windows, macOS, and Linux update artifacts and
+                publishes them to GitHub Releases. Windows and macOS jobs fail closed when signing
+                or notarization credentials are absent.
+              </p>
+              <span class="value">Implemented: signed release pipeline</span>
+            </article>
+            <article class="card">
+              <h3>Both macOS targets are configured</h3>
+              <p>
+                The builder now emits both the user-facing <code>dmg</code> and the <code>zip</code>
+                artifact electron-updater needs for its macOS update feed.
+              </p>
+              <span class="value">Implemented: DMG + ZIP</span>
+            </article>
+          </div>
+        </section>
+
+        <section id="comparison">
+          <p class="kicker">Methods compared</p>
+          <h2>Four viable paths, one clear fit</h2>
+          <p class="section-intro">
+            “Update server” and “update client” are separate choices. GitHub Releases, S3/R2, or a
+            generic HTTPS origin can all host files for <code>electron-updater</code>; choosing a
+            host does not require inventing a new client.
+          </p>
+          <div class="table-wrap" role="region" aria-label="Update option comparison" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Approach</th>
+                  <th>Current targets</th>
+                  <th>Manual control</th>
+                  <th>Migration</th>
+                  <th>Operational burden</th>
+                  <th>Fit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>electron-updater + existing electron-builder</strong></td>
+                  <td>NSIS, macOS, AppImage; also deb/rpm later</td>
+                  <td>Excellent: launch check plus separately controlled download/install</td>
+                  <td>Small; add updater, metadata, publish config, ZIP on macOS</td>
+                  <td>Low–medium</td>
+                  <td class="score">Best</td>
+                </tr>
+                <tr>
+                  <td><strong>Electron built-in autoUpdater / update-electron-app</strong></td>
+                  <td>
+                    Windows and macOS only; current NSIS setup is not its Squirrel.Windows path
+                  </td>
+                  <td>Check is callable, but available updates download automatically</td>
+                  <td>High; switch Windows packaging and create a Linux strategy</td>
+                  <td>Medium</td>
+                  <td class="score medium">Weak</td>
+                </tr>
+                <tr>
+                  <td><strong>OS stores and package managers</strong></td>
+                  <td>Separate MSIX/Store, MAS, Flatpak/Snap/apt flows</td>
+                  <td>Often controlled by OS/user policy, not Showtime</td>
+                  <td>High; multiple manifests, reviews, sandbox rules, channels</td>
+                  <td>High across three ecosystems</td>
+                  <td class="score medium">Later channel</td>
+                </tr>
+                <tr>
+                  <td><strong>Custom manifest + downloader + installer</strong></td>
+                  <td>Anything the team builds</td>
+                  <td>Complete</td>
+                  <td>Very high; security, signatures, rollback, locking, elevation</td>
+                  <td>Very high and permanent</td>
+                  <td class="score low">Avoid</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="option-stack" style="margin-top: 1.2rem">
+            <article class="option recommended">
+              <div class="option-number">01</div>
+              <div>
+                <div class="option-title">
+                  <h3>electron-updater with GitHub Releases or static HTTPS</h3>
+                  <span class="tag">Recommended</span>
+                </div>
+                <p>
+                  electron-builder generates platform metadata such as <code>latest.yml</code>,
+                  <code>latest-mac.yml</code>, and <code>latest-linux.yml</code>. The app checks
+                  that metadata, downloads a signed artifact, verifies it, and installs only when
+                  the application calls the install method. It supports progress, cancellation,
+                  differential downloads, and staged rollouts.
+                </p>
+                <div class="pros-cons">
+                  <div>
+                    <strong>Why it wins</strong>
+                    <ul>
+                      <li>Matches all configured targets.</li>
+                      <li>Least packaging churn.</li>
+                      <li>Enough events for an automatic check and honest manual update UI.</li>
+                      <li>Provider can change without changing the user flow.</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>Watch carefully</strong>
+                    <ul>
+                      <li>Defaults perform work automatically.</li>
+                      <li>Production behavior must be tested from installed packages.</li>
+                      <li>macOS signing is mandatory; Windows signing is strongly advised.</li>
+                      <li>Rollback still requires publishing a higher version.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="option">
+              <div class="option-number">02</div>
+              <div>
+                <div class="option-title">
+                  <h3>Electron autoUpdater and update-electron-app</h3>
+                </div>
+                <p>
+                  Electron's built-in updater uses Squirrel.Mac and, for traditional Windows apps,
+                  Squirrel.Windows. The convenience package <code>update-electron-app</code> checks
+                  on startup and every ten minutes by default, downloads in the background, and
+                  prompts to restart. It can use the free Electron update service for public GitHub
+                  apps, but the service supports only Windows and macOS.
+                </p>
+                <p>
+                  Showtime could customize the built-in API to check only after a click, but a
+                  discovered update is still downloaded automatically. More importantly, the project
+                  would replace its working Windows NSIS target and still need an unrelated Linux
+                  solution. That is packaging churn without a reliability benefit.
+                </p>
+              </div>
+            </article>
+
+            <article class="option">
+              <div class="option-number">03</div>
+              <div>
+                <div class="option-title">
+                  <h3>Microsoft, Apple, and Linux distribution channels</h3>
+                </div>
+                <p>
+                  Stores and system package managers provide trusted delivery, review, signing, and
+                  centralized upgrades. They are useful additional installation channels once
+                  Showtime is mature. They are not a single cross-platform self-update system, and
+                  background update policy can be controlled outside the app—directly conflicting
+                  with a strict “download and install only when requested inside Showtime” promise.
+                </p>
+                <p>
+                  Treat them as later distribution channels. A store build may need to omit the
+                  in-app updater and explain that updates are managed by the store.
+                </p>
+              </div>
+            </article>
+
+            <article class="option">
+              <div class="option-number">04</div>
+              <div>
+                <div class="option-title"><h3>A custom updater</h3></div>
+                <p>
+                  A custom manifest and download flow offers exact policy control, but the hard part
+                  is safe replacement: signature verification, atomicity, elevation, locked files,
+                  interrupted installs, architecture selection, proxy behavior, partial releases,
+                  and platform-specific rollback. This duplicates mature updater logic in one of the
+                  highest-risk parts of the app. It is only justified if a future deployment model
+                  cannot be represented by existing providers.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="hosting">
+          <p class="kicker">Hosting choice within the recommendation</p>
+          <h2>Start with public GitHub Releases</h2>
+          <div
+            class="table-wrap"
+            role="region"
+            aria-label="Hosting comparison"
+            tabindex="0"
+            style="margin-top: 1.2rem"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Best part</th>
+                  <th>Cost / risk</th>
+                  <th>Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Public GitHub Releases</strong></td>
+                  <td>
+                    Already public, no client secret, minimal new infrastructure, release notes and
+                    assets together
+                  </td>
+                  <td>Dependent on GitHub availability and API behavior</td>
+                  <td class="score">Use first</td>
+                </tr>
+                <tr>
+                  <td><strong>Generic HTTPS on S3/R2/CDN</strong></td>
+                  <td>
+                    Simple static files, predictable paths/cache control, vendor-independent client
+                  </td>
+                  <td>Bucket/CDN/IAM setup; CI must upload artifacts and publish metadata last</td>
+                  <td class="score medium">Strong next step</td>
+                </tr>
+                <tr>
+                  <td><strong>Private GitHub Releases</strong></td>
+                  <td>Keeps binaries private</td>
+                  <td>
+                    Requires a GitHub token on every user machine; official docs call this
+                    unsuitable for normal users
+                  </td>
+                  <td class="score low">Do not use</td>
+                </tr>
+                <tr>
+                  <td><strong>Custom update API</strong></td>
+                  <td>Entitlements, channels, staged cohorts, custom auth</td>
+                  <td>Service operations and a larger attack surface</td>
+                  <td class="score medium">Only if licensing requires it</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout">
+            <strong>Release publication must be atomic from the client's point of view.</strong>
+            Upload every installer, ZIP, AppImage, checksum, and blockmap first. Publish the
+            <code>latest*.yml</code> pointer only after all referenced files are reachable. A manual
+            client still needs protection from a half-published release.
+          </div>
+        </section>
+
+        <section id="safety">
+          <p class="kicker">Product behavior contract</p>
+          <h2>Discovery may be automatic; change remains manual</h2>
+          <p class="section-intro">
+            The policy belongs in the main/backend boundary, not only in a disabled React button.
+            Renderer state can be stale, a second client may be Live, and the session can change
+            between download and install.
+          </p>
+
+          <div class="contract">
+            <div class="never">
+              <h3>Showtime never…</h3>
+              <ul>
+                <li>polls, schedules recurring checks, or checks because a window was reopened;</li>
+                <li>downloads merely because the launch check discovered an update;</li>
+                <li>installs on normal quit, OS shutdown, or the next launch;</li>
+                <li>starts or continues update downloads or installation while Live is active;</li>
+                <li>quits if any Live lease exists or the safety state is unknown;</li>
+                <li>turns an update failure into an app-startup or backend failure.</li>
+              </ul>
+            </div>
+            <div class="only">
+              <h3>Showtime only…</h3>
+              <ul>
+                <li>
+                  checks once, asynchronously, after the packaged app and backend have started;
+                </li>
+                <li>downloads after an explicit <strong>Download</strong> action;</li>
+                <li>installs after <strong>Install &amp; restart</strong> plus confirmation;</li>
+                <li>performs each download/install step when the backend says no show is Live;</li>
+                <li>acquires an exclusive maintenance permit before shutting down;</li>
+                <li>shows recoverable errors and leaves the running version untouched.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="flow" aria-label="Launch check and manual update flow">
+            <div class="flow-step">
+              <span>Launch</span>
+              <strong>Start normally</strong>
+              <p>The backend and window do not wait for the update service.</p>
+            </div>
+            <div class="flow-step">
+              <span>Automatic · once</span>
+              <strong>Check quietly</strong>
+              <p>Fetch metadata only; show a passive result and never auto-download.</p>
+            </div>
+            <div class="flow-step">
+              <span>User action 1</span>
+              <strong>Download</strong>
+              <p>Refuse if Live; expose progress; cancel if Live begins.</p>
+            </div>
+            <div class="flow-step">
+              <span>User action 2</span>
+              <strong>Install</strong>
+              <p>Confirm restart and ask the backend for a maintenance permit.</p>
+            </div>
+            <div class="flow-step">
+              <span>Protected exit</span>
+              <strong>Drain &amp; replace</strong>
+              <p>Dispose backend cleanly, install, relaunch, and report the new version.</p>
+            </div>
+          </div>
+
+          <div class="callout danger">
+            <strong>A route check is not enough.</strong>
+            Today a Live session is renderer-local, and connected PWAs can be Live independently of
+            the host window. Add a backend-owned registry of short-lived Live leases. Each Live UI
+            registers and renews a lease; leaving unregisters it; expiration handles crashes and
+            disconnects. Installation obtains an exclusive maintenance permit only when the lease
+            set is empty and prevents a new lease from starting during shutdown. If the guard cannot
+            answer, fail closed and do not install.
+          </div>
+        </section>
+
+        <section id="implementation">
+          <p class="kicker">Suggested implementation shape</p>
+          <h2>Keep platform mechanics behind one small service</h2>
+          <p class="section-intro">
+            Updater events are callback-based and global. Wrap them once in the main process, expose
+            a narrow state machine over the preload bridge, and let the web UI remain declarative.
+          </p>
+          <div class="architecture">
+            <div>
+              <strong>Backend: LiveGuard</strong>
+              <p>
+                An Effect service owns Live leases and an exclusive maintenance permit. RPC lets
+                connected browser clients register/renew/release their Live presence.
+              </p>
+            </div>
+            <div>
+              <strong>Main: DesktopUpdateService</strong>
+              <p>
+                Owns <code>electron-updater</code>, translates events to a typed state, serializes
+                commands, enforces timeouts, logs failures, and checks <code>LiveGuard</code> before
+                every transition.
+              </p>
+            </div>
+            <div>
+              <strong>Renderer: Settings / About</strong>
+              <p>
+                Displays current version and one valid next action. It never talks to the update
+                host directly and never decides whether quitting is safe.
+              </p>
+            </div>
+          </div>
+
+          <div
+            class="table-wrap"
+            role="region"
+            aria-label="Updater state model"
+            tabindex="0"
+            style="margin-top: 1rem"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Primary UI</th>
+                  <th>Allowed command</th>
+                  <th>Failure behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>idle</code></td>
+                  <td>Current version</td>
+                  <td>Check again after a failed launch check</td>
+                  <td>Remain on installed version</td>
+                </tr>
+                <tr>
+                  <td><code>checking</code></td>
+                  <td>Checking…</td>
+                  <td>None</td>
+                  <td>Return to idle with retryable message</td>
+                </tr>
+                <tr>
+                  <td><code>available</code></td>
+                  <td>Version, size, release notes</td>
+                  <td>Download</td>
+                  <td>Keep metadata; allow retry</td>
+                </tr>
+                <tr>
+                  <td><code>downloading</code></td>
+                  <td>Progress and cancel</td>
+                  <td>Cancel</td>
+                  <td>Delete/ignore partial data; never install</td>
+                </tr>
+                <tr>
+                  <td><code>ready</code></td>
+                  <td>Install &amp; restart</td>
+                  <td>Install after confirmation</td>
+                  <td>Stay ready unless validation failed</td>
+                </tr>
+                <tr>
+                  <td><code>blocked-live</code></td>
+                  <td>“Available after Live ends”</td>
+                  <td>None</td>
+                  <td>Return to previous safe state after Live</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout">
+            <strong>Handle updater quit separately.</strong>
+            Electron's updater closes windows before the normal <code>before-quit</code> sequence in
+            some paths. Showtime's current backend cleanup relies on <code>before-quit</code>, so
+            the update path should explicitly drain and dispose the backend before invoking the
+            installer, and also listen for <code>before-quit-for-update</code> as a defensive path.
+          </div>
+        </section>
+
+        <section id="rollout">
+          <p class="kicker">Path to an installable product</p>
+          <h2>The implemented release foundation</h2>
+          <ol class="steps">
+            <li>
+              <div>
+                <strong>Establish version and release rules</strong>
+                <p>
+                  The desktop package now starts at <code>0.1.0</code> with a tag-driven semver
+                  rule. Never reuse a published version. Correct a bad release with a newer version
+                  rather than replacing assets under the old tag.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Make packages trustworthy</strong>
+                <p>
+                  Sign Windows builds. Sign and notarize macOS builds. Add <code>zip</code> beside
+                  <code>dmg</code>. Make release CI fail rather than silently publish unsigned
+                  production artifacts.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Build a repeatable matrix release</strong>
+                <p>
+                  Build on each native OS, run tests, publish installers and update metadata to a
+                  draft GitHub Release, smoke-test fresh installs, then publish. Keep metadata
+                  publication last.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Add the authoritative LiveGuard</strong>
+                <p>
+                  Model host and remote Live presence as leases in the backend. Test disconnect,
+                  crash, reconnect, stale lease expiry, and the install-versus-Live race before
+                  updater integration.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Add the launch-check update service and manual update UI</strong>
+                <p>
+                  Use typed IPC contracts, explicit commands, cancellation, log files, and a
+                  fail-closed maintenance permit. Show release notes as plain text or sanitized
+                  content; never inject remote HTML.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Test real upgrade paths</strong>
+                <p>
+                  Test n → n+1 on installed Windows, macOS Intel/Apple Silicon as supported, and
+                  AppImage. Cover no network, proxy, corrupt metadata, bad checksum/signature,
+                  partial download, disk full, Live starting mid-download, shutdown, and backend
+                  disposal failure.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Roll out conservatively</strong>
+                <p>
+                  Use an internal channel first, then a small stable cohort or staged metadata.
+                  Monitor successful checks/downloads/installs without collecting show content.
+                  Preserve a manual installer link as the recovery path.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <section id="sources">
+          <p class="kicker">Primary research sources</p>
+          <h2>Documentation used for this comparison</h2>
+          <p class="section-intro">
+            Product behavior and defaults change. These links were checked on 3 August 2026; pin
+            exact dependency versions and re-check their matching documentation during
+            implementation.
+          </p>
+          <ul class="sources">
+            <li>
+              <a href="https://www.electron.build/docs/features/auto-update/"
+                >electron-builder: Auto Update</a
+              >
+              <span
+                >Supported targets, metadata, manual install mode, progress, cancellation, staged
+                rollout, and test guidance.</span
+              >
+            </li>
+            <li>
+              <a href="https://www.electron.build/publish/">electron-builder: Publish</a>
+              <span
+                >GitHub, generic HTTPS, S3/R2 and other providers; publishing behavior and private
+                GitHub caveats.</span
+              >
+            </li>
+            <li>
+              <a href="https://www.electron.build/mac/">electron-builder: macOS</a>
+              <span>DMG and ZIP requirements for macOS auto-update packaging.</span>
+            </li>
+            <li>
+              <a href="https://www.electron.build/docs/features/code-signing/"
+                >electron-builder: Code Signing</a
+              >
+              <span>Signing, notarization, CI secrets, and fail-closed release configuration.</span>
+            </li>
+            <li>
+              <a href="https://www.electronjs.org/docs/latest/api/auto-updater/"
+                >Electron: autoUpdater API</a
+              >
+              <span
+                >Built-in platform limits, automatic download behavior, lifecycle, and quit
+                semantics.</span
+              >
+            </li>
+            <li>
+              <a href="https://www.electronjs.org/docs/latest/tutorial/updates"
+                >Electron: Updating Applications</a
+              >
+              <span
+                >update-electron-app defaults, the public GitHub update service, static storage, and
+                custom servers.</span
+              >
+            </li>
+            <li>
+              <a href="https://github.com/johannesschiessl/showtime/releases"
+                >Showtime: GitHub Releases</a
+              >
+              <span>Repository is public and, at research time, has no published releases.</span>
+            </li>
+            <li>
+              <a
+                href="https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/supply-chain-security/immutable-releases"
+                >GitHub: Immutable releases</a
+              >
+              <span>Protecting release tags and assets after publication.</span>
+            </li>
+          </ul>
+        </section>
+      </main>
+
+      <footer>
+        <strong>Status:</strong> the recommended electron-updater path is implemented. Publishing a
+        production release still requires the repository's Windows and Apple signing secrets.
+      </footer>
+    </div>
+  </body>
+</html>
