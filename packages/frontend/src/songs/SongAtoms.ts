@@ -1,21 +1,12 @@
 import { DateTime, Option } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import {
-  makeTemporaryId,
-  insertSongAfter,
-  songIdPrefix,
-  type ShowId,
-  type Song,
-  type SongId,
-} from "@showtime/contracts";
+import { insertSongAfter, type ShowId, type Song } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";
 import type { StreamingRpcOptions } from "../rpc/StreamingRpcOptions.js";
 
 export type SongListItem = Song & { readonly pending?: boolean };
 type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
-const makeTemporarySongId = (): SongId => makeTemporaryId(songIdPrefix) as SongId;
-
 export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingRpcOptions) => {
   const createSongMutation = RpcClient.mutation("songs.create");
   const deleteSongMutation = RpcClient.mutation("songs.delete");
@@ -31,7 +22,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
           if (!AsyncResult.isSuccess(current)) return current;
           const now = DateTime.nowUnsafe();
           const song: SongListItem = {
-            id: input.payload.id ?? makeTemporarySongId(),
+            id: input.payload.id,
             name: input.payload.name.trim() as Song["name"],
             artist: input.payload.artist.trim() as Song["artist"],
             mixAssignments: [],

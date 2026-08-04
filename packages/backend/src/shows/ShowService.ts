@@ -1,16 +1,17 @@
 import { Context, DateTime, Effect, Layer } from "effect";
 import {
   decodeShowName,
+  mainMixId,
+  MixId,
+  MixNumber,
   sortShowSummaries,
   RpcError,
-  type ShowFileDocument,
   type Color,
   type ShowId,
   type ShowSummary,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
-import { ShowFile } from "./ShowFile.js";
-import { ShowRepository } from "./ShowRepository.js";
+import { ShowRepository, type ShowDocument } from "./ShowRepository.js";
 
 export class ShowService extends Context.Service<
   ShowService,
@@ -35,7 +36,7 @@ const toRpcError = (message: string) => (cause: unknown) =>
     cause,
   });
 
-const toSummary = (document: ShowFileDocument): ShowSummary => ({
+const toSummary = (document: ShowDocument): ShowSummary => ({
   id: document.config.id,
   name: document.config.name,
   color: document.config.color,
@@ -46,12 +47,9 @@ const toSummary = (document: ShowFileDocument): ShowSummary => ({
 const makeShowService = Effect.fnUntraced(function* () {
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
-  const showFile = yield* ShowFile;
 
   const list = repository.list.pipe(
-    Effect.map((documents) =>
-      sortShowSummaries(documents.map(({ document }) => toSummary(document))),
-    ),
+    Effect.map((documents) => sortShowSummaries(documents.map(toSummary))),
     Effect.mapError(toRpcError("Could not list shows.")),
   );
 
@@ -63,13 +61,26 @@ const makeShowService = Effect.fnUntraced(function* () {
     readonly color: Color;
   }) {
     const id = yield* ids.makeShowId;
-    const filePath = yield* showFile
-      .create({ id, name, color })
-      .pipe(Effect.mapError(toRpcError("Could not create show.")));
-    const document = yield* showFile
-      .read(filePath)
-      .pipe(Effect.mapError(toRpcError("Could not read created show.")));
-    yield* repository.insert({ path: filePath, document });
+    const showName = yield* decodeShowName(name).pipe(
+      Effect.mapError(toRpcError("Show name cannot be empty.")),
+    );
+    const now = yield* DateTime.now;
+    const document: ShowDocument = {
+      config: { id, name: showName, color, createdAt: now, updatedAt: now },
+      microphones: [],
+      mixes: [
+        {
+          id: MixId.make(mainMixId),
+          number: MixNumber.make("LR"),
+          color: "sky",
+          name: "Main",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      songs: [],
+    };
+    yield* repository.insert(document);
 
     return toSummary(document);
   });
@@ -86,7 +97,7 @@ const makeShowService = Effect.fnUntraced(function* () {
     const showName = yield* decodeShowName(name).pipe(
       Effect.mapError(toRpcError("Show name cannot be empty.")),
     );
-    const { document } = yield* repository
+    const document = yield* repository
       .update(id, (current) => ({
         ...current,
         config: {

@@ -41,15 +41,13 @@ const make = Effect.fnUntraced(function* () {
   const repository = yield* ShowRepository;
 
   const list: MixServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).document.mixes.filter(
-      (mix) => mix.deletedAt === undefined,
-    );
+    return (yield* repository.findById(showId)).mixes.filter((mix) => mix.deletedAt === undefined);
   });
 
   const create: MixServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const id = yield* ids.makeMixId;
     const now = yield* DateTime.now;
-    const { document: updated } = yield* repository
+    const updated = yield* repository
       .update(showId, (document) => {
         const number = MixNumber.make(
           String(
@@ -71,9 +69,7 @@ const make = Effect.fnUntraced(function* () {
 
   const edit: MixServiceShape["edit"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    const existing = found.document.mixes.find(
-      (mix) => mix.id === params.id && mix.deletedAt === undefined,
-    );
+    const existing = found.mixes.find((mix) => mix.id === params.id && mix.deletedAt === undefined);
     if (existing === undefined)
       return yield* Effect.fail(new RpcError({ message: "Mix not found." }));
     const trimmedName = params.name?.trim();
@@ -103,7 +99,7 @@ const make = Effect.fnUntraced(function* () {
       return yield* Effect.fail(new RpcError({ message: "The main mix cannot be deleted." }));
     }
     const found = yield* repository.findById(params.showId);
-    if (!found.document.mixes.some((mix) => mix.id === params.id && mix.deletedAt === undefined)) {
+    if (!found.mixes.some((mix) => mix.id === params.id && mix.deletedAt === undefined)) {
       return yield* Effect.fail(new RpcError({ message: "Mix not found." }));
     }
     const now = yield* DateTime.now;

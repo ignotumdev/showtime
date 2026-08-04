@@ -1,5 +1,5 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, Exit, Layer } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,29 +12,43 @@ import {
   type ChatMessagePart,
   type ChatPresetField,
 } from "@showtime/contracts";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import * as Ids from "../ids/Ids.js";
 import * as ProfileService from "../profiles/ProfileService.js";
-import * as ChatDatabase from "./ChatDatabase.js";
+import * as ShowRepository from "../shows/ShowRepository.js";
+import { ShowService } from "../shows/ShowService.js";
+import * as ShowServiceLayer from "../shows/ShowService.js";
 import { ChatService, layer } from "./ChatService.js";
 
 const homes: Array<string> = [];
 
 const makeLayer = (home: string) => {
   const profiles = ProfileService.layer.pipe(Layer.provideMerge(Ids.layer));
-  return layer.pipe(
-    Layer.provideMerge(ChatDatabase.layer),
-    Layer.provideMerge(Layer.mergeAll(Ids.layer, profiles)),
-    Layer.provide(
-      Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, HomeDirectory.makeLayer(home)),
-    ),
+  const shows = ShowServiceLayer.layer.pipe(
+    Layer.provideMerge(Ids.layer),
+    Layer.provideMerge(ShowRepository.layer),
+  );
+  const chats = layer.pipe(Layer.provideMerge(Layer.mergeAll(Ids.layer, profiles)));
+  return Layer.mergeAll(chats, profiles, shows, Ids.layer).pipe(
+    Layer.provide(makeDatabaseTestLayer(home)),
   );
 };
 
+const makeShowId = Effect.flatMap(ShowService, (shows) =>
+  shows.create({ name: "Chat test", color: "sky" }).pipe(Effect.map((show) => show.id)),
+);
+
 const withService = <A>(
   home: string,
-  effect: Effect.Effect<A, unknown, ChatService | Ids.Ids | ProfileService.ProfileService>,
+  effect: Effect.Effect<
+    A,
+    unknown,
+    ChatService | Ids.Ids | ProfileService.ProfileService | ShowService
+  >,
 ) => Effect.runPromise(effect.pipe(Effect.provide(makeLayer(home))));
+
+const withDatabase = <A>(home: string, effect: Effect.Effect<A, unknown, SqlClient.SqlClient>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(makeDatabaseTestLayer(home))));
 
 afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
@@ -48,10 +62,9 @@ describe("ChatService", () => {
     const initial = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const senderProfileId = (yield* profiles.list).defaultProfileId;
         const profileId = (yield* profiles.create({ name: "Receiver", color: "violet" })).id;
         const state = yield* chats.state(showId, profileId);
@@ -113,10 +126,9 @@ describe("ChatService", () => {
     const result = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const deletedProfileId = (yield* profiles.list).defaultProfileId;
         const replacement = yield* profiles.create({ name: "Replacement", color: "green" });
         const channel = (yield* chats.state(showId, deletedProfileId)).channels[0]!;
@@ -175,10 +187,9 @@ describe("ChatService", () => {
     const result = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const general = (yield* chats.state(showId, profileId)).channels[0]!;
         const production = yield* chats.createChannel({ showId, name: "Production" });
@@ -233,8 +244,8 @@ describe("ChatService", () => {
         const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
-        const otherShowId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
+        const otherShowId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const preset = yield* chats.createPreset({
           showId,
@@ -348,6 +359,88 @@ describe("ChatService", () => {
     expect(reloaded.afterDelete.presets).toEqual([]);
   });
 
+  it("skips a malformed stored preset without hiding usable chat state", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const initial = await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const preset = yield* chats.createPreset({
+          showId,
+          name: "Usable preset",
+          template: "Check {{mic}}",
+          fields: [{ name: "mic", type: "microphone" }],
+        });
+        return { showId, profileId, preset };
+      }),
+    );
+
+    await withDatabase(
+      home,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO chat_presets
+            (id, show_id, name, template, fields_json, answer_json, created_at, updated_at)
+          VALUES (${"preset_malformed"}, ${initial.showId}, ${"Malformed preset"},
+            ${"Malformed"}, ${"{"}, ${null},
+            ${"2026-01-01T00:00:00.000Z"}, ${"2026-01-01T00:00:00.000Z"})`;
+      }),
+    );
+
+    const snapshot = await withService(
+      home,
+      Effect.gen(function* () {
+        const chats = yield* ChatService;
+        return yield* chats.state(initial.showId, initial.profileId);
+      }),
+    );
+
+    expect(snapshot.channels).toHaveLength(1);
+    expect(snapshot.presets.map((preset) => preset.id)).toEqual([initial.preset.id]);
+  });
+
+  it("deletes chat history containing replies", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const result = await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const channel = (yield* chats.state(showId, profileId)).channels[0]!;
+        const request = yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Can you check this?",
+          answer: {
+            template: ChatPresetTemplate.make("{{status}}"),
+            fields: [{ name: "status", type: "select", options: ["Done"] }],
+          },
+        });
+        yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Done",
+          replyToMessageId: request.id,
+        });
+        yield* chats.deleteShow(showId);
+        return yield* chats.state(showId, profileId);
+      }),
+    );
+
+    expect(result.channels).toMatchObject([{ name: "General", messageCount: 0, messages: [] }]);
+  });
+
   it("treats an empty rich-parts array as a plain message", async () => {
     const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
     homes.push(home);
@@ -355,10 +448,9 @@ describe("ChatService", () => {
     const message = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
         return yield* chats.send({
@@ -385,7 +477,7 @@ describe("ChatService", () => {
         const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
         const messageId = yield* ids.makeChatMessageId;

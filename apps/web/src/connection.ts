@@ -1,11 +1,9 @@
 import {
-  showtimeConnectionScopes,
   showtimeConnectionManagementScopes,
   showtimeConnectionStorageKey,
-  type ShowtimeConnectionScope,
-  type ShowtimeStoredConnection,
+  ShowtimeStoredConnection,
 } from "@showtime/shared";
-import { ProfileId, type ProfileId as ProfileIdType } from "@showtime/contracts";
+import type { ProfileId as ProfileIdType } from "@showtime/contracts";
 import {
   profileSelectionChangedEvent,
   profileSelectionStorageKey,
@@ -13,11 +11,8 @@ import {
 } from "./profile-selection";
 import { Schema } from "effect";
 
-const capabilityPattern = /^[A-Za-z0-9_-]{43}$/;
-const clientIdPattern = /^[A-Za-z0-9_-]{21}$/;
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
-const connectionScopeSet = new Set<string>(showtimeConnectionScopes);
 const connectionRequestTimeoutMs = 5_000;
 
 const requestWithTimeout = async (
@@ -44,9 +39,9 @@ const requestWithTimeout = async (
   }
 };
 
-const validScopes = (value: unknown): value is ReadonlyArray<ShowtimeConnectionScope> =>
-  Array.isArray(value) &&
-  value.every((scope) => typeof scope === "string" && connectionScopeSet.has(scope));
+const decodeStoredConnection = Schema.decodeUnknownSync(ShowtimeStoredConnection, {
+  onExcessProperty: "error",
+});
 
 export type PairingResult =
   | { readonly status: "none" }
@@ -109,25 +104,7 @@ export const readStoredConnection = (
     if (!storage) return undefined;
     const raw = storage.getItem(showtimeConnectionStorageKey);
     if (raw === null) return undefined;
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "version" in parsed &&
-      parsed.version === 1 &&
-      "clientId" in parsed &&
-      typeof parsed.clientId === "string" &&
-      clientIdPattern.test(parsed.clientId) &&
-      "capability" in parsed &&
-      typeof parsed.capability === "string" &&
-      capabilityPattern.test(parsed.capability) &&
-      "scopes" in parsed &&
-      validScopes(parsed.scopes) &&
-      "clientProfile" in parsed &&
-      Schema.is(ProfileId)(parsed.clientProfile)
-    ) {
-      return parsed as ShowtimeStoredConnection;
-    }
+    return decodeStoredConnection(JSON.parse(raw));
   } catch {
     // Storage can be unavailable in privacy modes. Treat it as unpaired.
   }
@@ -230,22 +207,10 @@ export const capturePairingFragment = async (
     removePairingFragment();
     return { status: "failed", message: "Showtime returned invalid connection details." };
   }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("version" in parsed) ||
-    parsed.version !== 1 ||
-    !("clientId" in parsed) ||
-    typeof parsed.clientId !== "string" ||
-    !clientIdPattern.test(parsed.clientId) ||
-    !("capability" in parsed) ||
-    typeof parsed.capability !== "string" ||
-    !capabilityPattern.test(parsed.capability) ||
-    !("scopes" in parsed) ||
-    !validScopes(parsed.scopes) ||
-    !("clientProfile" in parsed) ||
-    !Schema.is(ProfileId)(parsed.clientProfile)
-  ) {
+  let credentials: ShowtimeStoredConnection;
+  try {
+    credentials = decodeStoredConnection(parsed);
+  } catch {
     releaseReservation();
     removePairingFragment();
     return { status: "failed", message: "Showtime returned invalid connection details." };
@@ -253,8 +218,8 @@ export const capturePairingFragment = async (
 
   releaseReservation();
   try {
-    storage.setItem(showtimeConnectionStorageKey, JSON.stringify(parsed));
-    writeProfileSelection(parsed.clientProfile, storage);
+    storage.setItem(showtimeConnectionStorageKey, JSON.stringify(credentials));
+    writeProfileSelection(credentials.clientProfile as ProfileIdType, storage);
     if (typeof window !== "undefined")
       window.dispatchEvent(new Event(profileSelectionChangedEvent));
   } catch {

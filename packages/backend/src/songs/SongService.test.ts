@@ -1,15 +1,18 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import type { SongArtist, SongId, SongName } from "@showtime/contracts";
+import {
+  makeClientId,
+  songIdPrefix,
+  type SongArtist,
+  type SongId,
+  type SongName,
+} from "@showtime/contracts";
 import * as Ids from "../ids/Ids.js";
-import * as ShowDiscovery from "../shows/ShowDiscovery.js";
-import * as ShowFile from "../shows/ShowFile.js";
-import * as ShowPaths from "../shows/ShowPaths.js";
 import * as ShowRepository from "../shows/ShowRepository.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import { ShowService } from "../shows/ShowService.js";
 import * as ShowServiceLayer from "../shows/ShowService.js";
 import { MicrophoneService } from "../microphones/MicrophoneService.js";
@@ -24,21 +27,18 @@ afterEach(async () => {
 });
 
 const makeLayer = (home: string) => {
-  const files = ShowDiscovery.layer.pipe(
-    Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
-  );
-  const repository = ShowRepository.layer.pipe(Layer.provideMerge(files));
   return Layer.mergeAll(
     ShowServiceLayer.layer,
     SongServiceLayer.layer,
     MicrophoneServiceLayer.layer,
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(Ids.layer, repository)),
-    Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(Layer.mergeAll(Ids.layer, ShowRepository.layer)),
+    Layer.provide(makeDatabaseTestLayer(home)),
   );
 };
 
-const songInput = (name: string) => ({
+const songInput = (name: string, id = makeClientId(songIdPrefix) as SongId) => ({
+  id,
   name: name as SongName,
   artist: "Artist" as SongArtist,
 });
@@ -54,6 +54,7 @@ describe("SongService", () => {
         const show = yield* shows.create({ name: "Festival", color: "sky" });
         const created = yield* songs.create({
           showId: show.id,
+          id: makeClientId(songIdPrefix) as SongId,
           name: "" as SongName,
           artist: "" as SongArtist,
         });
@@ -139,8 +140,8 @@ describe("SongService", () => {
         const shows = yield* ShowService;
         const songs = yield* SongService;
         const show = yield* shows.create({ name: "Festival", color: "sky" });
-        const first = yield* songs.create({ showId: show.id, id, ...songInput("First") });
-        const retry = yield* songs.create({ showId: show.id, id, ...songInput("First") });
+        const first = yield* songs.create({ showId: show.id, ...songInput("First", id) });
+        const retry = yield* songs.create({ showId: show.id, ...songInput("First", id) });
         return { first, retry, listed: yield* songs.list(show.id) };
       }).pipe(Effect.provide(makeLayer(home))),
     );

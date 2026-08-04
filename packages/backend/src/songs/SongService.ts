@@ -12,14 +12,13 @@ import {
   type SongMixAssignment,
   type SongName,
 } from "@showtime/contracts";
-import { Ids } from "../ids/Ids.js";
 import { ShowRepository } from "../shows/ShowRepository.js";
 
 interface SongServiceShape {
   readonly list: (showId: ShowId) => Effect.Effect<ReadonlyArray<Song>, RpcError>;
   readonly create: (params: {
     readonly showId: ShowId;
-    readonly id?: SongId;
+    readonly id: SongId;
     readonly name: SongName;
     readonly artist: SongArtist;
     readonly insertAfterSongId?: SongId;
@@ -50,17 +49,16 @@ export class SongService extends Context.Service<SongService, SongServiceShape>(
 const toRpcError = (message: string) => (cause: unknown) => new RpcError({ message, cause });
 
 const make = Effect.fnUntraced(function* () {
-  const ids = yield* Ids;
   const repository = yield* ShowRepository;
 
   const list: SongServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).document.songs.filter(
+    return (yield* repository.findById(showId)).songs.filter(
       (song) => song.deletedAt === undefined,
     );
   });
 
   const create: SongServiceShape["create"] = Effect.fnUntraced(function* (params) {
-    const id = params.id ?? (yield* ids.makeSongId);
+    const id = params.id;
     const name = yield* decodeSongName(params.name.trim()).pipe(
       Effect.mapError(toRpcError("Invalid song name.")),
     );
@@ -76,7 +74,7 @@ const make = Effect.fnUntraced(function* () {
       createdAt: now,
       updatedAt: now,
     };
-    const { document: updated } = yield* repository
+    const updated = yield* repository
       .update(params.showId, (document) => {
         // The client owns the ID for new create requests. If a response is lost
         // and the RPC is retried after persistence, return the original song
@@ -102,15 +100,15 @@ const make = Effect.fnUntraced(function* () {
 
   const edit: SongServiceShape["edit"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    const existing = found.document.songs.find(
+    const existing = found.songs.find(
       (song) => song.id === params.id && song.deletedAt === undefined,
     );
     if (!existing) return yield* Effect.fail(new RpcError({ message: "Song not found." }));
 
     const activeMixIds = new Set(
-      found.document.mixes.filter((mix) => mix.deletedAt === undefined).map((mix) => mix.id),
+      found.mixes.filter((mix) => mix.deletedAt === undefined).map((mix) => mix.id),
     );
-    const activeMicrophones = found.document.microphones.filter(
+    const activeMicrophones = found.microphones.filter(
       (microphone) => microphone.deletedAt === undefined,
     );
     const activeMicrophoneIds = new Set(activeMicrophones.map((microphone) => microphone.id));
@@ -143,7 +141,7 @@ const make = Effect.fnUntraced(function* () {
     }
 
     const requestedByMix = new Map(params.mixAssignments.map((item) => [item.mixId, item]));
-    const mixAssignments: Array<SongMixAssignment> = found.document.mixes
+    const mixAssignments: Array<SongMixAssignment> = found.mixes
       .filter((mix) => mix.deletedAt === undefined)
       .flatMap((mix) => {
         const requested = requestedByMix.get(mix.id);
@@ -171,7 +169,7 @@ const make = Effect.fnUntraced(function* () {
     );
     const notes = params.notes?.trim();
     const now = yield* DateTime.now;
-    const { document: updated } = yield* repository
+    const updated = yield* repository
       .update(params.showId, (document) => {
         const current = document.songs.find(
           (item) => item.id === params.id && item.deletedAt === undefined,
@@ -218,7 +216,7 @@ const make = Effect.fnUntraced(function* () {
 
   const reorder: SongServiceShape["reorder"] = Effect.fnUntraced(function* (params) {
     const requested = params.orderedSongIds;
-    const { document: updated } = yield* repository
+    const updated = yield* repository
       .update(params.showId, (document) => {
         const active = document.songs.filter((song) => song.deletedAt === undefined);
         if (
@@ -244,7 +242,7 @@ const make = Effect.fnUntraced(function* () {
 
   const deleteSong: SongServiceShape["delete"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    if (!found.document.songs.some((song) => song.id === params.id && !song.deletedAt)) {
+    if (!found.songs.some((song) => song.id === params.id && !song.deletedAt)) {
       return yield* Effect.fail(new RpcError({ message: "Song not found." }));
     }
     const now = yield* DateTime.now;

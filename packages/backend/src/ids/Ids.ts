@@ -9,8 +9,6 @@ import {
   showIdPrefix,
   MixId,
   mixIdPrefix,
-  SongId,
-  songIdPrefix,
   ProfileId,
   profileIdPrefix,
   ChatChannelId,
@@ -27,7 +25,6 @@ export class Ids extends Context.Service<
     readonly makeShowId: Effect.Effect<ShowId>;
     readonly makeMicrophoneId: Effect.Effect<MicrophoneId>;
     readonly makeMixId: Effect.Effect<MixId>;
-    readonly makeSongId: Effect.Effect<SongId>;
     readonly makeProfileId: Effect.Effect<ProfileId>;
     readonly makeChatChannelId: Effect.Effect<ChatChannelId>;
     readonly makeChatMessageId: Effect.Effect<ChatMessageId>;
@@ -50,10 +47,6 @@ export const layer = Layer.succeed(
     ),
     makeMixId: Effect.sync(() => `${mixIdPrefix}${makeId()}`).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(MixId)),
-      Effect.orDie,
-    ),
-    makeSongId: Effect.sync(() => `${songIdPrefix}${makeId()}`).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(SongId)),
       Effect.orDie,
     ),
     makeProfileId: Effect.sync(() => `${profileIdPrefix}${makeId()}`).pipe(
