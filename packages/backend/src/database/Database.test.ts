@@ -1,10 +1,13 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   currentMigrations,
@@ -34,6 +37,85 @@ const runDatabase = <A>(
     DatabaseReady | SqlClient.SqlClient | SqliteClient.SqliteClient | DatabaseBackup
   >,
 ) => Effect.runPromise(effect.pipe(Effect.provide(makeDatabaseTestLayer(home)), Effect.scoped));
+
+const databaseTestDirectory = path.dirname(fileURLToPath(import.meta.url));
+const backendDirectory = path.resolve(databaseTestDirectory, "../..");
+const vitePlusCli = path.resolve(
+  databaseTestDirectory,
+  "../../../../node_modules/vite-plus/bin/vp",
+);
+
+const runStartupProcess = (home: string, barrier: string, workerId: string) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        vitePlusCli,
+        "test",
+        "run",
+        "src/database/Database.test.ts",
+        "-t",
+        "database concurrency worker",
+        "--reporter=dot",
+      ],
+      {
+        cwd: backendDirectory,
+        env: {
+          ...process.env,
+          NO_COLOR: "1",
+          SHOWTIME_DATABASE_CONCURRENCY_HOME: home,
+          SHOWTIME_DATABASE_CONCURRENCY_BARRIER: barrier,
+          SHOWTIME_DATABASE_CONCURRENCY_WORKER: workerId,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      },
+    );
+    let output = "";
+    child.stdout.on("data", (chunk) => (output += String(chunk)));
+    child.stderr.on("data", (chunk) => (output += String(chunk)));
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Database startup worker failed (${code ?? signal}).\n${output}`));
+    });
+  });
+
+const concurrencyWorkerHome = process.env.SHOWTIME_DATABASE_CONCURRENCY_HOME;
+const concurrencyWorkerBarrier = process.env.SHOWTIME_DATABASE_CONCURRENCY_BARRIER;
+const concurrencyWorkerId = process.env.SHOWTIME_DATABASE_CONCURRENCY_WORKER;
+
+if (concurrencyWorkerHome && concurrencyWorkerBarrier && concurrencyWorkerId) {
+  it("database concurrency worker", async () => {
+    await writeFile(path.join(concurrencyWorkerBarrier, `ready-${concurrencyWorkerId}`), "ready");
+    const deadline = Date.now() + 20_000;
+    let releaseAt: number | undefined;
+    while (releaseAt === undefined) {
+      if (Date.now() >= deadline) throw new Error("Timed out waiting for the startup barrier.");
+      try {
+        const parsed = Number(
+          await readFile(path.join(concurrencyWorkerBarrier, "release"), "utf8"),
+        );
+        if (parsed > 0) releaseAt = parsed;
+        else await delay(5);
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+        await delay(5);
+      }
+    }
+    await delay(Math.max(0, releaseAt - Date.now()));
+    const state = await runDatabase(
+      concurrencyWorkerHome,
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ settings: number; profiles: number }>`SELECT
+          (SELECT COUNT(*) FROM app_settings) AS settings,
+          (SELECT COUNT(*) FROM profiles) AS profiles`,
+      ),
+    );
+    expect(state).toEqual([{ settings: 1, profiles: 1 }]);
+  }, 30_000);
+}
 
 describe("Showtime database", () => {
   it("creates migration 1, bootstrap state, safety pragmas, and a consistent backup", async () => {
@@ -107,21 +189,16 @@ describe("Showtime database", () => {
     expect(secondLedger).toEqual(firstLedger);
   });
 
-  it("serializes concurrent startup and enforces foreign keys", async () => {
+  it("records the migration ledger and enforces foreign keys", async () => {
     const home = await makeHome();
     const readLedger = Effect.flatMap(
       SqlClient.SqlClient,
       (sql) => sql<{ migration_id: number; name: string }>`SELECT migration_id, name
         FROM effect_sql_migrations ORDER BY migration_id`,
     );
-    const ledgers = await Promise.all([
-      runDatabase(home, readLedger),
-      runDatabase(home, readLedger),
-    ]);
-    expect(ledgers).toEqual([
+    expect(await runDatabase(home, readLedger)).toEqual(
       currentMigrations.map(([migration_id, name]) => ({ migration_id, name })),
-      currentMigrations.map(([migration_id, name]) => ({ migration_id, name })),
-    ]);
+    );
 
     await expect(
       runDatabase(
@@ -144,19 +221,33 @@ describe("Showtime database", () => {
     const db = new DatabaseSync(filename);
     db.exec("BEGIN; DELETE FROM app_settings; DELETE FROM profiles; COMMIT;");
     db.close();
+    const barrier = path.join(home, "startup-barrier");
+    await mkdir(barrier);
 
-    const readBootstrapState = Effect.flatMap(
-      SqlClient.SqlClient,
-      (sql) => sql<{ settings: number; profiles: number }>`SELECT
-        (SELECT COUNT(*) FROM app_settings) AS settings,
-        (SELECT COUNT(*) FROM profiles) AS profiles`,
-    );
-    const states = await Promise.all([
-      runDatabase(home, readBootstrapState),
-      runDatabase(home, readBootstrapState),
-    ]);
-    expect(states).toEqual([[{ settings: 1, profiles: 1 }], [{ settings: 1, profiles: 1 }]]);
-  });
+    const workers = [
+      runStartupProcess(home, barrier, "worker-1"),
+      runStartupProcess(home, barrier, "worker-2"),
+    ];
+    const deadline = Date.now() + 20_000;
+    while ((await readdir(barrier)).filter((entry) => entry.startsWith("ready-")).length < 2) {
+      if (Date.now() >= deadline) throw new Error("Timed out starting database worker processes.");
+      await delay(5);
+    }
+    // Both processes receive the same future release time, avoiding a false pass caused by one
+    // process completing synchronous SQLite work while the other is still leaving the barrier.
+    await writeFile(path.join(barrier, "release"), String(Date.now() + 250));
+    await Promise.all(workers);
+
+    const verified = new DatabaseSync(filename, { readOnly: true });
+    expect(
+      verified
+        .prepare(`SELECT
+          (SELECT COUNT(*) FROM app_settings) AS settings,
+          (SELECT COUNT(*) FROM profiles) AS profiles`)
+        .get(),
+    ).toEqual({ settings: 1, profiles: 1 });
+    verified.close();
+  }, 30_000);
 
   it.each([
     ["settings.json", "{}"],

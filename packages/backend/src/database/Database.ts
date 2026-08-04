@@ -175,6 +175,9 @@ const inspectExistingDatabase = (filename: string) =>
     try: () => {
       const db = new DatabaseSync(filename, { readOnly: true });
       try {
+        // Read-only preflight can overlap another process changing WAL or committing bootstrap.
+        // Install the same lock wait used by the main client before inspecting any schema state.
+        db.exec("PRAGMA busy_timeout = 5000");
         const ledgerExists = db
           .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
           .get(migrationTableName);
@@ -279,7 +282,13 @@ const prepareDatabasePath = Effect.fn("ShowtimeDatabasePreflight")(function* () 
 const clientLayer = Layer.unwrap(
   prepareDatabasePath().pipe(
     Effect.map(({ filename }) =>
-      SqliteClient.layer({ filename, spanAttributes: { "showtime.database": "state" } }),
+      SqliteClient.layer({
+        filename,
+        // SqliteClient otherwise enables WAL before a busy timeout can be installed. Two processes
+        // opening the same database can then throw SQLITE_BUSY during layer construction.
+        disableWAL: true,
+        spanAttributes: { "showtime.database": "state" },
+      }),
     ),
   ),
 );
@@ -394,8 +403,10 @@ const validateCurrentSchema = Effect.fn("ShowtimeDatabaseValidate")(function* ()
 
 const initialize = Effect.fn("ShowtimeDatabaseInitialize")(function* () {
   const sql = yield* SqlClient.SqlClient;
-  yield* sql`PRAGMA foreign_keys = ON`;
+  // Install the lock wait before any pragma that may need to change database-wide state.
   yield* sql`PRAGMA busy_timeout = 5000`;
+  yield* sql`PRAGMA foreign_keys = ON`;
+  yield* sql`PRAGMA journal_mode = WAL`;
   yield* sql`PRAGMA synchronous = FULL`;
   yield* SqliteMigrator.run({
     loader: SqliteMigrator.fromRecord({ "0001_initial": initial }),
