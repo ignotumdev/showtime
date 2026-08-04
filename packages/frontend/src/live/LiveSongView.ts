@@ -45,6 +45,7 @@ export function projectLiveSong(
   const overrides = new Map(
     (song.microphoneNames ?? []).map((item) => [item.microphoneId, item.name.trim()]),
   );
+  const mixOverrides = new Map((song.mixNames ?? []).map((item) => [item.mixId, item.name.trim()]));
   const orderedMixes = mixes
     .filter((mix) => !mix.deletedAt)
     .map((mix, sourceIndex) => ({ mix, sourceIndex }))
@@ -76,7 +77,8 @@ export function projectLiveSong(
         id: mix.id,
         number: mix.number,
         color: mix.color,
-        name: mix.name?.trim() || (mix.id === mainMixId ? "Main" : "Mix"),
+        name:
+          mixOverrides.get(mix.id) || mix.name?.trim() || (mix.id === mainMixId ? "Main" : "Mix"),
         microphones: assigned,
       },
     ];

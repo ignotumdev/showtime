@@ -95,7 +95,7 @@ The baseline contains these areas:
 - normalized client/invitation scope tables with constrained scope values;
 - `shows`, `microphones`, `mixes`, and `songs`, including ownership, ordering, timestamps, and the
   existing soft-deletion semantics;
-- normalized song-to-mix assignments and ordered microphone-name overrides;
+- normalized song-to-mix assignments and ordered microphone- and mix-name overrides;
 - chat channels, messages, profile-channel state, and presets; and
 - indexes for all foreign keys and hot list, ordering, authorization, and sequence queries.
 

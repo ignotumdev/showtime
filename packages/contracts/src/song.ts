@@ -41,12 +41,26 @@ export const SongMicrophoneName = Schema.Struct({
 });
 export type SongMicrophoneName = typeof SongMicrophoneName.Type;
 
+export const SongMixName = Schema.Struct({
+  mixId: MixId,
+  name: Schema.String,
+});
+export type SongMixName = typeof SongMixName.Type;
+
 const UniqueMicrophoneNames = Schema.Array(SongMicrophoneName).pipe(
   Schema.check(
     Schema.makeFilter(
       (names) => new Set(names.map((item) => item.microphoneId)).size === names.length,
       { expected: "unique microphone name IDs" },
     ),
+  ),
+);
+
+const UniqueMixNames = Schema.Array(SongMixName).pipe(
+  Schema.check(
+    Schema.makeFilter((names) => new Set(names.map((item) => item.mixId)).size === names.length, {
+      expected: "unique mix name IDs",
+    }),
   ),
 );
 
@@ -67,6 +81,7 @@ export const Song = Schema.Struct({
   notes: Schema.optional(Schema.String),
   mixAssignments: UniqueMixAssignments,
   microphoneNames: Schema.optional(UniqueMicrophoneNames),
+  mixNames: Schema.optional(UniqueMixNames),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
   deletedAt: Schema.optional(Schema.DateTimeUtcFromString),
