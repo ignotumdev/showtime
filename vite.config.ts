@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "./apps/web/src") } },
   test: {
     environment: "node",
-    exclude: [".repos/**", "node_modules/**"],
+    exclude: [".repos/**", "node_modules/**", "**/node_modules/**"],
   },
   fmt: {
     ignorePatterns: ["apps/web/src/routeTree.gen.ts", ".plans/**", ".repos/**"],

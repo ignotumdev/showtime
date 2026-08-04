@@ -1,5 +1,6 @@
 import { NodeFileSystem, NodeHttpServer, NodePath } from "@effect/platform-node";
 import { Context, Effect, Layer, ManagedRuntime, Schema, Semaphore } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import {
   HttpRouter,
   HttpServerRequest,
@@ -28,9 +29,6 @@ import * as MicrophoneService from "./microphones/MicrophoneService.js";
 import * as MixService from "./mixes/MixService.js";
 import * as HomeDirectory from "./platform/HomeDirectory.js";
 import * as Rpc from "./rpc/Rpc.js";
-import * as ShowDiscovery from "./shows/ShowDiscovery.js";
-import * as ShowFile from "./shows/ShowFile.js";
-import * as ShowPaths from "./shows/ShowPaths.js";
 import * as ShowRepository from "./shows/ShowRepository.js";
 import * as ShowService from "./shows/ShowService.js";
 import * as SongService from "./songs/SongService.js";
@@ -39,18 +37,14 @@ import * as Settings from "./settings/Settings.js";
 import * as ProfileService from "./profiles/ProfileService.js";
 import { ProfileId } from "@showtime/contracts";
 import * as ChatService from "./chats/ChatService.js";
-import * as ChatDatabase from "./chats/ChatDatabase.js";
 import * as LiveGuardModule from "./live/LiveGuard.js";
+import * as Database from "./database/Database.js";
 
 export { LiveGuard } from "./live/LiveGuard.js";
 
-const ShowBackendLive = ShowDiscovery.layer.pipe(
-  Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.layer))),
-);
-
-const ShowRepositoryLive = ShowRepository.layer.pipe(Layer.provideMerge(ShowBackendLive));
+const ShowRepositoryLive = ShowRepository.layer;
 const ProfileLive = ProfileService.layer.pipe(Layer.provideMerge(Ids.layer));
-const ChatLive = ChatService.layer.pipe(Layer.provideMerge(ChatDatabase.layer));
+const ChatLive = ChatService.layer;
 
 export interface BackendOptions {
   readonly host: string;
@@ -76,7 +70,10 @@ export class ConnectionManager extends Context.Service<
       name: string | undefined,
       clientProfile: string,
       scopes: ReadonlyArray<ShowtimeConnectionScope>,
-    ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
+    ) => Effect.Effect<
+      import("@showtime/shared").ShowtimeConnectionsState,
+      ConnectionStore.ConnectionInputError
+    >;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
     readonly removeConnection: (
       id: string,
@@ -248,13 +245,12 @@ const makeRpcProtocol = (desktopCapability: string) =>
             );
             if (grant) return grant;
           }
-          return HttpServerResponse.jsonUnsafe(
-            yield* connectionManager.createInvitation(
-              name,
-              decoded.value.clientProfile,
-              decoded.value.scopes,
-            ),
-          );
+          const created = yield* connectionManager
+            .createInvitation(name, decoded.value.clientProfile, decoded.value.scopes)
+            .pipe(Effect.option);
+          return created._tag === "Some"
+            ? HttpServerResponse.jsonUnsafe(created.value)
+            : HttpServerResponse.jsonUnsafe({ error: "Profile not found." }, { status: 400 });
         }),
       );
       yield* router.add(
@@ -282,12 +278,14 @@ const makeRpcProtocol = (desktopCapability: string) =>
             params.capability,
             decoded.value.clientProfile,
           );
-          return updated
-            ? HttpServerResponse.jsonUnsafe({ updated: true })
-            : HttpServerResponse.jsonUnsafe(
+          if (updated === "invalid-profile")
+            return HttpServerResponse.jsonUnsafe({ error: "Profile not found." }, { status: 400 });
+          return updated === "revoked"
+            ? HttpServerResponse.jsonUnsafe(
                 { error: "Invalid connection credentials." },
                 { status: 401 },
-              );
+              )
+            : HttpServerResponse.jsonUnsafe({ updated: updated === "updated" });
         }),
       );
       yield* router.add(
@@ -383,6 +381,7 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
       const settings = yield* Settings.Settings;
       const addresses = yield* NetworkAddresses.NetworkAddresses;
       const discovery = yield* LocalDiscovery.LocalDiscovery;
+      const sql = yield* SqlClient.SqlClient;
       const connectionTransition = yield* Semaphore.make(1);
       const state = Effect.all({
         settings: settings.get,
@@ -479,13 +478,23 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
           connectionTransition.withPermits(1)(
             Effect.gen(function* () {
               if ((yield* settings.get).hostName === hostName) return yield* state;
-              // Revoke credentials first so a crash can never retain credentials for an old URL.
-              yield* connections.removeAll;
-              yield* settings.setHostName(hostName);
+              // Persist URL and credential revocation atomically. Active sessions are disconnected
+              // only after the database transaction commits.
+              const revoked = yield* sql
+                .withTransaction(
+                  connections.removeAllPersisted.pipe(
+                    Effect.flatMap((counts) =>
+                      settings.setHostName(hostName).pipe(Effect.as(counts)),
+                    ),
+                  ),
+                )
+                .pipe(Effect.orDie);
+              yield* connections.disconnectAll;
               yield* discovery.setHostName(hostName);
               yield* Effect.logInfo("Changed the local host name and revoked all clients").pipe(
                 Effect.annotateLogs({
                   hostname: showtimeLocalHostname(showtimeHostnameLabel(hostName)),
+                  ...revoked,
                 }),
               );
               return yield* state;
@@ -503,10 +512,15 @@ export const makeBackendLayer = (
   mdnsAdvertiserLayer: Layer.Layer<MdnsAdvertiser.MdnsAdvertiser> = MdnsAdvertiserLive.layer,
 ) => {
   const desktopCapability = randomBytes(32).toString("base64url");
-  const HttpServerLive = NodeHttpServer.layer(createServer, {
-    host: options.host,
-    port: options.port,
-  });
+  const HttpServerLive = Layer.unwrap(
+    Effect.gen(function* () {
+      yield* Database.DatabaseReady;
+      return NodeHttpServer.layer(createServer, {
+        host: options.host,
+        port: options.port,
+      });
+    }),
+  );
   const LocalDiscoveryLive = LocalDiscovery.layer({
     port: options.port,
     runtimeEnabled: options.localDiscovery ?? options.port === showtimeLocalPort,
@@ -526,6 +540,7 @@ export const makeBackendLayer = (
     Layer.provideMerge(HttpServerLive),
     Layer.provideMerge(makeConnectionLayers()),
     Layer.provideMerge(makeBackendServices()),
+    Layer.provideMerge(Database.layer),
     Layer.provide(makePlatformLayer(options)),
   );
 };

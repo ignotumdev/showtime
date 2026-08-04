@@ -1,17 +1,17 @@
-import { Context, Effect, Layer, Path, Ref, Schema, Semaphore } from "effect";
-import { FileSystem } from "effect/FileSystem";
-import { hostname } from "node:os";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { normalizeShowtimeHostName, ShowtimeHostName } from "@showtime/shared";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
-import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
+import { DatabaseReady } from "../database/Database.js";
 
-const SettingsFile = Schema.Struct({
-  version: Schema.Literal(2),
-  connectionsEnabled: Schema.Boolean,
+const SettingsRow = Schema.Struct({
+  connectionsEnabled: Schema.Number,
   hostName: ShowtimeHostName,
 });
 
-export type ShowtimeSettings = typeof SettingsFile.Type;
+export interface ShowtimeSettings {
+  readonly connectionsEnabled: boolean;
+  readonly hostName: ShowtimeHostName;
+}
 
 export class Settings extends Context.Service<
   Settings,
@@ -22,43 +22,34 @@ export class Settings extends Context.Service<
   }
 >()("@showtime/backend/settings/Settings") {}
 
-const make = Effect.gen(function* () {
-  const fs = yield* FileSystem;
-  const path = yield* Path.Path;
-  const home = yield* HomeDirectory.HomeDirectory;
-  const directory = path.join(yield* home.homeDirectory, ".showtime");
-  const filePath = path.join(directory, "settings.json");
-  const defaultHostName = normalizeShowtimeHostName(hostname());
-  const defaults: ShowtimeSettings = {
-    version: 2,
-    connectionsEnabled: true,
-    hostName: defaultHostName,
-  };
-  const initial = yield* readJson(fs, filePath, SettingsFile).pipe(
-    Effect.catchIf(isNotFound, () =>
-      writeJsonAtomic(fs, directory, filePath, defaults).pipe(Effect.as(defaults)),
-    ),
+const make = Effect.fn("Settings.make")(function* () {
+  yield* DatabaseReady;
+  const sql = yield* SqlClient.SqlClient;
+  const read = SqlSchema.findOne({
+    Request: Schema.Void,
+    Result: SettingsRow,
+    execute: () => sql`SELECT connections_enabled AS connectionsEnabled, host_name AS hostName
+      FROM app_settings WHERE singleton_id = 1`,
+  });
+  const get = read(undefined).pipe(
+    Effect.map((row) => ({
+      connectionsEnabled: row.connectionsEnabled === 1,
+      hostName: row.hostName,
+    })),
     Effect.orDie,
   );
-
-  const state = yield* Ref.make(initial);
-  const lock = yield* Semaphore.make(1);
-  const update = (change: (current: ShowtimeSettings) => ShowtimeSettings) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const next = change(yield* Ref.get(state));
-        yield* writeJsonAtomic(fs, directory, filePath, next).pipe(Effect.orDie);
-        yield* Ref.set(state, next);
-        return next;
-      }),
+  const setConnectionsEnabled = (enabled: boolean) =>
+    sql`UPDATE app_settings SET connections_enabled = ${enabled ? 1 : 0}
+      WHERE singleton_id = 1`.pipe(Effect.andThen(get), Effect.orDie);
+  const setHostName = (hostName: ShowtimeHostName) => {
+    const normalized = normalizeShowtimeHostName(hostName);
+    return sql`UPDATE app_settings SET host_name = ${normalized} WHERE singleton_id = 1`.pipe(
+      Effect.andThen(get),
+      Effect.orDie,
     );
-
-  return Settings.of({
-    get: Ref.get(state),
-    setConnectionsEnabled: (connectionsEnabled) =>
-      update((current) => ({ ...current, connectionsEnabled })),
-    setHostName: (hostName) => update((current) => ({ ...current, hostName })),
-  });
+  };
+  return Settings.of({ get, setConnectionsEnabled, setHostName });
 });
 
-export const layer = Layer.effect(Settings, make);
+export const layerNoDeps = Layer.effect(Settings, make());
+export const layer = layerNoDeps;

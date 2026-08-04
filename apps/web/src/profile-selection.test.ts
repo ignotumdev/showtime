@@ -23,4 +23,13 @@ describe("profile selection persistence", () => {
   it("rejects malformed storage", () => {
     expect(readProfileSelection(storageWith("not-json"))).toBeUndefined();
   });
+
+  it.each([
+    { profileId: "profile_0000000000000000" },
+    { version: 0, profileId: "profile_0000000000000000" },
+    { version: 2, profileId: "profile_0000000000000000" },
+    { version: 1, profileId: "profile_0000000000000000", legacy: true },
+  ])("rejects non-version-1 or non-exact records", (record) => {
+    expect(readProfileSelection(storageWith(JSON.stringify(record)))).toBeUndefined();
+  });
 });

@@ -104,6 +104,7 @@ export const ChatMessagePart = Schema.Union([
   }),
 ]);
 export type ChatMessagePart = typeof ChatMessagePart.Type;
+export const ChatMessageParts = Schema.Array(ChatMessagePart);
 
 export const ChatPresetAnswerContext = Schema.Struct({
   name: ChatPresetFieldName,
@@ -174,6 +175,7 @@ export const decodeChatPresetName = Schema.decodeUnknownEffect(ChatPresetName);
 export const decodeChatPresetTemplate = Schema.decodeUnknownEffect(ChatPresetTemplate);
 export const decodeChatPresetFields = Schema.decodeUnknownSync(Schema.Array(ChatPresetField));
 export const decodeChatPresetAnswer = Schema.decodeUnknownSync(ChatPresetAnswer);
+export const decodeChatMessageParts = Schema.decodeUnknownSync(ChatMessageParts);
 
 const placeholderPattern = /{{\s*([A-Za-z][A-Za-z0-9_-]*)\s*}}/g;
 const singlePlaceholderPattern = /^{{\s*[A-Za-z][A-Za-z0-9_-]*\s*}}/;
@@ -287,84 +289,4 @@ export const resolveChatPresetTemplate = (
   if (cursor < template.length) parts.push({ type: "text", text: template.slice(cursor) });
   if (parts.length === 0) return undefined;
   return { body: chatMessagePartsText(parts), parts };
-};
-
-const legacyStoredChatMessagePrefix = "__showtime_chat_v1__:";
-const previousStoredChatMessagePrefix = "__showtime_chat_v2__:";
-const storedChatMessagePrefix = "__showtime_chat_v3__:";
-const decodeChatMessageParts = Schema.decodeUnknownSync(Schema.Array(ChatMessagePart));
-const decodeChatMessageId = Schema.decodeUnknownSync(ChatMessageId);
-const decodeStoredChatPresetAnswer = (input: unknown) => {
-  const answer = decodeChatPresetAnswer(input);
-  const validationError = validateChatPresetAnswerDefinition(
-    answer,
-    answer.context?.map((item) => item.name) ?? [],
-  );
-  if (validationError) throw new Error(validationError);
-  return answer;
-};
-
-export const encodeStoredChatMessage = (
-  body: ChatMessageBody,
-  options: {
-    readonly parts?: ReadonlyArray<ChatMessagePart>;
-    readonly answer?: ChatPresetAnswer;
-    readonly replyToMessageId?: ChatMessageId;
-  } = {},
-): string =>
-  `${storedChatMessagePrefix}${JSON.stringify({
-    kind: options.parts?.length ? "rich" : "plain",
-    body,
-    ...(options.parts?.length ? { parts: options.parts } : {}),
-    ...(options.answer ? { answer: options.answer } : {}),
-    ...(options.replyToMessageId ? { replyToMessageId: options.replyToMessageId } : {}),
-  })}`;
-
-export const decodeStoredChatMessage = (
-  stored: string,
-): {
-  readonly body: string;
-  readonly parts?: ReadonlyArray<ChatMessagePart>;
-  readonly answer?: ChatPresetAnswer;
-  readonly replyToMessageId?: ChatMessageId;
-} => {
-  const isCurrentEnvelope = stored.startsWith(storedChatMessagePrefix);
-  const isPreviousEnvelope = stored.startsWith(previousStoredChatMessagePrefix);
-  const isLegacyEnvelope = stored.startsWith(legacyStoredChatMessagePrefix);
-  if (!isCurrentEnvelope && !isPreviousEnvelope && !isLegacyEnvelope) return { body: stored };
-  try {
-    const prefix = isCurrentEnvelope
-      ? storedChatMessagePrefix
-      : isPreviousEnvelope
-        ? previousStoredChatMessagePrefix
-        : legacyStoredChatMessagePrefix;
-    const parsed = JSON.parse(stored.slice(prefix.length)) as unknown;
-    if (!parsed || typeof parsed !== "object") return { body: stored };
-    const value = parsed as {
-      readonly kind?: unknown;
-      readonly body?: unknown;
-      readonly parts?: unknown;
-      readonly answer?: unknown;
-      readonly replyToMessageId?: unknown;
-    };
-    if (typeof value.body !== "string") return { body: stored };
-    if (!isLegacyEnvelope && value.kind !== "plain" && value.kind !== "rich")
-      return { body: stored };
-    const metadata = isCurrentEnvelope
-      ? {
-          ...(value.answer === undefined
-            ? {}
-            : { answer: decodeStoredChatPresetAnswer(value.answer) }),
-          ...(value.replyToMessageId === undefined
-            ? {}
-            : { replyToMessageId: decodeChatMessageId(value.replyToMessageId) }),
-        }
-      : {};
-    if (!isLegacyEnvelope && value.kind === "plain") return { body: value.body, ...metadata };
-    const parts = decodeChatMessageParts(value.parts);
-    if (parts.length === 0 || chatMessagePartsText(parts) !== value.body) return { body: stored };
-    return { body: value.body, parts, ...metadata };
-  } catch {
-    return { body: stored };
-  }
 };

@@ -1,12 +1,12 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { ProfileName, profileIdPrefix } from "@showtime/contracts";
 import { DateTime, Effect, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
+import { DatabaseSync } from "node:sqlite";
 import * as Ids from "../ids/Ids.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import { ProfileService, layer } from "./ProfileService.js";
 
 const homes: Array<string> = [];
@@ -15,12 +15,7 @@ const withService = async <A>(home: string, effect: Effect.Effect<A, unknown, Pr
   Effect.runPromise(
     effect.pipe(
       Effect.provide(
-        layer.pipe(
-          Layer.provide(Ids.layer),
-          Layer.provide(
-            Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, HomeDirectory.makeLayer(home)),
-          ),
-        ),
+        layer.pipe(Layer.provide(Ids.layer), Layer.provide(makeDatabaseTestLayer(home))),
       ),
     ),
   );
@@ -58,9 +53,7 @@ describe("ProfileService", () => {
       message: "Choose another default profile before deleting this one.",
     });
 
-    const file = JSON.parse(await readFile(join(home, ".showtime", "profiles.json"), "utf8"));
-    expect(file.profiles[0].id).toBe(state.defaultProfileId);
-    expect(file.profiles[0].createdAt).toBe(DateTime.formatIso(state.profiles[0]!.createdAt));
+    expect((await stat(join(home, ".showtime", "showtime.db"))).isFile()).toBe(true);
   });
 
   it("creates, edits, changes default, deletes, and reloads profiles", async () => {
@@ -107,5 +100,47 @@ describe("ProfileService", () => {
       }),
     );
     expect(finalState.profiles).toMatchObject([{ id: created.id, name: "Monitors" }]);
+  });
+
+  it("reports only unique-name violations as validation errors", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-profiles-"));
+    homes.push(home);
+
+    await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService;
+        yield* profiles.create({ name: "Monitor engineer", color: "violet" });
+      }),
+    );
+
+    await expect(
+      withService(
+        home,
+        Effect.gen(function* () {
+          const profiles = yield* ProfileService;
+          yield* profiles.create({ name: "MONITOR ENGINEER", color: "green" });
+        }),
+      ),
+    ).rejects.toMatchObject({
+      message: "Could not create profile. Profile names must be unique.",
+    });
+
+    const database = new DatabaseSync(join(home, ".showtime", "showtime.db"));
+    database.exec(`CREATE TRIGGER reject_profile_insert
+      BEFORE INSERT ON profiles BEGIN
+        SELECT RAISE(ABORT, 'synthetic persistence failure');
+      END`);
+    database.close();
+
+    await expect(
+      withService(
+        home,
+        Effect.gen(function* () {
+          const profiles = yield* ProfileService;
+          yield* profiles.create({ name: "Front of house", color: "sky" });
+        }),
+      ),
+    ).rejects.toMatchObject({ message: "Could not create profile." });
   });
 });

@@ -184,10 +184,11 @@ packages/backend/src/database/migrations/
   0002_example_future_change.ts
 ```
 
-Each module default-exports an Effect requiring `SqlClient`. Prefer
-`SqliteMigrator.fromGlob(import.meta.glob(...))` when packaged Electron builds are proven to include
-the migration modules. Otherwise use `SqliteMigrator.fromRecord` with static imports. Do not create
-a custom loader, migration table, or migration executor.
+Each module default-exports an Effect requiring `SqlClient`. Showtime currently uses
+`SqliteMigrator.fromRecord` with static imports so packaged Electron builds cannot omit a migration
+module during bundling. A future switch to `SqliteMigrator.fromGlob(import.meta.glob(...))` requires
+an explicit packaged-build test first. Do not create a custom loader, migration table, or migration
+executor.
 
 Run the migrator through `SqliteMigrator.layer` after database configuration and before bootstrap.
 Migration 1 creates schema only. An idempotent bootstrap transaction supplies host-derived settings
@@ -200,6 +201,17 @@ The validation layer then verifies:
 3. critical tables, indexes, constraints, and foreign-key enforcement exist;
 4. bootstrap invariants hold, including exactly one settings row and a valid default profile; and
 5. `PRAGMA quick_check` or the documented integrity check succeeds.
+
+The current validator also compares the exact ordered column set of every critical table, checks
+the required index names, runs `PRAGMA foreign_key_check`, and reads back WAL, foreign-key,
+busy-timeout, and synchronous settings. Existing databases are inspected read-only before the
+write-capable client is acquired so experimental or future ledgers are rejected without being
+modified.
+
+Historical chat sender IDs are deliberately retained after a non-default profile is deleted. They
+are immutable attribution data, not profile ownership, so `chat_messages.sender_profile_id` is
+indexed but does not cascade or restrict profile deletion. Current sender IDs are still validated
+against `profiles` before a message is inserted.
 
 Only then does the layer provide `DatabaseReady`.
 
