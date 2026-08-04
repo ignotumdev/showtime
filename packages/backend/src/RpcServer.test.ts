@@ -2,12 +2,14 @@ import { NodeSocket } from "@effect/platform-node";
 import { Deferred, Effect, Layer, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { createServer } from "node:net";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { ShowtimeRpcs, ShowName } from "@showtime/contracts";
 import { ConnectionManager, makeBackendRuntime } from "./index.js";
+import { ProfileService } from "./profiles/ProfileService.js";
+import { DatabaseSync } from "node:sqlite";
 
 const tempHomes = new Set<string>();
 
@@ -30,6 +32,28 @@ const findAvailablePort = () =>
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });
+
+const defaultProfileId = (runtime: ReturnType<typeof makeBackendRuntime>) =>
+  runtime
+    .runPromise(Effect.flatMap(ProfileService, (_) => _.list))
+    .then((state) => state.defaultProfileId);
+
+const tokenForInvitation = async (
+  runtime: ReturnType<typeof makeBackendRuntime>,
+  invitationId: string,
+) => {
+  const info = await runtime.runPromise(
+    Effect.flatMap(ConnectionManager, (_) => _.pairingInfo(invitationId)),
+  );
+  const candidate = info.candidates[0];
+  if (!candidate) throw new Error("Pairing candidate missing");
+  const token = new URL(candidate.url).hash
+    .slice(1)
+    .split("&")[0]
+    ?.replace(/^pair=/, "");
+  if (!token) throw new Error("Pairing token missing");
+  return token;
+};
 
 describe("Showtime WebSocket RPC", () => {
   it("returns a desktop RPC URL reachable through the configured bind address", async () => {
@@ -233,18 +257,16 @@ describe("Showtime WebSocket RPC", () => {
 
     await runtime.runPromise(Effect.void);
     try {
+      const profileId = await defaultProfileId(runtime);
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Monitor iPad", "profile_0000000000000000", []),
+          connections.createInvitation("Monitor iPad", profileId, []),
         ),
       );
       expect(pending.clients[0]).toMatchObject({ kind: "pending", name: "Monitor iPad" });
-      const persisted = JSON.parse(
-        await readFile(path.join(homeDirectory, ".showtime", "connections.json"), "utf8"),
-      ) as {
-        invitations: Array<{ token: string }>;
-      };
-      const token = persisted.invitations[0]!.token;
+      const invitation = pending.clients[0];
+      if (!invitation || invitation.kind !== "pending") throw new Error("Invitation missing");
+      const token = await tokenForInvitation(runtime, invitation.invitationId);
       const pairing = await fetch(`http://127.0.0.1:${port}/pair/${token}`, { method: "POST" });
       expect(pairing.status).toBe(200);
       const connection = (await pairing.json()) as { clientId: string; capability: string };
@@ -285,11 +307,11 @@ describe("Showtime WebSocket RPC", () => {
       await disabledClose;
       expect(await (await fetch(statusUrl)).json()).toEqual({ status: "disabled" });
       expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(404);
-      const settings = JSON.parse(
-        await readFile(path.join(homeDirectory, ".showtime", "settings.json"), "utf8"),
+      const disabledState = await runtime.runPromise(
+        Effect.flatMap(ConnectionManager, (_) => _.connectionsState),
       );
-      expect(settings).toMatchObject({ version: 2, connectionsEnabled: false });
-      expect(settings.hostName).toMatch(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
+      expect(disabledState.enabled).toBe(false);
+      expect(disabledState.hostName).toMatch(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 
       await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) => connections.setConnectionsEnabled(true)),
@@ -327,20 +349,16 @@ describe("Showtime WebSocket RPC", () => {
 
     await runtime.runPromise(Effect.void);
     try {
+      const profileId = await defaultProfileId(runtime);
       const pending = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.createInvitation("Restarted iPad", "profile_0000000000000000", []),
+          connections.createInvitation("Restarted iPad", profileId, []),
         ),
       );
       const invitation = pending.clients[0];
-      expect(invitation?.kind).toBe("pending");
-      const persisted = JSON.parse(
-        await readFile(path.join(homeDirectory, ".showtime", "connections.json"), "utf8"),
-      ) as { invitations: Array<{ token: string }> };
-      const pairing = await fetch(
-        `http://127.0.0.1:${port}/pair/${persisted.invitations[0]!.token}`,
-        { method: "POST" },
-      );
+      if (!invitation || invitation.kind !== "pending") throw new Error("Invitation missing");
+      const token = await tokenForInvitation(runtime, invitation.invitationId);
+      const pairing = await fetch(`http://127.0.0.1:${port}/pair/${token}`, { method: "POST" });
       const credentials = (await pairing.json()) as { clientId: string; capability: string };
       const statusUrl = `http://127.0.0.1:${port}/connection-status/${credentials.clientId}/${credentials.capability}`;
       const rpcUrl = `ws://127.0.0.1:${port}/rpc/${credentials.clientId}/${credentials.capability}`;
@@ -375,19 +393,24 @@ describe("Showtime WebSocket RPC", () => {
 
     await runtime.runPromise(Effect.void);
     try {
+      const profileId = await defaultProfileId(runtime);
       const pair = async (
         name: string,
         scopes: ReadonlyArray<"connections:read" | "connections:create" | "connections:delete">,
       ) => {
         await runtime.runPromise(
           Effect.flatMap(ConnectionManager, (connections) =>
-            connections.createInvitation(name, "profile_0000000000000000", scopes),
+            connections.createInvitation(name, profileId, scopes),
           ),
         );
-        const persisted = JSON.parse(
-          await readFile(path.join(homeDirectory, ".showtime", "connections.json"), "utf8"),
-        ) as { invitations: Array<{ name: string; token: string }> };
-        const token = persisted.invitations.find((invitation) => invitation.name === name)!.token;
+        const state = await runtime.runPromise(
+          Effect.flatMap(ConnectionManager, (_) => _.connectionsState),
+        );
+        const invitation = state.clients.find(
+          (client) => client.kind === "pending" && client.name === name,
+        );
+        if (!invitation || invitation.kind !== "pending") throw new Error("Invitation missing");
+        const token = await tokenForInvitation(runtime, invitation.invitationId);
         return (await (await fetch(`${origin}/pair/${token}`, { method: "POST" })).json()) as {
           clientId: string;
           capability: string;
@@ -400,7 +423,7 @@ describe("Showtime WebSocket RPC", () => {
         fetch(url, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name, clientProfile: "profile_0000000000000000", scopes }),
+          body: JSON.stringify({ name, clientProfile: profileId, scopes }),
         });
 
       const unscoped = await pair("Unscoped iPad", []);
@@ -419,7 +442,13 @@ describe("Showtime WebSocket RPC", () => {
       const state = (await stateResponse.json()) as { clients: Array<{ name: string }> };
       expect(state.clients.map((client) => client.name)).toContain("Manager iPad");
 
-      const changedProfile = "profile_1111111111111111";
+      const changedProfile = await runtime.runPromise(
+        Effect.flatMap(ProfileService, (_) =>
+          _.create({ name: "Changed profile", color: "green" }).pipe(
+            Effect.map((profile) => profile.id),
+          ),
+        ),
+      );
       const profileUpdate = await fetch(
         `${origin}/connection-profile/${manager.clientId}/${manager.capability}`,
         {
@@ -476,45 +505,36 @@ describe("Showtime WebSocket RPC", () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-expired-home-"));
     tempHomes.add(homeDirectory);
     const showtimeDirectory = path.join(homeDirectory, ".showtime");
-    await mkdir(showtimeDirectory);
-    const expiredToken = "x".repeat(43);
-    await writeFile(
-      path.join(showtimeDirectory, "connections.json"),
-      JSON.stringify({
-        version: 1,
-        clients: [],
-        invitations: [
-          {
-            invitationId: "expiredInvitation1234",
-            name: "Expired iPad",
-            token: expiredToken,
-            expiresAt: "2000-01-01T00:00:00.000Z",
-            updatedAt: "2000-01-01T00:00:00.000Z",
-            clientProfile: "profile_0000000000000000",
-            scopes: [],
-          },
-        ],
-      }),
-    );
     const port = await findAvailablePort();
-    const runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+    let runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
     await runtime.runPromise(Effect.void);
     try {
+      const profileId = await defaultProfileId(runtime);
       const before = await runtime.runPromise(
-        Effect.flatMap(ConnectionManager, (connections) => connections.connectionsState),
+        Effect.flatMap(ConnectionManager, (_) => _.createInvitation("Expired iPad", profileId, [])),
       );
-      expect(before.clients[0]).toMatchObject({ kind: "pending", name: "Expired iPad" });
+      const invitation = before.clients.find((client) => client.kind === "pending");
+      if (!invitation || invitation.kind !== "pending") throw new Error("Invitation missing");
+      const expiredToken = await tokenForInvitation(runtime, invitation.invitationId);
+      await runtime.dispose();
+      const db = new DatabaseSync(path.join(showtimeDirectory, "showtime.db"));
+      db.prepare(
+        "UPDATE connection_invitations SET expires_at = ?, updated_at = ? WHERE invitation_id = ?",
+      ).run("2000-01-01T00:00:00.000Z", "2000-01-01T00:00:00.000Z", invitation.invitationId);
+      db.close();
+      runtime = makeBackendRuntime({ host: "127.0.0.1", port, homeDirectory });
+      await runtime.runPromise(Effect.void);
       const pairingInfo = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (connections) =>
-          connections.pairingInfo("expiredInvitation1234"),
+          connections.pairingInfo(invitation.invitationId),
         ),
       );
-      const persisted = JSON.parse(
-        await readFile(path.join(showtimeDirectory, "connections.json"), "utf8"),
-      ) as { invitations: Array<{ token: string; expiresAt: string }> };
-      expect(persisted.invitations[0]!.token).not.toBe(expiredToken);
-      expect(Date.parse(persisted.invitations[0]!.expiresAt)).toBeGreaterThan(Date.now());
-      expect(pairingInfo.expiresAt).toBe(persisted.invitations[0]!.expiresAt);
+      const renewedToken = new URL(pairingInfo.candidates[0]!.url).hash
+        .slice(1)
+        .split("&")[0]!
+        .replace(/^pair=/, "");
+      expect(renewedToken).not.toBe(expiredToken);
+      expect(Date.parse(pairingInfo.expiresAt!)).toBeGreaterThan(Date.now());
       expect(
         (await fetch(`http://127.0.0.1:${port}/pair/${expiredToken}`, { method: "POST" })).status,
       ).toBe(410);

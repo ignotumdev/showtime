@@ -8,8 +8,7 @@ import {
   decodeChatPresetTemplate,
   decodeChatChannelName,
   decodeChatMessageBody,
-  decodeStoredChatMessage,
-  encodeStoredChatMessage,
+  decodeChatMessageParts,
   RpcError,
   validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
@@ -28,6 +27,7 @@ import {
   type ShowId,
 } from "@showtime/contracts";
 import { Ids } from "../ids/Ids.js";
+import { DatabaseReady } from "../database/Database.js";
 import { ProfileService } from "../profiles/ProfileService.js";
 
 const replayLimit = 100;
@@ -52,6 +52,9 @@ interface MessageRow {
   readonly channel_id: string;
   readonly sender_profile_id: string;
   readonly body: string;
+  readonly parts_json: string | null;
+  readonly answer_json: string | null;
+  readonly reply_to_message_id: string | null;
   readonly sent_at: string;
 }
 
@@ -132,19 +135,31 @@ const rpcError = (message: string, cause?: unknown) =>
   new RpcError({ message, ...(cause === undefined ? {} : { cause }) });
 
 const toMessage = (row: MessageRow): ChatMessage => {
-  const content = decodeStoredChatMessage(row.body);
+  const parts =
+    row.parts_json === null ? undefined : decodeChatMessageParts(JSON.parse(row.parts_json));
+  const answer =
+    row.answer_json === null ? undefined : decodeChatPresetAnswer(JSON.parse(row.answer_json));
+  if (parts && (parts.length === 0 || chatMessagePartsText(parts) !== row.body))
+    throw new Error("Stored chat parts do not match the message body.");
+  if (answer) {
+    const validationError = validateChatPresetAnswerDefinition(
+      answer,
+      answer.context?.map((item) => item.name) ?? [],
+    );
+    if (validationError) throw new Error(validationError);
+  }
   return {
     id: row.id as ChatMessage["id"],
     sequence: row.sequence as ChatSequence,
     showId: row.show_id as ShowId,
     channelId: row.channel_id as ChatChannelId,
     senderProfileId: row.sender_profile_id as ProfileId,
-    body: content.body as ChatMessage["body"],
-    ...(content.parts === undefined ? {} : { parts: content.parts }),
-    ...(content.answer === undefined ? {} : { answer: content.answer }),
-    ...(content.replyToMessageId === undefined
+    body: row.body as ChatMessage["body"],
+    ...(parts === undefined ? {} : { parts }),
+    ...(answer === undefined ? {} : { answer }),
+    ...(row.reply_to_message_id === null
       ? {}
-      : { replyToMessageId: content.replyToMessageId }),
+      : { replyToMessageId: row.reply_to_message_id as ChatMessageId }),
     sentAt: DateTime.makeUnsafe(row.sent_at),
   };
 };
@@ -176,56 +191,10 @@ const toPreset = (row: PresetRow): ChatPreset => {
 };
 
 const make = Effect.gen(function* () {
+  yield* DatabaseReady;
   const sql = yield* SqlClient.SqlClient;
   const ids = yield* Ids;
   const profiles = yield* ProfileService;
-
-  yield* sql`PRAGMA foreign_keys = ON`;
-  yield* sql`PRAGMA busy_timeout = 5000`;
-  yield* sql`CREATE TABLE IF NOT EXISTS chat_channels (
-    id TEXT PRIMARY KEY,
-    show_id TEXT NOT NULL,
-    name TEXT NOT NULL COLLATE NOCASE,
-    created_at TEXT NOT NULL,
-    UNIQUE(show_id, name)
-  )`;
-  yield* sql`CREATE TABLE IF NOT EXISTS chat_messages (
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-    id TEXT NOT NULL UNIQUE,
-    show_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
-    sender_profile_id TEXT NOT NULL,
-    body TEXT NOT NULL,
-    sent_at TEXT NOT NULL
-  )`;
-  yield* sql`CREATE INDEX IF NOT EXISTS chat_messages_channel_sequence
-    ON chat_messages(channel_id, sequence)`;
-  yield* sql`CREATE TABLE IF NOT EXISTS chat_profile_channel_state (
-    show_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
-    profile_id TEXT NOT NULL,
-    last_read_sequence INTEGER NOT NULL DEFAULT 0,
-    notifications_enabled INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY(show_id, channel_id, profile_id)
-  )`;
-  yield* sql`CREATE TABLE IF NOT EXISTS chat_presets (
-    id TEXT PRIMARY KEY,
-    show_id TEXT NOT NULL,
-    name TEXT NOT NULL COLLATE NOCASE,
-    template TEXT NOT NULL,
-    fields_json TEXT NOT NULL,
-    answer_json TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    UNIQUE(show_id, name)
-  )`;
-  const presetColumns = (yield* sql`PRAGMA table_info(chat_presets)`) as unknown as ReadonlyArray<{
-    readonly name: string;
-  }>;
-  if (!presetColumns.some((column) => column.name === "answer_json"))
-    yield* sql`ALTER TABLE chat_presets ADD COLUMN answer_json TEXT`;
-  yield* sql`CREATE INDEX IF NOT EXISTS chat_presets_show_updated
-    ON chat_presets(show_id, updated_at DESC)`;
 
   const ensureProfile = (profileId: ProfileId) =>
     profiles.list.pipe(
@@ -255,8 +224,8 @@ const make = Effect.gen(function* () {
 
   const loadMessages = (showId: ShowId) =>
     Effect.gen(function* () {
-      const rows =
-        (yield* sql`SELECT id, sequence, show_id, channel_id, sender_profile_id, body, sent_at
+      const rows = (yield* sql`SELECT id, sequence, show_id, channel_id, sender_profile_id, body,
+          parts_json, answer_json, reply_to_message_id, sent_at
         FROM (
           SELECT m.*,
             ROW_NUMBER() OVER (PARTITION BY m.channel_id ORDER BY m.sequence DESC) AS replay_rank
@@ -285,20 +254,12 @@ const make = Effect.gen(function* () {
         ORDER BY name COLLATE NOCASE, created_at`) as unknown as ReadonlyArray<PresetRow>;
       const presets: Array<ChatPreset> = [];
       for (const row of rows) {
-        const result = yield* Effect.result(
-          Effect.try({
+        presets.push(
+          yield* Effect.try({
             try: () => toPreset(row),
             catch: (cause) => cause,
           }),
         );
-        if (result._tag === "Success") presets.push(result.success);
-        else {
-          yield* Effect.logWarning("Skipping invalid chat preset", {
-            presetId: row.id,
-            showId: row.show_id,
-            cause: result.failure,
-          });
-        }
       }
       return presets;
     });
@@ -564,29 +525,27 @@ const make = Effect.gen(function* () {
       }>;
       if (channel.length === 0) return yield* Effect.fail(rpcError("Channel not found."));
       if (params.replyToMessageId) {
-        const request = (yield* sql`SELECT id, body FROM chat_messages
+        const request = (yield* sql`SELECT id, answer_json FROM chat_messages
           WHERE id = ${params.replyToMessageId} AND channel_id = ${params.channelId}
             AND show_id = ${params.showId}`) as unknown as ReadonlyArray<{
           readonly id: string;
-          readonly body: string;
+          readonly answer_json: string | null;
         }>;
         if (request.length === 0)
           return yield* Effect.fail(rpcError("The message being answered was not found."));
-        if (!decodeStoredChatMessage(request[0]!.body).answer)
+        if (request[0]!.answer_json === null)
           return yield* Effect.fail(rpcError("This message does not accept an answer."));
       }
       const id = params.messageId ?? (yield* ids.makeChatMessageId);
       const sentAt = yield* DateTime.now;
-      const storedBody = encodeStoredChatMessage(body, {
-        ...(params.parts?.length ? { parts: params.parts } : {}),
-        ...(params.answer === undefined ? {} : { answer: params.answer }),
-        ...(params.replyToMessageId === undefined
-          ? {}
-          : { replyToMessageId: params.replyToMessageId }),
-      });
+      const partsJson = params.parts?.length ? JSON.stringify(params.parts) : null;
+      const answerJson = params.answer === undefined ? null : JSON.stringify(params.answer);
+      const replyToMessageId = params.replyToMessageId ?? null;
       const inserted = (yield* sql`INSERT INTO chat_messages
-          (id, show_id, channel_id, sender_profile_id, body, sent_at)
-        VALUES (${id}, ${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${storedBody}, ${DateTime.formatIso(sentAt)})
+          (id, show_id, channel_id, sender_profile_id, body, parts_json, answer_json,
+            reply_to_message_id, sent_at)
+        VALUES (${id}, ${params.showId}, ${params.channelId}, ${params.senderProfileId}, ${body},
+          ${partsJson}, ${answerJson}, ${replyToMessageId}, ${DateTime.formatIso(sentAt)})
         ON CONFLICT(id) DO NOTHING
         RETURNING sequence`) as unknown as ReadonlyArray<{ sequence: number }>;
       let message: ChatMessage;
@@ -607,7 +566,8 @@ const make = Effect.gen(function* () {
         };
       } else {
         const existing = (yield* sql`SELECT
-            id, sequence, show_id, channel_id, sender_profile_id, body, sent_at
+            id, sequence, show_id, channel_id, sender_profile_id, body, parts_json,
+            answer_json, reply_to_message_id, sent_at
           FROM chat_messages
           WHERE id = ${id}`) as unknown as ReadonlyArray<MessageRow>;
         const row = existing[0];
@@ -616,7 +576,10 @@ const make = Effect.gen(function* () {
           row.show_id !== params.showId ||
           row.channel_id !== params.channelId ||
           row.sender_profile_id !== params.senderProfileId ||
-          row.body !== storedBody
+          row.body !== body ||
+          row.parts_json !== partsJson ||
+          row.answer_json !== answerJson ||
+          row.reply_to_message_id !== replyToMessageId
         )
           return yield* Effect.fail(rpcError("Message id is already in use."));
         message = toMessage(row);
@@ -704,4 +667,5 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(ChatService, make);
+export const layerNoDeps = Layer.effect(ChatService, make);
+export const layer = layerNoDeps;

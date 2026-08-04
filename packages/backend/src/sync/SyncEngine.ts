@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, PartitionedSemaphore, Stream } from "effect";
+import { Context, Effect, Layer, Stream } from "effect";
 import { Reactivity } from "effect/unstable/reactivity";
 
 type SyncKeys = ReadonlyArray<unknown>;
@@ -20,15 +20,10 @@ export class SyncEngine extends Context.Service<SyncEngine, SyncEngineShape>()(
 
 const make = Effect.gen(function* () {
   const reactivity = yield* Reactivity.Reactivity;
-  const transaction = yield* PartitionedSemaphore.make<string>({ permits: 1 });
-  const transact = transaction.withPermit("sync");
 
-  const query: SyncEngineShape["query"] = (keys, effect) =>
-    reactivity.stream(keys, transact(effect));
+  const query: SyncEngineShape["query"] = (keys, effect) => reactivity.stream(keys, effect);
 
-  const mutation: SyncEngineShape["mutation"] = (keys, effect) => {
-    return transact(reactivity.mutation(keys, effect));
-  };
+  const mutation: SyncEngineShape["mutation"] = (keys, effect) => reactivity.mutation(keys, effect);
 
   return SyncEngine.of({ query, mutation });
 });

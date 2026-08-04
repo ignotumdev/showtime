@@ -106,13 +106,16 @@ export interface ShowtimeConnectionsState {
   readonly clients: ReadonlyArray<ShowtimeConnectionClient>;
 }
 
-export interface ShowtimeStoredConnection {
-  readonly version: 1;
-  readonly clientId: string;
-  readonly capability: string;
-  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
-  readonly clientProfile: string;
-}
+export const ShowtimeStoredConnection = Schema.Struct({
+  version: Schema.Literal(1),
+  clientId: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{21}$/)),
+  capability: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/)),
+  clientProfile: Schema.String.check(
+    Schema.isPattern(/^profile_[a-z0-9]{16}$/, { expected: "a Showtime profile ID" }),
+  ),
+  scopes: ShowtimeConnectionScopes,
+});
+export type ShowtimeStoredConnection = typeof ShowtimeStoredConnection.Type;
 
 /** Capabilities supplied by a native host. Browser clients run without this bridge. */
 export interface ShowtimeHostBridge {

@@ -7,17 +7,18 @@ export const profileSelectionChangedEvent = "showtime-profile-selection";
 type ReadableStorage = Pick<Storage, "getItem">;
 type WritableStorage = Pick<Storage, "setItem">;
 
+const ProfileSelection = Schema.Struct({ version: Schema.Literal(1), profileId: ProfileId });
+const decodeProfileSelection = Schema.decodeUnknownSync(ProfileSelection, {
+  onExcessProperty: "error",
+});
+
 export const readProfileSelection = (
   storage: ReadableStorage = localStorage,
 ): ProfileId | undefined => {
   try {
-    const parsed = JSON.parse(storage.getItem(profileSelectionStorageKey) ?? "null") as unknown;
-    return typeof parsed === "object" &&
-      parsed !== null &&
-      "profileId" in parsed &&
-      Schema.is(ProfileId)(parsed.profileId)
-      ? parsed.profileId
-      : undefined;
+    return decodeProfileSelection(
+      JSON.parse(storage.getItem(profileSelectionStorageKey) ?? "null") as unknown,
+    ).profileId;
   } catch {
     return undefined;
   }

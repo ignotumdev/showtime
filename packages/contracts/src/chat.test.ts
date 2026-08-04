@@ -5,11 +5,7 @@ import {
   chatPresetPlaceholderNames,
   chatPresetTemplateIsSinglePlaceholder,
   ChatChannel,
-  ChatMessageBody,
-  ChatMessageId,
   ChatPresetTemplate,
-  decodeStoredChatMessage,
-  encodeStoredChatMessage,
   resolveChatPresetTemplate,
   validateChatPresetAnswerDefinition,
   validateChatPresetDefinition,
@@ -98,7 +94,7 @@ describe("chat presets", () => {
     });
   });
 
-  it("resolves repeated placeholders and round-trips rich stored messages", () => {
+  it("resolves repeated placeholders into rich message parts", () => {
     const microphone = {
       type: "microphone",
       id: MicrophoneId.make("mic_1234567890abcdef"),
@@ -112,11 +108,8 @@ describe("chat presets", () => {
       new Map([["mic", microphone]]),
     )!;
     expect(resolved.body).toBe("Check Mic 7 (Lead), then mute Mic 7 (Lead).");
-    const body = ChatMessageBody.make(resolved.body);
-    expect(
-      decodeStoredChatMessage(encodeStoredChatMessage(body, { parts: resolved.parts })),
-    ).toEqual({
-      body,
+    expect(resolved).toEqual({
+      body: resolved.body,
       parts: resolved.parts,
     });
   });
@@ -147,64 +140,5 @@ describe("chat presets", () => {
     )!;
     expect(resolved.body).toBe("Mic 7 (Lead) is Ready");
     expect(resolved.parts[0]).toBe(microphone);
-  });
-
-  it("round-trips answer definitions and linked responses", () => {
-    const answer = {
-      template: ChatPresetTemplate.make("{{status}} at {{level}}"),
-      fields: [
-        { name: "status", type: "select", options: ["Done", "Working"] },
-        { name: "level", type: "number" },
-      ],
-    } as const;
-    const requestBody = ChatMessageBody.make("Set the monitor level");
-    const request = decodeStoredChatMessage(encodeStoredChatMessage(requestBody, { answer }));
-    expect(request).toEqual({ body: requestBody, answer });
-
-    const replyToMessageId = ChatMessageId.make("message_1234567890abcdef");
-    const replyBody = ChatMessageBody.make("Done at 5");
-    expect(
-      decodeStoredChatMessage(encodeStoredChatMessage(replyBody, { replyToMessageId })),
-    ).toEqual({ body: replyBody, replyToMessageId });
-  });
-
-  it("treats malformed rich envelopes as ordinary text", () => {
-    const malformed = '__showtime_chat_v1__:{"body":"Visible","parts":[]}';
-    expect(decodeStoredChatMessage(malformed)).toEqual({ body: malformed });
-  });
-
-  it("decodes legacy rich envelopes already stored in history", () => {
-    const legacy =
-      '__showtime_chat_v1__:{"body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
-
-    expect(decodeStoredChatMessage(legacy)).toEqual({
-      body: "Visible",
-      parts: [{ type: "text", text: "Visible" }],
-    });
-  });
-
-  it("decodes version 2 envelopes already stored in history", () => {
-    const previous =
-      '__showtime_chat_v2__:{"kind":"rich","body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
-
-    expect(decodeStoredChatMessage(previous)).toEqual({
-      body: "Visible",
-      parts: [{ type: "text", text: "Visible" }],
-    });
-  });
-
-  it("round-trips plain messages that look like legacy rich envelopes", () => {
-    const body = ChatMessageBody.make(
-      '__showtime_chat_v1__:{"body":"Rewritten","parts":[{"type":"text","text":"Rewritten"}]}',
-    );
-
-    expect(decodeStoredChatMessage(encodeStoredChatMessage(body))).toEqual({ body });
-  });
-
-  it("rejects version 2 envelopes without an explicit encoding kind", () => {
-    const ambiguous =
-      '__showtime_chat_v2__:{"body":"Visible","parts":[{"type":"text","text":"Visible"}]}';
-
-    expect(decodeStoredChatMessage(ambiguous)).toEqual({ body: ambiguous });
   });
 });

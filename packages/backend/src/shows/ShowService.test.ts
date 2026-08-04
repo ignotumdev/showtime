@@ -1,16 +1,13 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import * as Ids from "../ids/Ids.js";
 import { ShowService } from "./ShowService.js";
 import * as ShowServiceLayer from "./ShowService.js";
-import * as ShowDiscovery from "./ShowDiscovery.js";
-import * as ShowFile from "./ShowFile.js";
-import * as ShowPaths from "./ShowPaths.js";
 import * as ShowRepository from "./ShowRepository.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 
 const tempHomes = new Set<string>();
 
@@ -23,16 +20,8 @@ const makeTempHome = async () => {
 const makeLayer = (home: string) =>
   ShowServiceLayer.layer.pipe(
     Layer.provideMerge(Ids.layer),
-    Layer.provideMerge(
-      ShowRepository.layer.pipe(
-        Layer.provideMerge(
-          ShowDiscovery.layer.pipe(
-            Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
-          ),
-        ),
-      ),
-    ),
-    Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(ShowRepository.layer),
+    Layer.provide(makeDatabaseTestLayer(home)),
   );
 
 afterEach(async () => {
@@ -68,23 +57,18 @@ describe("ShowService", () => {
     expect(result.afterDelete).toEqual([]);
   });
 
-  it("serves and updates the in-memory document without rereading a damaged file", async () => {
+  it("persists shows across database restarts", async () => {
     const home = await makeTempHome();
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const shows = yield* ShowService;
-        const repository = yield* ShowRepository.ShowRepository;
         const created = yield* shows.create({ name: "Cached", color: "sky" });
-        const entry = yield* repository.findById(created.id);
-
-        yield* Effect.promise(() => writeFile(entry.path, "not valid json", "utf8"));
-        const fromMemory = yield* shows.list;
-        const edited = yield* shows.edit({ id: created.id, name: "Still Cached", color: "rose" });
-        return { fromMemory, edited };
+        return created.id;
       }).pipe(Effect.provide(makeLayer(home))),
     );
-
-    expect(result.fromMemory.map((show) => show.name)).toEqual(["Cached"]);
-    expect(result.edited).toMatchObject({ name: "Still Cached", color: "rose" });
+    const reloaded = await Effect.runPromise(
+      Effect.flatMap(ShowService, (_) => _.list).pipe(Effect.provide(makeLayer(home))),
+    );
+    expect(reloaded).toMatchObject([{ id: result, name: "Cached", color: "sky" }]);
   });
 });

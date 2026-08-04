@@ -41,7 +41,7 @@ const make = Effect.fnUntraced(function* () {
   const repository = yield* ShowRepository;
 
   const list: MicrophoneServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).document.microphones.filter(
+    return (yield* repository.findById(showId)).microphones.filter(
       (microphone) => microphone.deletedAt === undefined,
     );
   });
@@ -49,7 +49,7 @@ const make = Effect.fnUntraced(function* () {
   const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
     const id = yield* ids.makeMicrophoneId;
     const now = yield* DateTime.now;
-    const { document: updated } = yield* repository
+    const updated = yield* repository
       .update(showId, (document) => {
         const number = nextMicrophoneNumber(
           document.microphones
@@ -65,7 +65,7 @@ const make = Effect.fnUntraced(function* () {
 
   const edit: MicrophoneServiceShape["edit"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
-    const existing = found.document.microphones.find(
+    const existing = found.microphones.find(
       (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
     );
     if (existing === undefined) {
@@ -97,7 +97,7 @@ const make = Effect.fnUntraced(function* () {
   const deleteMicrophone: MicrophoneServiceShape["delete"] = Effect.fnUntraced(function* (params) {
     const found = yield* repository.findById(params.showId);
     if (
-      !found.document.microphones.some(
+      !found.microphones.some(
         (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
       )
     ) {

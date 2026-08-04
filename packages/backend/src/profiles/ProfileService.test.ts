@@ -1,12 +1,11 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { ProfileName, profileIdPrefix } from "@showtime/contracts";
 import { DateTime, Effect, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
 import * as Ids from "../ids/Ids.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import { ProfileService, layer } from "./ProfileService.js";
 
 const homes: Array<string> = [];
@@ -15,12 +14,7 @@ const withService = async <A>(home: string, effect: Effect.Effect<A, unknown, Pr
   Effect.runPromise(
     effect.pipe(
       Effect.provide(
-        layer.pipe(
-          Layer.provide(Ids.layer),
-          Layer.provide(
-            Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, HomeDirectory.makeLayer(home)),
-          ),
-        ),
+        layer.pipe(Layer.provide(Ids.layer), Layer.provide(makeDatabaseTestLayer(home))),
       ),
     ),
   );
@@ -58,9 +52,9 @@ describe("ProfileService", () => {
       message: "Choose another default profile before deleting this one.",
     });
 
-    const file = JSON.parse(await readFile(join(home, ".showtime", "profiles.json"), "utf8"));
-    expect(file.profiles[0].id).toBe(state.defaultProfileId);
-    expect(file.profiles[0].createdAt).toBe(DateTime.formatIso(state.profiles[0]!.createdAt));
+    await expect(stat(join(home, ".showtime", "showtime.db"))).resolves.toMatchObject({
+      isFile: expect.any(Function),
+    });
   });
 
   it("creates, edits, changes default, deletes, and reloads profiles", async () => {

@@ -1,14 +1,11 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { DateTime, Effect, Layer } from "effect";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import * as Ids from "../ids/Ids.js";
-import * as ShowDiscovery from "../shows/ShowDiscovery.js";
-import * as ShowFile from "../shows/ShowFile.js";
-import * as ShowPaths from "../shows/ShowPaths.js";
 import * as ShowRepository from "../shows/ShowRepository.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import { ShowService } from "../shows/ShowService.js";
 import * as ShowServiceLayer from "../shows/ShowService.js";
 import { MicrophoneService } from "./MicrophoneService.js";
@@ -21,13 +18,9 @@ afterEach(async () => {
 });
 
 const makeLayer = (home: string) => {
-  const files = ShowDiscovery.layer.pipe(
-    Layer.provideMerge(ShowFile.layer.pipe(Layer.provideMerge(ShowPaths.makeLayer(home)))),
-  );
-  const repository = ShowRepository.layer.pipe(Layer.provideMerge(files));
   return Layer.mergeAll(ShowServiceLayer.layer, MicrophoneServiceLayer.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Ids.layer, repository)),
-    Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(Layer.mergeAll(Ids.layer, ShowRepository.layer)),
+    Layer.provide(makeDatabaseTestLayer(home)),
   );
 };
 
@@ -64,7 +57,7 @@ describe("MicrophoneService", () => {
           afterDelete,
           afterEditWithoutName,
           first,
-          persisted: persisted.document.microphones,
+          persisted: persisted.microphones,
         };
       }).pipe(Effect.provide(makeLayer(home))),
     );

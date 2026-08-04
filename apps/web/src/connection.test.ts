@@ -169,6 +169,15 @@ describe("browser connection persistence", () => {
     ).toBe(`ws://showtime-foh.local:8585/rpc/${clientId}/${capability}`);
   });
 
+  it.each([
+    { clientId, capability, clientProfile, scopes },
+    { version: 0, clientId, capability, clientProfile, scopes },
+    { version: 2, clientId, capability, clientProfile, scopes },
+    { version: 1, clientId, capability, clientProfile, scopes, legacy: true },
+  ])("rejects non-version-1 or non-exact connection records", (record) => {
+    expect(readStoredConnection({ getItem: () => JSON.stringify(record) })).toBeUndefined();
+  });
+
   it("updates the authenticated client profile and then persists it locally", async () => {
     let stored = JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes });
     const storage = {

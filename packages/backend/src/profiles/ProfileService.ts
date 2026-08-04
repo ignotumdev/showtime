@@ -1,26 +1,16 @@
-import { Context, DateTime, Effect, Layer, Path, Ref, Schema, Semaphore } from "effect";
-import { FileSystem } from "effect/FileSystem";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import {
+  Color,
   decodeProfileName,
-  Profile as ProfileSchema,
   ProfileId,
   ProfileName,
   RpcError,
-  type Color,
   type Profile,
   type ProfilesState,
 } from "@showtime/contracts";
+import { DatabaseReady } from "../database/Database.js";
 import { Ids } from "../ids/Ids.js";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
-import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
-
-const ProfilesFile = Schema.Struct({
-  version: Schema.Literal(1),
-  profiles: Schema.Array(ProfileSchema),
-  defaultProfileId: ProfileId,
-});
-
-type ProfilesFile = typeof ProfilesFile.Type;
 
 export class ProfileService extends Context.Service<
   ProfileService,
@@ -40,143 +30,135 @@ export class ProfileService extends Context.Service<
   }
 >()("@showtime/backend/profiles/ProfileService") {}
 
+const ProfileRow = Schema.Struct({
+  id: ProfileId,
+  name: ProfileName,
+  color: Color,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+});
+
 const rpcError = (message: string, cause?: unknown) =>
   new RpcError({ message, ...(cause === undefined ? {} : { cause }) });
+const normalizeName = (name: string) => name.normalize("NFKC").toLowerCase();
 
-const make = Effect.gen(function* () {
-  const fs = yield* FileSystem;
-  const path = yield* Path.Path;
-  const home = yield* HomeDirectory.HomeDirectory;
+const make = Effect.fn("ProfileService.make")(function* () {
+  yield* DatabaseReady;
+  const sql = yield* SqlClient.SqlClient;
   const ids = yield* Ids;
-  const directory = path.join(yield* home.homeDirectory, ".showtime");
-  const filePath = path.join(directory, "profiles.json");
-  const loaded = yield* readJson(fs, filePath, ProfilesFile).pipe(
-    Effect.map((value) => ({ value, isNew: false as const })),
-    Effect.catchIf(isNotFound, () =>
-      Effect.gen(function* () {
-        const now = yield* DateTime.now;
-        const defaultProfile = {
-          id: yield* ids.makeProfileId,
-          name: ProfileName.make("Default"),
-          color: "sky" as const,
-          createdAt: now,
-          updatedAt: now,
-        };
-        return {
-          value: {
-            version: 1 as const,
-            profiles: [defaultProfile],
-            defaultProfileId: defaultProfile.id,
-          },
-          isNew: true as const,
-        };
-      }),
-    ),
+  const findProfiles = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProfileRow,
+    execute: () => sql`SELECT id, name, color, created_at AS createdAt, updated_at AS updatedAt
+      FROM profiles ORDER BY created_at, id`,
+  });
+  const findDefault = SqlSchema.findOne({
+    Request: Schema.Void,
+    Result: Schema.Struct({ defaultProfileId: ProfileId }),
+    execute: () => sql`SELECT default_profile_id AS defaultProfileId
+      FROM app_settings WHERE singleton_id = 1`,
+  });
+
+  const list = Effect.all([findProfiles(undefined), findDefault(undefined)]).pipe(
+    Effect.map(([profiles, settings]) => ({
+      profiles,
+      defaultProfileId: settings.defaultProfileId,
+    })),
     Effect.mapError((cause) => rpcError("Could not load profiles.", cause)),
   );
-  const initial = loaded.value;
-  const idsInFile = new Set(initial.profiles.map((profile) => profile.id));
-  if (
-    initial.profiles.length === 0 ||
-    idsInFile.size !== initial.profiles.length ||
-    !idsInFile.has(initial.defaultProfileId)
-  ) {
-    return yield* Effect.fail(rpcError("The profiles file is inconsistent."));
-  }
-  if (loaded.isNew) {
-    yield* writeJsonAtomic(fs, directory, filePath, initial).pipe(
-      Effect.mapError((cause) => rpcError("Could not create the default profile.", cause)),
-    );
-  }
-  const state = yield* Ref.make<ProfilesFile>(initial);
-  const lock = yield* Semaphore.make(1);
-  const persist = (next: ProfilesFile) =>
-    writeJsonAtomic(fs, directory, filePath, next).pipe(
-      Effect.mapError((cause) => rpcError("Could not save profiles.", cause)),
-      Effect.andThen(Ref.set(state, next)),
-    );
 
-  const list = Ref.get(state).pipe(
-    Effect.map(({ profiles, defaultProfileId }) => ({ profiles, defaultProfileId })),
-  );
-
-  const create = (params: { readonly name: string; readonly color: Color }) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const name = yield* decodeProfileName(params.name.trim()).pipe(
-          Effect.mapError((cause) =>
-            rpcError("Profile name cannot be empty or longer than 80 characters.", cause),
-          ),
-        );
-        const timestamp = yield* DateTime.now;
-        const profile: Profile = {
-          id: yield* ids.makeProfileId,
-          name,
-          color: params.color,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        const current = yield* Ref.get(state);
-        yield* persist({ ...current, profiles: [...current.profiles, profile] });
-        return profile;
-      }),
+  const create = Effect.fn("ProfileService.create")(function* (params: {
+    readonly name: string;
+    readonly color: Color;
+  }) {
+    const name = yield* decodeProfileName(params.name.trim()).pipe(
+      Effect.mapError((cause) =>
+        rpcError("Profile name cannot be empty or longer than 80 characters.", cause),
+      ),
     );
+    const now = yield* DateTime.now;
+    const profile: Profile = {
+      id: yield* ids.makeProfileId,
+      name,
+      color: params.color,
+      createdAt: now,
+      updatedAt: now,
+    };
+    yield* sql`INSERT INTO profiles
+      (id, name, normalized_name, color, created_at, updated_at)
+      VALUES (${profile.id}, ${profile.name}, ${normalizeName(profile.name)}, ${profile.color},
+        ${DateTime.formatIso(now)}, ${DateTime.formatIso(now)})`;
+    return profile;
+  });
 
-  const edit = (params: { readonly id: ProfileId; readonly name: string; readonly color: Color }) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const name = yield* decodeProfileName(params.name.trim()).pipe(
-          Effect.mapError((cause) =>
-            rpcError("Profile name cannot be empty or longer than 80 characters.", cause),
-          ),
-        );
-        const current = yield* Ref.get(state);
-        const existing = current.profiles.find((profile) => profile.id === params.id);
-        if (!existing) return yield* Effect.fail(rpcError("Profile not found."));
-        const updated: Profile = {
-          ...existing,
-          name,
-          color: params.color,
-          updatedAt: yield* DateTime.now,
-        };
-        yield* persist({
-          ...current,
-          profiles: current.profiles.map((profile) =>
-            profile.id === params.id ? updated : profile,
-          ),
-        });
-        return updated;
-      }),
+  const edit = Effect.fn("ProfileService.edit")(function* (params: {
+    readonly id: ProfileId;
+    readonly name: string;
+    readonly color: Color;
+  }) {
+    const name = yield* decodeProfileName(params.name.trim()).pipe(
+      Effect.mapError((cause) =>
+        rpcError("Profile name cannot be empty or longer than 80 characters.", cause),
+      ),
     );
+    const updatedAt = yield* DateTime.now;
+    const rows = yield* sql`UPDATE profiles SET name = ${name},
+      normalized_name = ${normalizeName(name)}, color = ${params.color},
+      updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${params.id}
+      RETURNING id, name, color, created_at AS createdAt, updated_at AS updatedAt`;
+    const decoded = yield* Schema.decodeUnknownEffect(Schema.Array(ProfileRow))(rows);
+    if (!decoded[0]) return yield* Effect.fail(rpcError("Profile not found."));
+    return decoded[0];
+  });
 
   const deleteProfile = (id: ProfileId) =>
-    lock.withPermits(1)(
+    sql.withTransaction(
       Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        if (!current.profiles.some((profile) => profile.id === id))
-          return yield* Effect.fail(rpcError("Profile not found."));
-        if (current.defaultProfileId === id)
+        const settings = yield* findDefault(undefined);
+        if (settings.defaultProfileId === id)
           return yield* Effect.fail(
             rpcError("Choose another default profile before deleting this one."),
           );
-        yield* persist({
-          ...current,
-          profiles: current.profiles.filter((profile) => profile.id !== id),
-        });
+        const references = yield* sql<{ count: number }>`SELECT
+          (SELECT COUNT(*) FROM connection_clients WHERE profile_id = ${id}) +
+          (SELECT COUNT(*) FROM connection_invitations WHERE profile_id = ${id}) AS count`;
+        if (Number(references[0]?.count) > 0)
+          return yield* Effect.fail(
+            rpcError("Remove connections using this profile before deleting it."),
+          );
+        const rows = yield* sql`DELETE FROM profiles WHERE id = ${id} RETURNING id`;
+        if (rows.length === 0) return yield* Effect.fail(rpcError("Profile not found."));
       }),
     );
 
   const setDefault = (id: ProfileId) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        if (!current.profiles.some((profile) => profile.id === id))
-          return yield* Effect.fail(rpcError("Profile not found."));
-        yield* persist({ ...current, defaultProfileId: id });
-      }),
+    sql`UPDATE app_settings SET default_profile_id = ${id} WHERE singleton_id = 1
+      AND EXISTS (SELECT 1 FROM profiles WHERE id = ${id}) RETURNING singleton_id`.pipe(
+      Effect.flatMap((rows) =>
+        rows.length === 0 ? Effect.fail(rpcError("Profile not found.")) : Effect.void,
+      ),
+      sql.withTransaction,
     );
 
-  return ProfileService.of({ list, create, edit, delete: deleteProfile, setDefault });
+  const mapPersistenceError = <A>(effect: Effect.Effect<A, unknown>, message: string) =>
+    effect.pipe(
+      Effect.mapError((cause) => (cause instanceof RpcError ? cause : rpcError(message, cause))),
+    );
+
+  return ProfileService.of({
+    list,
+    create: (params) =>
+      mapPersistenceError(
+        create(params),
+        "Could not create profile. Profile names must be unique.",
+      ),
+    edit: (params) =>
+      mapPersistenceError(edit(params), "Could not update profile. Profile names must be unique."),
+    delete: (id) => mapPersistenceError(deleteProfile(id), "Could not delete profile."),
+    setDefault: (id) =>
+      mapPersistenceError(setDefault(id), "Could not change the default profile."),
+  });
 });
 
-export const layer = Layer.effect(ProfileService, make);
+export const layerNoDeps = Layer.effect(ProfileService, make());
+export const layer = layerNoDeps;

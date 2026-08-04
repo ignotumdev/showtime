@@ -1,44 +1,39 @@
-import { Clock, Context, Deferred, Effect, Layer, Path, Ref, Schema, Semaphore } from "effect";
-import { FileSystem } from "effect/FileSystem";
+import { Clock, Context, Deferred, Effect, Layer, Ref, Schema, Semaphore } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { nanoid } from "nanoid";
 import { randomBytes } from "node:crypto";
 import { ShowtimeConnectionScopes, type ShowtimeConnectionScope } from "@showtime/shared";
 import { ProfileId, type ProfileId as ProfileIdType } from "@showtime/contracts";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
-import { isNotFound, readJson, writeJsonAtomic } from "../persistence/JsonFile.js";
+import { DatabaseReady } from "../database/Database.js";
 
 const NanoId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{21}$/));
 const Capability = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
 const ClientName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80));
-const StoredConnectionScopes = ShowtimeConnectionScopes.pipe(
-  Schema.withDecodingDefaultKey(Effect.succeed([])),
-);
-const Client = Schema.Struct({
+const ClientRow = Schema.Struct({
   clientId: NanoId,
   name: ClientName,
   capability: Capability,
   createdAt: Schema.String,
   updatedAt: Schema.String,
   clientProfile: ProfileId,
-  scopes: StoredConnectionScopes,
 });
-const Invitation = Schema.Struct({
+const InvitationRow = Schema.Struct({
   invitationId: NanoId,
   name: ClientName,
   token: Capability,
   expiresAt: Schema.String,
   updatedAt: Schema.String,
   clientProfile: ProfileId,
-  scopes: StoredConnectionScopes,
 });
-const ConnectionsFile = Schema.Struct({
-  version: Schema.Literal(1),
-  clients: Schema.Array(Client),
-  invitations: Schema.Array(Invitation),
-});
+const ClientScopeRow = Schema.Struct({ clientId: NanoId, scope: Schema.String });
+const InvitationScopeRow = Schema.Struct({ invitationId: NanoId, scope: Schema.String });
 
-export type StoredClient = typeof Client.Type;
-export type StoredInvitation = typeof Invitation.Type;
+export type StoredClient = typeof ClientRow.Type & {
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
+};
+export type StoredInvitation = typeof InvitationRow.Type & {
+  readonly scopes: ReadonlyArray<ShowtimeConnectionScope>;
+};
 export interface PairingCredentials {
   readonly clientId: string;
   readonly capability: string;
@@ -53,29 +48,13 @@ const nextDefaultClientName = (names: Iterable<string>) => {
   let highest = 0;
   for (const name of names) {
     const match = defaultClientNamePattern.exec(name);
-    if (match) {
-      const suffix = Number(match[1]);
-      if (Number.isSafeInteger(suffix) && suffix < Number.MAX_SAFE_INTEGER) {
-        highest = Math.max(highest, suffix);
-      }
-    }
+    if (!match) continue;
+    const suffix = Number(match[1]);
+    if (Number.isSafeInteger(suffix) && suffix < Number.MAX_SAFE_INTEGER)
+      highest = Math.max(highest, suffix);
   }
   return `Client ${highest + 1}`;
 };
-const makeInvitation = (
-  name: string,
-  clientProfile: ProfileIdType,
-  scopes: ReadonlyArray<ShowtimeConnectionScope>,
-  now: number,
-): StoredInvitation => ({
-  invitationId: nanoid(),
-  name,
-  token: makeToken(),
-  expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
-  updatedAt: new Date(now).toISOString(),
-  clientProfile,
-  scopes: [...scopes],
-});
 
 export class ConnectionStore extends Context.Service<
   ConnectionStore,
@@ -93,6 +72,7 @@ export class ConnectionStore extends Context.Service<
     ) => Effect.Effect<StoredInvitation | undefined>;
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
+    readonly removeAllPersisted: Effect.Effect<void>;
     readonly removeAll: Effect.Effect<void>;
     readonly updateClientProfile: (
       clientId: string,
@@ -118,200 +98,293 @@ export class ConnectionStore extends Context.Service<
   }
 >()("@showtime/backend/connections/ConnectionStore") {}
 
-const make = Effect.gen(function* () {
-  const fs = yield* FileSystem;
-  const path = yield* Path.Path;
-  const home = yield* HomeDirectory.HomeDirectory;
-  const directory = path.join(yield* home.homeDirectory, ".showtime");
-  const filePath = path.join(directory, "connections.json");
-  const initial = yield* readJson(fs, filePath, ConnectionsFile).pipe(
-    Effect.catchIf(isNotFound, () =>
-      Effect.succeed({ version: 1 as const, clients: [], invitations: [] }),
-    ),
-    Effect.orDie,
-  );
-  const state = yield* Ref.make(initial);
+const make = Effect.fn("ConnectionStore.make")(function* () {
+  yield* DatabaseReady;
+  const sql = yield* SqlClient.SqlClient;
   const sessions = yield* Ref.make(new Map<string, ReadonlySet<Deferred.Deferred<void>>>());
-  const lock = yield* Semaphore.make(1);
-  const persist = (next: typeof ConnectionsFile.Type) =>
-    writeJsonAtomic(fs, directory, filePath, next).pipe(
-      Effect.orDie,
-      Effect.andThen(Ref.set(state, next)),
+  // This gate protects only ephemeral admission and disconnect signals. SQLite owns persistence
+  // serialization and transactions.
+  const sessionGate = yield* Semaphore.make(1);
+
+  const clientRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ClientRow,
+    execute: () => sql`SELECT client_id AS clientId, name, capability,
+      created_at AS createdAt, updated_at AS updatedAt, profile_id AS clientProfile
+      FROM connection_clients ORDER BY created_at, client_id`,
+  });
+  const invitationRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: InvitationRow,
+    execute: () => sql`SELECT invitation_id AS invitationId, name, token,
+      expires_at AS expiresAt, updated_at AS updatedAt, profile_id AS clientProfile
+      FROM connection_invitations ORDER BY updated_at, invitation_id`,
+  });
+  const clientScopeRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ClientScopeRow,
+    execute: () => sql`SELECT client_id AS clientId, scope
+      FROM connection_client_scopes ORDER BY client_id, position`,
+  });
+  const invitationScopeRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: InvitationScopeRow,
+    execute: () => sql`SELECT invitation_id AS invitationId, scope
+      FROM connection_invitation_scopes ORDER BY invitation_id, position`,
+  });
+
+  const loadClients = Effect.gen(function* () {
+    const [rows, scopes] = yield* Effect.all([clientRows(undefined), clientScopeRows(undefined)]);
+    return rows.map(
+      (row): StoredClient => ({
+        ...row,
+        scopes: scopes
+          .filter((item) => item.clientId === row.clientId)
+          .map((item) => item.scope as ShowtimeConnectionScope),
+      }),
     );
+  });
+  const loadInvitations = Effect.gen(function* () {
+    const [rows, scopes] = yield* Effect.all([
+      invitationRows(undefined),
+      invitationScopeRows(undefined),
+    ]);
+    return rows.map(
+      (row): StoredInvitation => ({
+        ...row,
+        scopes: scopes
+          .filter((item) => item.invitationId === row.invitationId)
+          .map((item) => item.scope as ShowtimeConnectionScope),
+      }),
+    );
+  });
+  const loadInvitationById = Effect.fn("ConnectionStore.loadInvitationById")(function* (
+    invitationId: string,
+  ) {
+    const invitations = yield* loadInvitations;
+    return invitations.find((item) => item.invitationId === invitationId);
+  });
+  const insertScopes = Effect.fn("ConnectionStore.insertScopes")(function* (
+    kind: "client" | "invitation",
+    id: string,
+    scopes: ReadonlyArray<ShowtimeConnectionScope>,
+  ) {
+    for (const [position, scope] of scopes.entries()) {
+      if (kind === "client")
+        yield* sql`INSERT INTO connection_client_scopes (client_id, scope, position)
+          VALUES (${id}, ${scope}, ${position})`;
+      else
+        yield* sql`INSERT INTO connection_invitation_scopes (invitation_id, scope, position)
+          VALUES (${id}, ${scope}, ${position})`;
+    }
+  });
 
   const createInvitation = (
     name: string | undefined,
     clientProfile: string,
     requestedScopes: ReadonlyArray<ShowtimeConnectionScope> = [],
   ) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        const trimmedName = name?.trim();
-        const resolvedName =
-          trimmedName ||
-          nextDefaultClientName([
-            ...current.clients.map((client) => client.name),
-            ...current.invitations.map((invitation) => invitation.name),
-          ]);
-        const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName).pipe(
-          Effect.orDie,
-        );
-        const scopes = yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(
-          requestedScopes,
-        ).pipe(Effect.orDie);
-        const now = yield* Clock.currentTimeMillis;
-        const validatedProfile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
-          Effect.orDie,
-        );
-        const invitation = makeInvitation(validatedName, validatedProfile, scopes, now);
-        yield* persist({
-          ...current,
-          invitations: [...current.invitations, invitation],
-        });
-        yield* Effect.logInfo("Created client pairing invitation").pipe(
-          Effect.annotateLogs({
-            invitationId: invitation.invitationId,
-            clientName: invitation.name,
-          }),
-        );
-        return invitation;
-      }),
-    );
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const [clients, invitations] = yield* Effect.all([loadClients, loadInvitations]);
+          const trimmedName = name?.trim();
+          const resolvedName =
+            trimmedName ||
+            nextDefaultClientName([
+              ...clients.map((client) => client.name),
+              ...invitations.map((invitation) => invitation.name),
+            ]);
+          const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName);
+          const scopes =
+            yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(requestedScopes);
+          const profile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile);
+          const now = yield* Clock.currentTimeMillis;
+          const invitation: StoredInvitation = {
+            invitationId: nanoid(),
+            name: validatedName,
+            token: makeToken(),
+            expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
+            updatedAt: new Date(now).toISOString(),
+            clientProfile: profile,
+            scopes,
+          };
+          yield* sql`INSERT INTO connection_invitations
+          (invitation_id, name, token, profile_id, expires_at, updated_at)
+          VALUES (${invitation.invitationId}, ${invitation.name}, ${invitation.token},
+            ${invitation.clientProfile}, ${invitation.expiresAt}, ${invitation.updatedAt})`;
+          yield* insertScopes("invitation", invitation.invitationId, invitation.scopes);
+          yield* Effect.logInfo("Created client pairing invitation").pipe(
+            Effect.annotateLogs({ invitationId: invitation.invitationId }),
+          );
+          return invitation;
+        }),
+      )
+      .pipe(Effect.orDie);
 
   const pairingInvitation = (invitationId: string) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        const invitation = current.invitations.find((item) => item.invitationId === invitationId);
-        if (!invitation) return undefined;
-        const now = yield* Clock.currentTimeMillis;
-        if (Date.parse(invitation.expiresAt) > now) return invitation;
-        const renewed = {
-          ...invitation,
-          token: makeToken(),
-          expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
-          updatedAt: new Date(now).toISOString(),
-        };
-        yield* persist({
-          ...current,
-          invitations: current.invitations.map((item) =>
-            item.invitationId === invitationId ? renewed : item,
-          ),
-        });
-        yield* Effect.logInfo("Renewed expired client pairing invitation").pipe(
-          Effect.annotateLogs({ invitationId, clientName: renewed.name }),
-        );
-        return renewed;
-      }),
-    );
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const invitation = yield* loadInvitationById(invitationId);
+          if (!invitation) return undefined;
+          const now = yield* Clock.currentTimeMillis;
+          if (Date.parse(invitation.expiresAt) > now) return invitation;
+          const renewed: StoredInvitation = {
+            ...invitation,
+            token: makeToken(),
+            expiresAt: new Date(now + pairingLifetimeMs).toISOString(),
+            updatedAt: new Date(now).toISOString(),
+          };
+          yield* sql`UPDATE connection_invitations SET token = ${renewed.token},
+          expires_at = ${renewed.expiresAt}, updated_at = ${renewed.updatedAt}
+          WHERE invitation_id = ${invitationId}`;
+          yield* Effect.logInfo("Renewed expired client pairing invitation").pipe(
+            Effect.annotateLogs({ invitationId }),
+          );
+          return renewed;
+        }),
+      )
+      .pipe(Effect.orDie);
 
   const consumeInvitation = (token: string) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        const invitation = current.invitations.find((item) => item.token === token);
-        const now = yield* Clock.currentTimeMillis;
-        if (!invitation || Date.parse(invitation.expiresAt) <= now) {
-          yield* Effect.logWarning("Rejected invalid or expired pairing token");
-          return undefined;
-        }
-        const client: StoredClient = {
-          clientId: nanoid(),
-          name: invitation.name,
-          capability: makeToken(),
-          createdAt: new Date(now).toISOString(),
-          updatedAt: new Date(now).toISOString(),
-          clientProfile: invitation.clientProfile,
-          scopes: invitation.scopes,
-        };
-        yield* persist({
-          version: 1,
-          clients: [...current.clients, client],
-          invitations: current.invitations.filter(
-            (item) => item.invitationId !== invitation.invitationId,
-          ),
-        });
-        yield* Effect.logInfo("Paired client").pipe(
-          Effect.annotateLogs({ clientId: client.clientId, clientName: client.name }),
-        );
-        return {
-          clientId: client.clientId,
-          capability: client.capability,
-          scopes: client.scopes,
-          clientProfile: client.clientProfile,
-        };
-      }),
-    );
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const invitations = yield* loadInvitations;
+          const invitation = invitations.find((item) => item.token === token);
+          const now = yield* Clock.currentTimeMillis;
+          if (!invitation || Date.parse(invitation.expiresAt) <= now) {
+            yield* Effect.logWarning("Rejected invalid or expired pairing token");
+            return undefined;
+          }
+          const client: StoredClient = {
+            clientId: nanoid(),
+            name: invitation.name,
+            capability: makeToken(),
+            createdAt: new Date(now).toISOString(),
+            updatedAt: new Date(now).toISOString(),
+            clientProfile: invitation.clientProfile,
+            scopes: invitation.scopes,
+          };
+          yield* sql`INSERT INTO connection_clients
+          (client_id, name, capability, profile_id, created_at, updated_at)
+          VALUES (${client.clientId}, ${client.name}, ${client.capability}, ${client.clientProfile},
+            ${client.createdAt}, ${client.updatedAt})`;
+          yield* insertScopes("client", client.clientId, client.scopes);
+          yield* sql`DELETE FROM connection_invitations
+          WHERE invitation_id = ${invitation.invitationId}`;
+          yield* Effect.logInfo("Paired client").pipe(
+            Effect.annotateLogs({ clientId: client.clientId }),
+          );
+          return {
+            clientId: client.clientId,
+            capability: client.capability,
+            scopes: client.scopes,
+            clientProfile: client.clientProfile,
+          };
+        }),
+      )
+      .pipe(Effect.orDie);
 
   const disconnect = (signals: Iterable<Deferred.Deferred<void>>) =>
-    Effect.forEach(signals, (signal) => Deferred.succeed(signal, undefined), {
-      discard: true,
-    });
+    Effect.forEach(signals, (signal) => Deferred.succeed(signal, undefined), { discard: true });
 
   const remove = (id: string) =>
-    lock.withPermits(1)(
+    sessionGate.withPermits(1)(
       Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        const client = current.clients.find((item) => item.clientId === id);
-        const invitation = current.invitations.find((item) => item.invitationId === id);
-        yield* persist({
-          version: 1,
-          clients: current.clients.filter((item) => item.clientId !== id),
-          invitations: current.invitations.filter((item) => item.invitationId !== id),
-        });
+        const client = yield* sql<{ client_id: string }>`SELECT client_id FROM connection_clients
+          WHERE client_id = ${id}`;
+        yield* sql.withTransaction(
+          Effect.all(
+            [
+              sql`DELETE FROM connection_clients WHERE client_id = ${id}`,
+              sql`DELETE FROM connection_invitations WHERE invitation_id = ${id}`,
+            ],
+            { discard: true },
+          ),
+        );
         const active = (yield* Ref.get(sessions)).get(id) ?? [];
         yield* disconnect(active);
-        yield* Effect.logInfo(client ? "Revoked client" : "Removed client invitation").pipe(
+        yield* Effect.logInfo(
+          client.length > 0 ? "Revoked client" : "Removed client invitation",
+        ).pipe(Effect.annotateLogs({ connectionId: id }));
+      }).pipe(Effect.orDie),
+    );
+
+  const removeAllPersisted = sql
+    .withTransaction(
+      Effect.gen(function* () {
+        const counts = yield* sql<{ clients: number; invitations: number }>`SELECT
+        (SELECT COUNT(*) FROM connection_clients) AS clients,
+        (SELECT COUNT(*) FROM connection_invitations) AS invitations`;
+        yield* sql.withTransaction(
+          Effect.all(
+            [sql`DELETE FROM connection_clients`, sql`DELETE FROM connection_invitations`],
+            { discard: true },
+          ),
+        );
+        yield* Effect.logInfo("Revoked all clients after the host name changed").pipe(
           Effect.annotateLogs({
-            connectionId: id,
-            clientName: client?.name ?? invitation?.name ?? "unknown",
+            pairedClients: Number(counts[0]?.clients ?? 0),
+            pendingInvitations: Number(counts[0]?.invitations ?? 0),
           }),
         );
       }),
-    );
+    )
+    .pipe(Effect.orDie);
 
-  const removeAll = lock.withPermits(1)(
-    Effect.gen(function* () {
-      const current = yield* Ref.get(state);
-      if (current.clients.length === 0 && current.invitations.length === 0) return;
-      yield* persist({ version: 1, clients: [], invitations: [] });
-      const active = Array.from((yield* Ref.get(sessions)).values()).flatMap((signals) =>
-        Array.from(signals),
-      );
-      yield* disconnect(active);
-      yield* Effect.logInfo("Revoked all clients after the host name changed").pipe(
-        Effect.annotateLogs({
-          pairedClients: current.clients.length,
-          pendingInvitations: current.invitations.length,
-        }),
-      );
-    }),
+  const removeAll = sessionGate.withPermits(1)(
+    removeAllPersisted.pipe(
+      Effect.andThen(
+        Ref.get(sessions).pipe(
+          Effect.flatMap((current) =>
+            disconnect(Array.from(current.values()).flatMap((signals) => Array.from(signals))),
+          ),
+        ),
+      ),
+    ),
   );
 
   const updateClientProfile = (clientId: string, capability: string, clientProfile: string) =>
-    lock.withPermits(1)(
-      Effect.gen(function* () {
-        const current = yield* Ref.get(state);
-        const client = current.clients.find(
-          (item) => item.clientId === clientId && item.capability === capability,
-        );
-        if (!client) return false;
-        const validatedProfile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
-          Effect.orDie,
-        );
-        if (client.clientProfile === validatedProfile) return true;
-        const now = yield* Clock.currentTimeMillis;
-        yield* persist({
-          ...current,
-          clients: current.clients.map((item) =>
-            item.clientId === clientId
-              ? { ...item, clientProfile: validatedProfile, updatedAt: new Date(now).toISOString() }
-              : item,
-          ),
-        });
-        return true;
+    Effect.gen(function* () {
+      const profile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile);
+      const updatedAt = new Date(yield* Clock.currentTimeMillis).toISOString();
+      const rows = yield* sql`UPDATE connection_clients SET profile_id = ${profile},
+        updated_at = ${updatedAt} WHERE client_id = ${clientId} AND capability = ${capability}
+        RETURNING client_id`;
+      return rows.length > 0;
+    }).pipe(Effect.orDie);
+
+  const disconnectAll = sessionGate.withPermits(1)(
+    Ref.get(sessions).pipe(
+      Effect.flatMap((current) =>
+        disconnect(Array.from(current.values()).flatMap((signals) => Array.from(signals))),
+      ),
+      Effect.andThen(Effect.logInfo("Disconnected all remote clients")),
+    ),
+  );
+
+  const credentialsStatus = (clientId: string, capability: string) =>
+    sql`SELECT 1 AS found FROM connection_clients
+      WHERE client_id = ${clientId} AND capability = ${capability} LIMIT 1`.pipe(
+      Effect.map((rows) => (rows.length > 0 ? ("authorized" as const) : ("revoked" as const))),
+      Effect.orDie,
+    );
+
+  const scopeAuthorization = (
+    clientId: string,
+    capability: string,
+    scope: ShowtimeConnectionScope,
+  ) =>
+    sql<{ scope: string | null }>`SELECT s.scope FROM connection_clients c
+      LEFT JOIN connection_client_scopes s ON s.client_id = c.client_id AND s.scope = ${scope}
+      WHERE c.client_id = ${clientId} AND c.capability = ${capability} LIMIT 1`.pipe(
+      Effect.map((rows) => {
+        if (rows.length === 0) return "revoked" as const;
+        return rows[0]?.scope === scope ? ("authorized" as const) : ("forbidden" as const);
       }),
+      Effect.orDie,
     );
 
   const withAuthorizedSession = <A, E, R, E2, R2>(
@@ -322,20 +395,13 @@ const make = Effect.gen(function* () {
   ) =>
     Effect.gen(function* () {
       const signal = yield* Deferred.make<void>();
-      const admitted = yield* lock.withPermits(1)(
+      const admitted = yield* sessionGate.withPermits(1)(
         Effect.gen(function* () {
           if (!(yield* isEnabled)) return false;
-          const current = yield* Ref.get(state);
-          if (
-            !current.clients.some(
-              (client) => client.clientId === clientId && client.capability === capability,
-            )
-          ) {
-            return false;
-          }
-          yield* Ref.update(sessions, (currentSessions) => {
-            const next = new Map(currentSessions);
-            next.set(clientId, new Set([...(currentSessions.get(clientId) ?? []), signal]));
+          if ((yield* credentialsStatus(clientId, capability)) !== "authorized") return false;
+          yield* Ref.update(sessions, (current) => {
+            const next = new Map(current);
+            next.set(clientId, new Set([...(current.get(clientId) ?? []), signal]));
             return next;
           });
           return true;
@@ -365,50 +431,22 @@ const make = Effect.gen(function* () {
     });
 
   return ConnectionStore.of({
-    clients: Ref.get(state).pipe(Effect.map((file) => file.clients)),
-    invitations: Ref.get(state).pipe(Effect.map((file) => file.invitations)),
+    clients: loadClients.pipe(Effect.orDie),
+    invitations: loadInvitations.pipe(Effect.orDie),
     connectedClientIds: Ref.get(sessions).pipe(Effect.map((current) => new Set(current.keys()))),
     createInvitation,
     pairingInvitation,
     consumeInvitation,
     remove,
+    removeAllPersisted,
     removeAll,
     updateClientProfile,
-    disconnectAll: lock
-      .withPermits(1)(
-        Ref.get(sessions).pipe(
-          Effect.flatMap((current) =>
-            disconnect(Array.from(current.values()).flatMap((signals) => Array.from(signals))),
-          ),
-        ),
-      )
-      .pipe(Effect.andThen(Effect.logInfo("Disconnected all remote clients"))),
-    credentialsStatus: (clientId, capability) =>
-      lock.withPermits(1)(
-        Ref.get(state).pipe(
-          Effect.map((current) =>
-            current.clients.some(
-              (client) => client.clientId === clientId && client.capability === capability,
-            )
-              ? "authorized"
-              : "revoked",
-          ),
-        ),
-      ),
-    scopeAuthorization: (clientId, capability, scope) =>
-      lock.withPermits(1)(
-        Ref.get(state).pipe(
-          Effect.map((current) => {
-            const client = current.clients.find(
-              (candidate) => candidate.clientId === clientId && candidate.capability === capability,
-            );
-            if (!client) return "revoked" as const;
-            return client.scopes.includes(scope) ? ("authorized" as const) : ("forbidden" as const);
-          }),
-        ),
-      ),
+    disconnectAll,
+    credentialsStatus,
+    scopeAuthorization,
     withAuthorizedSession,
   });
 });
 
-export const layer = Layer.effect(ConnectionStore, make);
+export const layerNoDeps = Layer.effect(ConnectionStore, make());
+export const layer = layerNoDeps;

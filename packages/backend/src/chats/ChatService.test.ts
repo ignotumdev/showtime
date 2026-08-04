@@ -1,4 +1,3 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, Exit, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,28 +11,40 @@ import {
   type ChatMessagePart,
   type ChatPresetField,
 } from "@showtime/contracts";
-import * as HomeDirectory from "../platform/HomeDirectory.js";
+import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import * as Ids from "../ids/Ids.js";
 import * as ProfileService from "../profiles/ProfileService.js";
-import * as ChatDatabase from "./ChatDatabase.js";
+import * as ShowRepository from "../shows/ShowRepository.js";
+import { ShowService } from "../shows/ShowService.js";
+import * as ShowServiceLayer from "../shows/ShowService.js";
 import { ChatService, layer } from "./ChatService.js";
 
 const homes: Array<string> = [];
 
 const makeLayer = (home: string) => {
   const profiles = ProfileService.layer.pipe(Layer.provideMerge(Ids.layer));
-  return layer.pipe(
-    Layer.provideMerge(ChatDatabase.layer),
-    Layer.provideMerge(Layer.mergeAll(Ids.layer, profiles)),
-    Layer.provide(
-      Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, HomeDirectory.makeLayer(home)),
-    ),
+  const shows = ShowServiceLayer.layer.pipe(
+    Layer.provideMerge(Ids.layer),
+    Layer.provideMerge(ShowRepository.layer),
+  );
+  const chats = layer.pipe(Layer.provideMerge(Layer.mergeAll(Ids.layer, profiles)));
+  return Layer.mergeAll(chats, profiles, shows, Ids.layer).pipe(
+    Layer.provideMerge(ShowRepository.layer),
+    Layer.provide(makeDatabaseTestLayer(home)),
   );
 };
 
+const makeShowId = Effect.flatMap(ShowService, (shows) =>
+  shows.create({ name: "Chat test", color: "sky" }).pipe(Effect.map((show) => show.id)),
+);
+
 const withService = <A>(
   home: string,
-  effect: Effect.Effect<A, unknown, ChatService | Ids.Ids | ProfileService.ProfileService>,
+  effect: Effect.Effect<
+    A,
+    unknown,
+    ChatService | Ids.Ids | ProfileService.ProfileService | ShowService
+  >,
 ) => Effect.runPromise(effect.pipe(Effect.provide(makeLayer(home))));
 
 afterEach(async () => {
@@ -48,10 +59,9 @@ describe("ChatService", () => {
     const initial = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const senderProfileId = (yield* profiles.list).defaultProfileId;
         const profileId = (yield* profiles.create({ name: "Receiver", color: "violet" })).id;
         const state = yield* chats.state(showId, profileId);
@@ -113,10 +123,9 @@ describe("ChatService", () => {
     const result = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const deletedProfileId = (yield* profiles.list).defaultProfileId;
         const replacement = yield* profiles.create({ name: "Replacement", color: "green" });
         const channel = (yield* chats.state(showId, deletedProfileId)).channels[0]!;
@@ -175,10 +184,9 @@ describe("ChatService", () => {
     const result = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const general = (yield* chats.state(showId, profileId)).channels[0]!;
         const production = yield* chats.createChannel({ showId, name: "Production" });
@@ -233,8 +241,8 @@ describe("ChatService", () => {
         const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
-        const otherShowId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
+        const otherShowId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const preset = yield* chats.createPreset({
           showId,
@@ -355,10 +363,9 @@ describe("ChatService", () => {
     const message = await withService(
       home,
       Effect.gen(function* () {
-        const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
         return yield* chats.send({
@@ -385,7 +392,7 @@ describe("ChatService", () => {
         const ids = yield* Ids.Ids;
         const profiles = yield* ProfileService.ProfileService;
         const chats = yield* ChatService;
-        const showId = yield* ids.makeShowId;
+        const showId = yield* makeShowId;
         const profileId = (yield* profiles.list).defaultProfileId;
         const channel = (yield* chats.state(showId, profileId)).channels[0]!;
         const messageId = yield* ids.makeChatMessageId;

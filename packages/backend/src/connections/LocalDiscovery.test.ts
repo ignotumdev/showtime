@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { createServer } from "node:net";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -10,6 +10,7 @@ import {
   type ShowtimeHostnameLabel,
 } from "@showtime/shared";
 import { ConnectionManager, makeBackendRuntime } from "../index.js";
+import { ProfileService } from "../profiles/ProfileService.js";
 import { makeLayer, MdnsAdvertiserError } from "./MdnsAdvertiser.js";
 
 const tempHomes = new Set<string>();
@@ -52,9 +53,14 @@ const invitationId = (state: ShowtimeConnectionsState) => {
 
 const createInvitation = (runtime: ReturnType<typeof makeBackendRuntime>) =>
   runtime.runPromise(
-    Effect.flatMap(ConnectionManager, (_) =>
-      _.createInvitation("Discovery test client", "profile_0000000000000000", []),
-    ),
+    Effect.gen(function* () {
+      const profileId = (yield* (yield* ProfileService).list).defaultProfileId;
+      return yield* (yield* ConnectionManager).createInvitation(
+        "Discovery test client",
+        profileId,
+        [],
+      );
+    }),
   );
 
 describe("LocalDiscovery", () => {
@@ -94,13 +100,13 @@ describe("LocalDiscovery", () => {
     });
     expect(info.candidates[0]?.url).toMatch(
       new RegExp(
-        `^http://${label}\\.local:${port}/#pair=[A-Za-z0-9_-]{43}&profile=profile_0000000000000000$`,
+        `^http://${label}\\.local:${port}/#pair=[A-Za-z0-9_-]{43}&profile=profile_[a-z0-9]{16}$`,
       ),
     );
     expect(preferred).toEqual([label]);
-    expect(
-      JSON.parse(await readFile(path.join(homeDirectory, ".showtime", "settings.json"), "utf8")),
-    ).toEqual({ version: 2, connectionsEnabled: true, hostName });
+    await expect(
+      runtime.runPromise(Effect.flatMap(ConnectionManager, (_) => _.connectionsState)),
+    ).resolves.toMatchObject({ enabled: true, hostName });
 
     await runtime.runPromise(
       Effect.flatMap(ConnectionManager, (_) => _.setConnectionsEnabled(false)),
@@ -157,12 +163,15 @@ describe("LocalDiscovery", () => {
   it("retries degraded discovery without ever changing the persisted hostname", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-discovery-retry-"));
     tempHomes.add(homeDirectory);
-    const directory = path.join(homeDirectory, ".showtime");
-    await mkdir(directory);
-    await writeFile(
-      path.join(directory, "settings.json"),
-      JSON.stringify({ version: 2, connectionsEnabled: true, hostName: "foh" }),
-    );
+    const bootstrap = makeBackendRuntime({
+      host: "127.0.0.1",
+      port: await findAvailablePort(),
+      homeDirectory,
+      localDiscovery: false,
+    });
+    await bootstrap.runPromise(Effect.void);
+    await bootstrap.runPromise(Effect.flatMap(ConnectionManager, (_) => _.setHostName("foh")));
+    await bootstrap.dispose();
     const advertised: Array<ShowtimeHostnameLabel> = [];
     const advertiser = makeLayer(({ preferredLabel }) => {
       advertised.push(preferredLabel);
