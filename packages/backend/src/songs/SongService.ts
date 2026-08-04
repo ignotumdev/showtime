@@ -141,13 +141,11 @@ const make = Effect.fnUntraced(function* () {
         new RpcError({ message: "A named microphone is invalid or no longer exists." }),
       );
     }
-    if (
-      new Set(params.mixNames.map((item) => item.mixId)).size !== params.mixNames.length ||
-      params.mixNames.some((item) => !activeMixIds.has(item.mixId))
-    ) {
-      return yield* Effect.fail(
-        new RpcError({ message: "A named mix is invalid or no longer exists." }),
-      );
+    if (new Set(params.mixNames.map((item) => item.mixId)).size !== params.mixNames.length) {
+      return yield* Effect.fail(new RpcError({ message: "A mix was named more than once." }));
+    }
+    if (params.mixNames.some((item) => !activeMixIds.has(item.mixId))) {
+      return yield* Effect.fail(new RpcError({ message: "A named mix no longer exists." }));
     }
 
     const requestedByMix = new Map(params.mixAssignments.map((item) => [item.mixId, item]));

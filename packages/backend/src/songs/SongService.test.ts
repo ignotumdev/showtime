@@ -240,6 +240,65 @@ describe("SongService", () => {
     expect(result.inherited.mixNames).toBeUndefined();
   });
 
+  it("does not return a song-specific name for a deleted mix", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const mixes = yield* MixService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const song = yield* songs.create({ showId: show.id, ...songInput("First") });
+        const mix = yield* mixes.create({ showId: show.id, color: "rose" });
+        yield* songs.edit({
+          showId: show.id,
+          id: song.id,
+          name: song.name,
+          artist: song.artist,
+          mixAssignments: [],
+          microphoneNames: [],
+          mixNames: [{ mixId: mix.id, name: "Vocal" }],
+        });
+        yield* mixes.delete({ showId: show.id, id: mix.id });
+        return (yield* songs.list(show.id))[0]!;
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(result.mixNames).toBeUndefined();
+  });
+
+  it("reports duplicate song-specific mix names accurately", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
+    tempHomes.add(home);
+    const error = await Effect.runPromise(
+      Effect.gen(function* () {
+        const shows = yield* ShowService;
+        const songs = yield* SongService;
+        const mixes = yield* MixService;
+        const show = yield* shows.create({ name: "Festival", color: "sky" });
+        const song = yield* songs.create({ showId: show.id, ...songInput("First") });
+        const main = (yield* mixes.list(show.id))[0]!;
+        return yield* Effect.flip(
+          songs.edit({
+            showId: show.id,
+            id: song.id,
+            name: song.name,
+            artist: song.artist,
+            mixAssignments: [],
+            microphoneNames: [],
+            mixNames: [
+              { mixId: main.id, name: "House" },
+              { mixId: main.id, name: "PA" },
+            ],
+          }),
+        );
+      }).pipe(Effect.provide(makeLayer(home))),
+    );
+
+    expect(error.message).toBe("A mix was named more than once.");
+  });
+
   it("rejects incomplete reorder payloads without changing the setlist", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "showtime-home-"));
     tempHomes.add(home);

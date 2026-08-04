@@ -49,7 +49,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { cn } from "@/lib/utils";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { mixAtoms } from "@/client";
+import { mixAtoms, type MixListItem } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
 import { asyncResultValueOrElse, rpcErrorMessageFromCause } from "@/client";
@@ -153,7 +153,7 @@ function SongDetail({
   readonly showId: ShowId;
   readonly song: Song;
   readonly number: number;
-  readonly mixes: ReadonlyArray<Mix>;
+  readonly mixes: ReadonlyArray<MixListItem>;
   readonly microphones: ReadonlyArray<Microphone>;
 }) {
   const edit = useAtomSet(songAtoms(showId).edit, { mode: "promiseExit" });
@@ -169,6 +169,17 @@ function SongDetail({
   const [mixNames, setMixNames] = React.useState<ReadonlyArray<SongMixName>>(song.mixNames ?? []);
   const [isSaving, setIsSaving] = React.useState(false);
   const isSavingRef = React.useRef(false);
+  const queuedSaveCountRef = React.useRef(0);
+  const preserveDraftRef = React.useRef(false);
+  const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+  const draftRef = React.useRef({
+    name: song.name as string,
+    artist: song.artist as string,
+    notes: song.notes ?? "",
+    assignments: song.mixAssignments,
+    microphoneNames: song.microphoneNames ?? [],
+    mixNames: song.mixNames ?? [],
+  });
   const [saveError, setSaveError] = React.useState<string>();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
@@ -178,6 +189,15 @@ function SongDetail({
   const hasUnpairedMix = orderedMixes.filter((mix) => mix.id !== mainMixId).length % 2 === 1;
 
   React.useEffect(() => {
+    if (queuedSaveCountRef.current > 0 || preserveDraftRef.current) return;
+    draftRef.current = {
+      name: song.name,
+      artist: song.artist,
+      notes: song.notes ?? "",
+      assignments: song.mixAssignments,
+      microphoneNames: song.microphoneNames ?? [],
+      mixNames: song.mixNames ?? [],
+    };
     setName(song.name);
     setArtist(song.artist);
     setNotes(song.notes ?? "");
@@ -215,60 +235,76 @@ function SongDetail({
     },
     blockUi = true,
   ) => {
-    const nextName = (next?.name ?? name).trim();
-    const nextArtist = (next?.artist ?? artist).trim();
     if (blockUi && isSavingRef.current) return false;
-    const activeMixIds = new Set(mixes.map((mix) => mix.id));
+    const draft = { ...draftRef.current, ...next };
+    const activeMixIds = new Set(mixes.filter((mix) => !mix.pending).map((mix) => mix.id));
     const activeMicrophoneIds = new Set(microphones.map((microphone) => microphone.id));
-    const normalizedAssignments = (next?.assignments ?? assignments).flatMap((assignment) => {
+    const normalizedAssignments = draft.assignments.flatMap((assignment) => {
       if (!activeMixIds.has(assignment.mixId)) return [];
       const microphoneIds = assignment.microphoneIds.filter((id) => activeMicrophoneIds.has(id));
       return microphoneIds.length > 0 ? [{ ...assignment, microphoneIds }] : [];
     });
-    const normalizedMicrophoneNames = (next?.microphoneNames ?? microphoneNames).filter((item) =>
+    const normalizedMicrophoneNames = draft.microphoneNames.filter((item) =>
       activeMicrophoneIds.has(item.microphoneId),
     );
-    const normalizedMixNames = (next?.mixNames ?? mixNames).filter((item) =>
-      activeMixIds.has(item.mixId),
+    const normalizedMixNames = draft.mixNames.filter((item) => activeMixIds.has(item.mixId));
+    const normalizedDraft = {
+      ...draft,
+      name: draft.name.trim(),
+      artist: draft.artist.trim(),
+      assignments: normalizedAssignments,
+      microphoneNames: normalizedMicrophoneNames,
+      mixNames: normalizedMixNames,
+    };
+    draftRef.current = normalizedDraft;
+    queuedSaveCountRef.current += 1;
+
+    const run = async () => {
+      if (blockUi) {
+        isSavingRef.current = true;
+        setIsSaving(true);
+      }
+      setSaveError(undefined);
+      const result = await edit({
+        payload: {
+          showId,
+          id: song.id,
+          name: normalizedDraft.name as SongName,
+          artist: normalizedDraft.artist as SongArtist,
+          notes: normalizedDraft.notes,
+          mixAssignments: normalizedDraft.assignments,
+          microphoneNames: normalizedDraft.microphoneNames,
+          mixNames: normalizedDraft.mixNames,
+        },
+        reactivityKeys: songsRpcReactivityKey(showId),
+      });
+      if (blockUi) {
+        isSavingRef.current = false;
+        setIsSaving(false);
+      }
+      if (Exit.isFailure(result)) {
+        preserveDraftRef.current = true;
+        setSaveError(rpcErrorMessageFromCause(result.cause));
+        return false;
+      }
+      preserveDraftRef.current = false;
+      return true;
+    };
+
+    const result = saveQueueRef.current.then(run, run);
+    saveQueueRef.current = result.then(
+      () => undefined,
+      () => undefined,
     );
-    if (blockUi) {
-      isSavingRef.current = true;
-      setIsSaving(true);
-    }
-    setSaveError(undefined);
-    const result = await edit({
-      payload: {
-        showId,
-        id: song.id,
-        name: nextName as SongName,
-        artist: nextArtist as SongArtist,
-        notes: next?.notes ?? notes,
-        mixAssignments: normalizedAssignments,
-        microphoneNames: normalizedMicrophoneNames,
-        mixNames: normalizedMixNames,
-      },
-      reactivityKeys: songsRpcReactivityKey(showId),
+    return result.finally(() => {
+      queuedSaveCountRef.current -= 1;
     });
-    if (blockUi) {
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
-    if (Exit.isFailure(result)) {
-      setSaveError(rpcErrorMessageFromCause(result.cause));
-      setName(song.name);
-      setArtist(song.artist);
-      setNotes(song.notes ?? "");
-      setAssignments(song.mixAssignments);
-      setMicrophoneNames(song.microphoneNames ?? []);
-      setMixNames(song.mixNames ?? []);
-      return false;
-    }
-    return true;
   };
 
   const toggleMicrophone = (mixId: Mix["id"], microphoneId: MicrophoneId) => {
     if (isSavingRef.current) return;
-    const existing = assignments.find((assignment) => assignment.mixId === mixId);
+    const currentAssignments = draftRef.current.assignments;
+    const existing = currentAssignments.find((assignment) => assignment.mixId === mixId);
     const selected = new Set(existing?.microphoneIds ?? []);
     if (selected.has(microphoneId)) {
       selected.delete(microphoneId);
@@ -279,7 +315,7 @@ function SongDetail({
       .filter((microphone) => selected.has(microphone.id))
       .map((microphone) => microphone.id);
     const next = [
-      ...assignments.filter((assignment) => assignment.mixId !== mixId),
+      ...currentAssignments.filter((assignment) => assignment.mixId !== mixId),
       ...(microphoneIds.length ? [{ mixId, microphoneIds }] : []),
     ];
     setAssignments(next);
@@ -299,7 +335,11 @@ function SongDetail({
               placeholder="New song"
               value={name}
               disabled={isSaving}
-              onChange={(event) => setName(event.currentTarget.value)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                draftRef.current = { ...draftRef.current, name: value };
+                setName(value);
+              }}
               onBlur={() => {
                 if (name.trim() !== song.name) void save({ name });
               }}
@@ -315,7 +355,11 @@ function SongDetail({
                 placeholder="Artist"
                 value={artist}
                 disabled={isSaving}
-                onChange={(event) => setArtist(event.currentTarget.value)}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  draftRef.current = { ...draftRef.current, artist: value };
+                  setArtist(value);
+                }}
                 onBlur={() => {
                   if (artist.trim() !== song.artist) void save({ artist });
                 }}
@@ -331,7 +375,11 @@ function SongDetail({
             disabled={isSaving}
             placeholder="Notes"
             rows={1}
-            onChange={(event) => setNotes(event.currentTarget.value)}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              draftRef.current = { ...draftRef.current, notes: value };
+              setNotes(value);
+            }}
             onBlur={() => {
               if (notes.trim() !== (song.notes ?? "")) void save({ notes });
             }}
@@ -407,7 +455,7 @@ function SongDetail({
                           }
                           placeholder={mix.id === mainMixId ? "Main mix" : "Add name"}
                           ariaLabel={`Name override for mix ${mix.number}`}
-                          disabled={isSaving}
+                          disabled={isSaving || mix.pending === true}
                           inputClassName="min-w-0 pl-1 pr-2.5 text-left"
                           persistentInput
                           onSave={(value) => {
@@ -415,7 +463,7 @@ function SongDetail({
                             const override =
                               trimmed && trimmed !== (mix.name?.trim() ?? "") ? trimmed : undefined;
                             const nextMixNames = [
-                              ...mixNames.filter((item) => item.mixId !== mix.id),
+                              ...draftRef.current.mixNames.filter((item) => item.mixId !== mix.id),
                               ...(override ? [{ mixId: mix.id, name: override }] : []),
                             ];
                             setMixNames(nextMixNames);
@@ -468,7 +516,7 @@ function SongDetail({
                                       ? trimmed
                                       : undefined;
                                   const nextMicrophoneNames = [
-                                    ...microphoneNames.filter(
+                                    ...draftRef.current.microphoneNames.filter(
                                       (item) => item.microphoneId !== microphone.id,
                                     ),
                                     ...(override

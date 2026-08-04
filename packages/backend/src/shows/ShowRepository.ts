@@ -164,8 +164,11 @@ const make = Effect.fn("ShowRepository.make")(function* () {
     Result: MixNameRow,
     execute: (showId) => sql`SELECT n.song_id AS songId, n.mix_id AS mixId,
         n.name, n.position
-      FROM song_mix_names n INNER JOIN songs s ON s.id = n.song_id
-      WHERE s.show_id = ${showId} ORDER BY n.song_id, n.position`,
+      FROM song_mix_names n
+      INNER JOIN songs s ON s.id = n.song_id
+      INNER JOIN mixes m ON m.show_id = n.show_id AND m.id = n.mix_id
+      WHERE s.show_id = ${showId} AND m.deleted_at IS NULL
+      ORDER BY n.song_id, n.position`,
   });
 
   const loadDocument = Effect.fn("ShowRepository.loadDocument")(function* (
