@@ -183,7 +183,7 @@ const inspectExistingDatabase = (filename: string) =>
         // still be writing this WAL database while another process performs the cutoff check.
         db.exec("PRAGMA busy_timeout = 5000");
         const objects = db
-          .prepare("SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index')")
+          .prepare("SELECT type, name FROM sqlite_master")
           .all() as unknown as ReadonlyArray<{ type: string; name: string }>;
         const applicationObjects = objects.filter((row) => !row.name.startsWith("sqlite_"));
         const ledgerExists = db

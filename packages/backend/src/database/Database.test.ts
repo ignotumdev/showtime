@@ -46,6 +46,37 @@ const vitePlusCli = path.resolve(
   "../../../../node_modules/vite-plus/bin/vp",
 );
 
+const workerStartupTimeout = 60_000;
+const workerRunTimeout = 20_000;
+const workerStopTimeout = 5_000;
+const concurrencyTestTimeout = workerStartupTimeout + workerRunTimeout + workerStopTimeout + 5_000;
+
+const waitFor = async <A>(promise: Promise<A>, timeout: number, message: string) => {
+  const timer = new AbortController();
+  try {
+    return await Promise.race([
+      promise,
+      delay(timeout, undefined, { signal: timer.signal }).then(() => {
+        throw new Error(message);
+      }),
+    ]);
+  } finally {
+    timer.abort();
+  }
+};
+
+const settlesWithin = async (promise: Promise<unknown>, timeout: number) => {
+  const timer = new AbortController();
+  try {
+    return await Promise.race([
+      promise.then(() => true),
+      delay(timeout, undefined, { signal: timer.signal }).then(() => false),
+    ]);
+  } finally {
+    timer.abort();
+  }
+};
+
 const runStartupProcess = (home: string, barrier: string, workerId: string) => {
   const child = spawn(
     process.execPath,
@@ -68,6 +99,7 @@ const runStartupProcess = (home: string, barrier: string, workerId: string) => {
         SHOWTIME_DATABASE_CONCURRENCY_WORKER: workerId,
       },
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
       windowsHide: true,
     },
   );
@@ -92,10 +124,65 @@ const runStartupProcess = (home: string, barrier: string, workerId: string) => {
       return failure;
     },
     async stop() {
-      if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) {
-        child.kill();
+      const pid = child.pid;
+      if (pid === undefined) return;
+      if (process.platform === "win32" && (child.exitCode !== null || child.signalCode !== null)) {
+        return;
       }
-      await completion.catch(() => undefined);
+
+      const stopDeadline = Date.now() + workerStopTimeout;
+      const remainingStopTime = () => Math.max(0, stopDeadline - Date.now());
+
+      if (process.platform === "win32") {
+        const taskkill = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        taskkill.unref();
+        const taskkillCompletion = new Promise<void>((resolve) => {
+          taskkill.once("error", () => resolve());
+          taskkill.once("exit", () => resolve());
+        });
+        if (!(await settlesWithin(taskkillCompletion, remainingStopTime()))) {
+          taskkill.kill("SIGKILL");
+        }
+      } else {
+        try {
+          process.kill(-pid, "SIGTERM");
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code !== "ESRCH") child.kill();
+        }
+        await settlesWithin(
+          completion.catch(() => undefined),
+          Math.min(1_000, remainingStopTime()),
+        );
+        try {
+          process.kill(-pid, 0);
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code === "ESRCH") return;
+        }
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code !== "ESRCH") child.kill("SIGKILL");
+        }
+      }
+
+      if (
+        !(await settlesWithin(
+          completion.catch(() => undefined),
+          remainingStopTime(),
+        ))
+      ) {
+        if (child.exitCode === null && child.signalCode === null) {
+          try {
+            child.kill("SIGKILL");
+          } catch {}
+        }
+        child.stdout.destroy();
+        child.stderr.destroy();
+        child.unref();
+      }
     },
   };
 };
@@ -106,29 +193,23 @@ const runConcurrentStartupProcesses = async (home: string, barrier: string) => {
     runStartupProcess(home, barrier, "worker-2"),
   ];
   try {
-    const deadline = Date.now() + 20_000;
+    const startupDeadline = Date.now() + workerStartupTimeout;
     while ((await readdir(barrier)).filter((entry) => entry.startsWith("ready-")).length < 2) {
       const failedWorker = workers.find((worker) => worker.failure !== undefined);
       if (failedWorker) throw failedWorker.failure;
-      if (Date.now() >= deadline) throw new Error("Timed out starting database worker processes.");
+      if (Date.now() >= startupDeadline) {
+        throw new Error("Timed out starting database worker processes.");
+      }
       await delay(5);
     }
     // Both processes receive the same future release time, avoiding a false pass caused by one
     // process completing synchronous SQLite work while the other is still leaving the barrier.
     await writeFile(path.join(barrier, "release"), String(Date.now() + 250));
-    const timeout = new AbortController();
-    try {
-      await Promise.race([
-        Promise.all(workers.map((worker) => worker.completion)),
-        delay(Math.max(0, deadline - Date.now()), undefined, { signal: timeout.signal }).then(
-          () => {
-            throw new Error("Timed out waiting for database worker processes.");
-          },
-        ),
-      ]);
-    } finally {
-      timeout.abort();
-    }
+    await waitFor(
+      Promise.all(workers.map((worker) => worker.completion)),
+      workerRunTimeout,
+      "Timed out waiting for database worker processes.",
+    );
   } finally {
     await Promise.all(workers.map((worker) => worker.stop()));
   }
@@ -139,35 +220,39 @@ const concurrencyWorkerBarrier = process.env.SHOWTIME_DATABASE_CONCURRENCY_BARRI
 const concurrencyWorkerId = process.env.SHOWTIME_DATABASE_CONCURRENCY_WORKER;
 
 if (concurrencyWorkerHome && concurrencyWorkerBarrier && concurrencyWorkerId) {
-  it("database concurrency worker", async () => {
-    await writeFile(path.join(concurrencyWorkerBarrier, `ready-${concurrencyWorkerId}`), "ready");
-    const deadline = Date.now() + 20_000;
-    let releaseAt: number | undefined;
-    while (releaseAt === undefined) {
-      if (Date.now() >= deadline) throw new Error("Timed out waiting for the startup barrier.");
-      try {
-        const parsed = Number(
-          await readFile(path.join(concurrencyWorkerBarrier, "release"), "utf8"),
-        );
-        if (parsed > 0) releaseAt = parsed;
-        else await delay(5);
-      } catch (cause) {
-        if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
-        await delay(5);
+  it(
+    "database concurrency worker",
+    async () => {
+      await writeFile(path.join(concurrencyWorkerBarrier, `ready-${concurrencyWorkerId}`), "ready");
+      const deadline = Date.now() + workerStartupTimeout;
+      let releaseAt: number | undefined;
+      while (releaseAt === undefined) {
+        if (Date.now() >= deadline) throw new Error("Timed out waiting for the startup barrier.");
+        try {
+          const parsed = Number(
+            await readFile(path.join(concurrencyWorkerBarrier, "release"), "utf8"),
+          );
+          if (parsed > 0) releaseAt = parsed;
+          else await delay(5);
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+          await delay(5);
+        }
       }
-    }
-    await delay(Math.max(0, releaseAt - Date.now()));
-    const state = await runDatabase(
-      concurrencyWorkerHome,
-      Effect.flatMap(
-        SqlClient.SqlClient,
-        (sql) => sql<{ settings: number; profiles: number }>`SELECT
+      await delay(Math.max(0, releaseAt - Date.now()));
+      const state = await runDatabase(
+        concurrencyWorkerHome,
+        Effect.flatMap(
+          SqlClient.SqlClient,
+          (sql) => sql<{ settings: number; profiles: number }>`SELECT
           (SELECT COUNT(*) FROM app_settings) AS settings,
           (SELECT COUNT(*) FROM profiles) AS profiles`,
-      ),
-    );
-    expect(state).toEqual([{ settings: 1, profiles: 1 }]);
-  }, 30_000);
+        ),
+      );
+      expect(state).toEqual([{ settings: 1, profiles: 1 }]);
+    },
+    concurrencyTestTimeout,
+  );
 }
 
 describe("Showtime database", () => {
@@ -267,59 +352,67 @@ describe("Showtime database", () => {
     ).rejects.toBeDefined();
   });
 
-  it("initializes a completely absent database safely across concurrent startups", async () => {
-    const home = await makeHome();
-    const filename = path.join(home, ".showtime", databaseFileName);
-    const barrier = path.join(home, "startup-barrier");
-    await mkdir(barrier);
+  it(
+    "initializes a completely absent database safely across concurrent startups",
+    async () => {
+      const home = await makeHome();
+      const filename = path.join(home, ".showtime", databaseFileName);
+      const barrier = path.join(home, "startup-barrier");
+      await mkdir(barrier);
 
-    await expect(stat(filename)).rejects.toMatchObject({ code: "ENOENT" });
-    await runConcurrentStartupProcesses(home, barrier);
+      await expect(stat(filename)).rejects.toMatchObject({ code: "ENOENT" });
+      await runConcurrentStartupProcesses(home, barrier);
 
-    const verified = new DatabaseSync(filename, { readOnly: true });
-    try {
-      expect(
-        verified
-          .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
-          .all(),
-      ).toEqual(currentMigrations.map(([migration_id, name]) => ({ migration_id, name })));
-      expect(
-        verified
-          .prepare(`SELECT
+      const verified = new DatabaseSync(filename, { readOnly: true });
+      try {
+        expect(
+          verified
+            .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
+            .all(),
+        ).toEqual(currentMigrations.map(([migration_id, name]) => ({ migration_id, name })));
+        expect(
+          verified
+            .prepare(`SELECT
             (SELECT COUNT(*) FROM app_settings) AS settings,
             (SELECT COUNT(*) FROM profiles) AS profiles`)
-          .get(),
-      ).toEqual({ settings: 1, profiles: 1 });
-    } finally {
-      verified.close();
-    }
-  }, 30_000);
+            .get(),
+        ).toEqual({ settings: 1, profiles: 1 });
+      } finally {
+        verified.close();
+      }
+    },
+    concurrencyTestTimeout,
+  );
 
-  it("repairs an unbootstrapped baseline safely across concurrent startups", async () => {
-    const home = await makeHome();
-    await runDatabase(home, Effect.void);
-    const filename = path.join(home, ".showtime", databaseFileName);
-    const db = new DatabaseSync(filename);
-    db.exec("BEGIN; DELETE FROM app_settings; DELETE FROM profiles; COMMIT;");
-    db.close();
-    const barrier = path.join(home, "startup-barrier");
-    await mkdir(barrier);
+  it(
+    "repairs an unbootstrapped baseline safely across concurrent startups",
+    async () => {
+      const home = await makeHome();
+      await runDatabase(home, Effect.void);
+      const filename = path.join(home, ".showtime", databaseFileName);
+      const db = new DatabaseSync(filename);
+      db.exec("BEGIN; DELETE FROM app_settings; DELETE FROM profiles; COMMIT;");
+      db.close();
+      const barrier = path.join(home, "startup-barrier");
+      await mkdir(barrier);
 
-    await runConcurrentStartupProcesses(home, barrier);
+      await runConcurrentStartupProcesses(home, barrier);
 
-    const verified = new DatabaseSync(filename, { readOnly: true });
-    try {
-      expect(
-        verified
-          .prepare(`SELECT
+      const verified = new DatabaseSync(filename, { readOnly: true });
+      try {
+        expect(
+          verified
+            .prepare(`SELECT
             (SELECT COUNT(*) FROM app_settings) AS settings,
             (SELECT COUNT(*) FROM profiles) AS profiles`)
-          .get(),
-      ).toEqual({ settings: 1, profiles: 1 });
-    } finally {
-      verified.close();
-    }
-  }, 30_000);
+            .get(),
+        ).toEqual({ settings: 1, profiles: 1 });
+      } finally {
+        verified.close();
+      }
+    },
+    concurrencyTestTimeout,
+  );
 
   it("reclaims an initialization lock left by a terminated process", async () => {
     const home = await makeHome();
@@ -377,22 +470,35 @@ describe("Showtime database", () => {
     expect(await readFile(showPath)).toEqual(before);
   });
 
-  it("rejects an experimental database and leaves it byte-for-byte unchanged", async () => {
-    const home = await makeHome();
-    const directory = path.join(home, ".showtime");
-    await mkdir(directory);
-    const filename = path.join(directory, databaseFileName);
-    const db = new DatabaseSync(filename);
-    db.exec(
+  it.each([
+    [
+      "table",
       "CREATE TABLE prerelease_state (value TEXT); INSERT INTO prerelease_state VALUES ('keep')",
-    );
-    db.close();
-    const before = await readFile(filename);
-    await expect(runDatabase(home, Effect.void)).rejects.toBeInstanceOf(
-      UnsupportedPrereleaseStateError,
-    );
-    expect(await readFile(filename)).toEqual(before);
-  });
+    ],
+    ["view", "CREATE VIEW prerelease_state AS SELECT 'keep' AS value"],
+    [
+      "view and trigger",
+      `CREATE VIEW prerelease_state AS SELECT 'keep' AS value;
+       CREATE TRIGGER prerelease_trigger INSTEAD OF INSERT ON prerelease_state
+       BEGIN SELECT NEW.value; END`,
+    ],
+  ])(
+    "rejects an experimental database containing a %s and leaves it byte-for-byte unchanged",
+    async (_objectType, setup) => {
+      const home = await makeHome();
+      const directory = path.join(home, ".showtime");
+      await mkdir(directory);
+      const filename = path.join(directory, databaseFileName);
+      const db = new DatabaseSync(filename);
+      db.exec(setup);
+      db.close();
+      const before = await readFile(filename);
+      await expect(runDatabase(home, Effect.void)).rejects.toBeInstanceOf(
+        UnsupportedPrereleaseStateError,
+      );
+      expect(await readFile(filename)).toEqual(before);
+    },
+  );
 
   it("rejects unknown future ledger entries without opening the database for writes", async () => {
     const home = await makeHome();
