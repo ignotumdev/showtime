@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import * as Ids from "../ids/Ids.js";
 import { makeDatabaseTestLayer } from "../database/DatabaseTest.js";
 import { ProfileService, layer } from "./ProfileService.js";
@@ -52,9 +53,7 @@ describe("ProfileService", () => {
       message: "Choose another default profile before deleting this one.",
     });
 
-    await expect(stat(join(home, ".showtime", "showtime.db"))).resolves.toMatchObject({
-      isFile: expect.any(Function),
-    });
+    expect((await stat(join(home, ".showtime", "showtime.db"))).isFile()).toBe(true);
   });
 
   it("creates, edits, changes default, deletes, and reloads profiles", async () => {
@@ -101,5 +100,47 @@ describe("ProfileService", () => {
       }),
     );
     expect(finalState.profiles).toMatchObject([{ id: created.id, name: "Monitors" }]);
+  });
+
+  it("reports only unique-name violations as validation errors", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-profiles-"));
+    homes.push(home);
+
+    await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService;
+        yield* profiles.create({ name: "Monitor engineer", color: "violet" });
+      }),
+    );
+
+    await expect(
+      withService(
+        home,
+        Effect.gen(function* () {
+          const profiles = yield* ProfileService;
+          yield* profiles.create({ name: "MONITOR ENGINEER", color: "green" });
+        }),
+      ),
+    ).rejects.toMatchObject({
+      message: "Could not create profile. Profile names must be unique.",
+    });
+
+    const database = new DatabaseSync(join(home, ".showtime", "showtime.db"));
+    database.exec(`CREATE TRIGGER reject_profile_insert
+      BEFORE INSERT ON profiles BEGIN
+        SELECT RAISE(ABORT, 'synthetic persistence failure');
+      END`);
+    database.close();
+
+    await expect(
+      withService(
+        home,
+        Effect.gen(function* () {
+          const profiles = yield* ProfileService;
+          yield* profiles.create({ name: "Front of house", color: "sky" });
+        }),
+      ),
+    ).rejects.toMatchObject({ message: "Could not create profile." });
   });
 });

@@ -442,6 +442,30 @@ describe("Showtime WebSocket RPC", () => {
       const state = (await stateResponse.json()) as { clients: Array<{ name: string }> };
       expect(state.clients.map((client) => client.name)).toContain("Manager iPad");
 
+      const missingProfile = "profile_1111111111111111";
+      const invalidInvitation = await fetch(managerUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Invalid profile",
+          clientProfile: missingProfile,
+          scopes: [],
+        }),
+      });
+      expect(invalidInvitation.status).toBe(400);
+      expect(await invalidInvitation.json()).toEqual({ error: "Profile not found." });
+
+      const invalidProfileUpdate = await fetch(
+        `${origin}/connection-profile/${manager.clientId}/${manager.capability}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ clientProfile: missingProfile }),
+        },
+      );
+      expect(invalidProfileUpdate.status).toBe(400);
+      expect(await invalidProfileUpdate.json()).toEqual({ error: "Profile not found." });
+
       const changedProfile = await runtime.runPromise(
         Effect.flatMap(ProfileService, (_) =>
           _.create({ name: "Changed profile", color: "green" }).pipe(

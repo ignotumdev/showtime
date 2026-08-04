@@ -1,4 +1,5 @@
 import { Effect, Exit, Layer } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -29,7 +30,6 @@ const makeLayer = (home: string) => {
   );
   const chats = layer.pipe(Layer.provideMerge(Layer.mergeAll(Ids.layer, profiles)));
   return Layer.mergeAll(chats, profiles, shows, Ids.layer).pipe(
-    Layer.provideMerge(ShowRepository.layer),
     Layer.provide(makeDatabaseTestLayer(home)),
   );
 };
@@ -46,6 +46,9 @@ const withService = <A>(
     ChatService | Ids.Ids | ProfileService.ProfileService | ShowService
   >,
 ) => Effect.runPromise(effect.pipe(Effect.provide(makeLayer(home))));
+
+const withDatabase = <A>(home: string, effect: Effect.Effect<A, unknown, SqlClient.SqlClient>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(makeDatabaseTestLayer(home))));
 
 afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
@@ -354,6 +357,88 @@ describe("ChatService", () => {
       answer: { template: "{{status}}" },
     });
     expect(reloaded.afterDelete.presets).toEqual([]);
+  });
+
+  it("skips a malformed stored preset without hiding usable chat state", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const initial = await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const preset = yield* chats.createPreset({
+          showId,
+          name: "Usable preset",
+          template: "Check {{mic}}",
+          fields: [{ name: "mic", type: "microphone" }],
+        });
+        return { showId, profileId, preset };
+      }),
+    );
+
+    await withDatabase(
+      home,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO chat_presets
+            (id, show_id, name, template, fields_json, answer_json, created_at, updated_at)
+          VALUES (${"preset_malformed"}, ${initial.showId}, ${"Malformed preset"},
+            ${"Malformed"}, ${"{"}, ${null},
+            ${"2026-01-01T00:00:00.000Z"}, ${"2026-01-01T00:00:00.000Z"})`;
+      }),
+    );
+
+    const snapshot = await withService(
+      home,
+      Effect.gen(function* () {
+        const chats = yield* ChatService;
+        return yield* chats.state(initial.showId, initial.profileId);
+      }),
+    );
+
+    expect(snapshot.channels).toHaveLength(1);
+    expect(snapshot.presets.map((preset) => preset.id)).toEqual([initial.preset.id]);
+  });
+
+  it("deletes chat history containing replies", async () => {
+    const home = await mkdtemp(join(tmpdir(), "showtime-chat-"));
+    homes.push(home);
+
+    const result = await withService(
+      home,
+      Effect.gen(function* () {
+        const profiles = yield* ProfileService.ProfileService;
+        const chats = yield* ChatService;
+        const showId = yield* makeShowId;
+        const profileId = (yield* profiles.list).defaultProfileId;
+        const channel = (yield* chats.state(showId, profileId)).channels[0]!;
+        const request = yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Can you check this?",
+          answer: {
+            template: ChatPresetTemplate.make("{{status}}"),
+            fields: [{ name: "status", type: "select", options: ["Done"] }],
+          },
+        });
+        yield* chats.send({
+          showId,
+          channelId: channel.id,
+          senderProfileId: profileId,
+          body: "Done",
+          replyToMessageId: request.id,
+        });
+        yield* chats.deleteShow(showId);
+        return yield* chats.state(showId, profileId);
+      }),
+    );
+
+    expect(result.channels).toMatchObject([{ name: "General", messageCount: 0, messages: [] }]);
   });
 
   it("treats an empty rich-parts array as a plain message", async () => {

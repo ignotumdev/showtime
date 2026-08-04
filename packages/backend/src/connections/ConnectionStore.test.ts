@@ -47,6 +47,7 @@ describe("ConnectionStore", () => {
         const profileId = (yield* (yield* ProfileService).list).defaultProfileId;
         const invitation = yield* store.createInvitation(undefined, profileId, [
           "connections:read",
+          "connections:read",
           "connections:create",
         ]);
         const credentials = (yield* store.consumeInvitation(invitation.token))!;
@@ -70,6 +71,54 @@ describe("ConnectionStore", () => {
     expect(result.clients[0]?.scopes).toEqual(result.credentials.scopes);
     expect(result.read).toBe("authorized");
     expect(result.remove).toBe("forbidden");
+  });
+
+  it("rejects missing profiles without defects and leaves no partial invitation", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-connections-"));
+    homes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        const error = yield* Effect.flip(
+          store.createInvitation(undefined, "profile_1111111111111111"),
+        );
+        return { error, invitations: yield* store.invitations };
+      }).pipe(Effect.provide(testLayer(home))),
+    );
+    expect(result.error).toMatchObject({
+      _tag: "ConnectionInputError",
+      message: "Profile not found.",
+    });
+    expect(result.invitations).toEqual([]);
+  });
+
+  it("distinguishes invalid and unchanged profile updates without touching updatedAt", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "showtime-connections-"));
+    homes.add(home);
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const store = yield* ConnectionStore;
+        const profileId = (yield* (yield* ProfileService).list).defaultProfileId;
+        const invitation = yield* store.createInvitation(undefined, profileId);
+        const credentials = (yield* store.consumeInvitation(invitation.token))!;
+        const before = (yield* store.clients)[0]!;
+        const unchanged = yield* store.updateClientProfile(
+          credentials.clientId,
+          credentials.capability,
+          profileId,
+        );
+        const invalid = yield* store.updateClientProfile(
+          credentials.clientId,
+          credentials.capability,
+          "profile_1111111111111111",
+        );
+        const after = (yield* store.clients)[0]!;
+        return { before, after, unchanged, invalid };
+      }).pipe(Effect.provide(testLayer(home))),
+    );
+    expect(result.unchanged).toBe("unchanged");
+    expect(result.invalid).toBe("invalid-profile");
+    expect(result.after).toEqual(result.before);
   });
 
   it("interrupts admitted sessions after revocation", async () => {

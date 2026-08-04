@@ -41,6 +41,13 @@ export interface PairingCredentials {
   readonly clientProfile: ProfileIdType;
 }
 
+export class ConnectionInputError extends Schema.TaggedErrorClass<ConnectionInputError>()(
+  "ConnectionInputError",
+  { message: Schema.String },
+) {}
+
+export type ClientProfileUpdateResult = "updated" | "unchanged" | "invalid-profile" | "revoked";
+
 const pairingLifetimeMs = 5 * 60 * 1_000;
 const makeToken = () => randomBytes(32).toString("base64url");
 const defaultClientNamePattern = /^Client (\d+)$/;
@@ -66,19 +73,22 @@ export class ConnectionStore extends Context.Service<
       name: string | undefined,
       clientProfile: string,
       scopes?: ReadonlyArray<ShowtimeConnectionScope>,
-    ) => Effect.Effect<StoredInvitation>;
+    ) => Effect.Effect<StoredInvitation, ConnectionInputError>;
     readonly pairingInvitation: (
       invitationId: string,
     ) => Effect.Effect<StoredInvitation | undefined>;
     readonly consumeInvitation: (token: string) => Effect.Effect<PairingCredentials | undefined>;
     readonly remove: (id: string) => Effect.Effect<void>;
-    readonly removeAllPersisted: Effect.Effect<void>;
+    readonly removeAllPersisted: Effect.Effect<{
+      readonly pairedClients: number;
+      readonly pendingInvitations: number;
+    }>;
     readonly removeAll: Effect.Effect<void>;
     readonly updateClientProfile: (
       clientId: string,
       capability: string,
       clientProfile: string,
-    ) => Effect.Effect<boolean>;
+    ) => Effect.Effect<ClientProfileUpdateResult>;
     readonly disconnectAll: Effect.Effect<void>;
     readonly credentialsStatus: (
       clientId: string,
@@ -195,10 +205,22 @@ const make = Effect.fn("ConnectionStore.make")(function* () {
               ...clients.map((client) => client.name),
               ...invitations.map((invitation) => invitation.name),
             ]);
-          const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName);
-          const scopes =
-            yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(requestedScopes);
-          const profile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile);
+          const validatedName = yield* Schema.decodeUnknownEffect(ClientName)(resolvedName).pipe(
+            Effect.mapError(
+              () => new ConnectionInputError({ message: "Invalid connection name." }),
+            ),
+          );
+          const decodedScopes = yield* Schema.decodeUnknownEffect(ShowtimeConnectionScopes)(
+            requestedScopes,
+          ).pipe(
+            Effect.mapError(
+              () => new ConnectionInputError({ message: "Invalid connection permissions." }),
+            ),
+          );
+          const scopes = Array.from(new Set(decodedScopes));
+          const profile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
+            Effect.mapError(() => new ConnectionInputError({ message: "Invalid profile." })),
+          );
           const now = yield* Clock.currentTimeMillis;
           const invitation: StoredInvitation = {
             invitationId: nanoid(),
@@ -209,10 +231,14 @@ const make = Effect.fn("ConnectionStore.make")(function* () {
             clientProfile: profile,
             scopes,
           };
-          yield* sql`INSERT INTO connection_invitations
+          const inserted = yield* sql`INSERT INTO connection_invitations
           (invitation_id, name, token, profile_id, expires_at, updated_at)
-          VALUES (${invitation.invitationId}, ${invitation.name}, ${invitation.token},
-            ${invitation.clientProfile}, ${invitation.expiresAt}, ${invitation.updatedAt})`;
+          SELECT ${invitation.invitationId}, ${invitation.name}, ${invitation.token},
+            ${invitation.clientProfile}, ${invitation.expiresAt}, ${invitation.updatedAt}
+          WHERE EXISTS (SELECT 1 FROM profiles WHERE id = ${invitation.clientProfile})
+          RETURNING invitation_id`;
+          if (inserted.length === 0)
+            return yield* new ConnectionInputError({ message: "Profile not found." });
           yield* insertScopes("invitation", invitation.invitationId, invitation.scopes);
           yield* Effect.logInfo("Created client pairing invitation").pipe(
             Effect.annotateLogs({ invitationId: invitation.invitationId }),
@@ -220,7 +246,11 @@ const make = Effect.fn("ConnectionStore.make")(function* () {
           return invitation;
         }),
       )
-      .pipe(Effect.orDie);
+      .pipe(
+        Effect.catch((cause) =>
+          cause instanceof ConnectionInputError ? Effect.fail(cause) : Effect.die(cause),
+        ),
+      );
 
   const pairingInvitation = (invitationId: string) =>
     sql
@@ -318,24 +348,23 @@ const make = Effect.fn("ConnectionStore.make")(function* () {
         const counts = yield* sql<{ clients: number; invitations: number }>`SELECT
         (SELECT COUNT(*) FROM connection_clients) AS clients,
         (SELECT COUNT(*) FROM connection_invitations) AS invitations`;
-        yield* sql.withTransaction(
-          Effect.all(
-            [sql`DELETE FROM connection_clients`, sql`DELETE FROM connection_invitations`],
-            { discard: true },
-          ),
+        yield* Effect.all(
+          [sql`DELETE FROM connection_clients`, sql`DELETE FROM connection_invitations`],
+          { discard: true },
         );
-        yield* Effect.logInfo("Revoked all clients after the host name changed").pipe(
-          Effect.annotateLogs({
-            pairedClients: Number(counts[0]?.clients ?? 0),
-            pendingInvitations: Number(counts[0]?.invitations ?? 0),
-          }),
-        );
+        return {
+          pairedClients: Number(counts[0]?.clients ?? 0),
+          pendingInvitations: Number(counts[0]?.invitations ?? 0),
+        };
       }),
     )
     .pipe(Effect.orDie);
 
   const removeAll = sessionGate.withPermits(1)(
     removeAllPersisted.pipe(
+      Effect.tap((counts) =>
+        Effect.logInfo("Revoked all clients").pipe(Effect.annotateLogs(counts)),
+      ),
       Effect.andThen(
         Ref.get(sessions).pipe(
           Effect.flatMap((current) =>
@@ -348,12 +377,29 @@ const make = Effect.fn("ConnectionStore.make")(function* () {
 
   const updateClientProfile = (clientId: string, capability: string, clientProfile: string) =>
     Effect.gen(function* () {
-      const profile = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile);
+      const decoded = yield* Schema.decodeUnknownEffect(ProfileId)(clientProfile).pipe(
+        Effect.option,
+      );
+      if (decoded._tag === "None") return "invalid-profile" as const;
+      const profile = decoded.value;
       const updatedAt = new Date(yield* Clock.currentTimeMillis).toISOString();
-      const rows = yield* sql`UPDATE connection_clients SET profile_id = ${profile},
-        updated_at = ${updatedAt} WHERE client_id = ${clientId} AND capability = ${capability}
-        RETURNING client_id`;
-      return rows.length > 0;
+      return yield* sql.withTransaction(
+        Effect.gen(function* () {
+          const rows = yield* sql`UPDATE connection_clients SET profile_id = ${profile},
+            updated_at = ${updatedAt} WHERE client_id = ${clientId} AND capability = ${capability}
+            AND profile_id <> ${profile}
+            AND EXISTS (SELECT 1 FROM profiles WHERE id = ${profile})
+            RETURNING client_id`;
+          if (rows.length > 0) return "updated" as const;
+          const status = yield* sql<{ authorized: number; profileExists: number }>`SELECT
+            EXISTS (SELECT 1 FROM connection_clients
+              WHERE client_id = ${clientId} AND capability = ${capability}) AS authorized,
+            EXISTS (SELECT 1 FROM profiles WHERE id = ${profile}) AS profileExists`;
+          if (Number(status[0]?.authorized) !== 1) return "revoked" as const;
+          if (Number(status[0]?.profileExists) !== 1) return "invalid-profile" as const;
+          return "unchanged" as const;
+        }),
+      );
     }).pipe(Effect.orDie);
 
   const disconnectAll = sessionGate.withPermits(1)(

@@ -211,12 +211,22 @@ const inspectExistingDatabase = (filename: string) =>
           )
             throw new Error(`The ${table} table does not match the released schema.`);
         }
-        const settings = db
-          .prepare(`SELECT COUNT(*) AS count,
-            SUM(CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END) AS valid_default
-          FROM app_settings s LEFT JOIN profiles p ON p.id = s.default_profile_id`)
-          .get() as { count: number; valid_default: number } | undefined;
-        if (!settings || Number(settings.count) !== 1 || Number(settings.valid_default) !== 1)
+        const bootstrapState = db
+          .prepare(`SELECT
+            (SELECT COUNT(*) FROM app_settings) AS settings_count,
+            (SELECT COUNT(*) FROM profiles) AS profile_count,
+            (SELECT COUNT(*) FROM app_settings s
+              INNER JOIN profiles p ON p.id = s.default_profile_id) AS valid_default`)
+          .get() as
+          | { settings_count: number; profile_count: number; valid_default: number }
+          | undefined;
+        const isBootstrapped =
+          Number(bootstrapState?.settings_count) === 1 &&
+          Number(bootstrapState?.valid_default) === 1;
+        const isUnbootstrappedBaseline =
+          Number(bootstrapState?.settings_count) === 0 &&
+          Number(bootstrapState?.profile_count) === 0;
+        if (!isBootstrapped && !isUnbootstrappedBaseline)
           throw new Error("The bootstrap settings/default-profile invariant is invalid.");
         if (db.prepare("PRAGMA foreign_key_check").all().length > 0)
           throw new Error("The database contains invalid foreign-key references.");
@@ -276,24 +286,32 @@ const clientLayer = Layer.unwrap(
 
 const bootstrap = Effect.fn("ShowtimeDatabaseBootstrap")(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const settings = yield* sql<{ count: number }>`SELECT COUNT(*) AS count FROM app_settings`;
-  if (Number(settings[0]?.count ?? 0) > 0) return;
-  const profiles = yield* sql<{ count: number }>`SELECT COUNT(*) AS count FROM profiles`;
-  if (Number(profiles[0]?.count ?? 0) !== 0)
-    return yield* new DatabaseInitializationError({
-      message: "The fresh database contains profiles without application settings.",
-      stage: "bootstrap",
-    });
   const makeId = customAlphabet(idAlphabet, idSuffixLength);
   const profileId = `${profileIdPrefix}${makeId()}`;
   const timestamp = DateTime.formatIso(yield* DateTime.now);
   const hostName = normalizeShowtimeHostName(hostname());
-  yield* sql`INSERT INTO profiles
+  // The first statement is a conditional write, so concurrent initializers serialize before
+  // deciding whether bootstrap is needed instead of racing after a shared read snapshot.
+  const inserted = yield* sql<{ id: string }>`INSERT INTO profiles
     (id, name, normalized_name, color, created_at, updated_at)
-    VALUES (${profileId}, ${"Default"}, ${"default"}, ${"sky"}, ${timestamp}, ${timestamp})`;
-  yield* sql`INSERT INTO app_settings
-    (singleton_id, connections_enabled, host_name, default_profile_id)
-    VALUES (1, 1, ${hostName}, ${profileId})`;
+    SELECT ${profileId}, ${"Default"}, ${"default"}, ${"sky"}, ${timestamp}, ${timestamp}
+    WHERE NOT EXISTS (SELECT 1 FROM app_settings)
+      AND NOT EXISTS (SELECT 1 FROM profiles)
+    RETURNING id`;
+  if (inserted.length > 0) {
+    yield* sql`INSERT INTO app_settings
+      (singleton_id, connections_enabled, host_name, default_profile_id)
+      VALUES (1, 1, ${hostName}, ${profileId})`;
+    return;
+  }
+  const state = yield* sql<{ settings: number; profiles: number }>`SELECT
+    (SELECT COUNT(*) FROM app_settings) AS settings,
+    (SELECT COUNT(*) FROM profiles) AS profiles`;
+  if (Number(state[0]?.settings) !== 1 || Number(state[0]?.profiles) < 1)
+    return yield* new DatabaseInitializationError({
+      message: "The database contains incomplete bootstrap state.",
+      stage: "bootstrap",
+    });
 });
 
 const validateCurrentSchema = Effect.fn("ShowtimeDatabaseValidate")(function* () {

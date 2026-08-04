@@ -108,10 +108,13 @@ describe("chat presets", () => {
       new Map([["mic", microphone]]),
     )!;
     expect(resolved.body).toBe("Check Mic 7 (Lead), then mute Mic 7 (Lead).");
-    expect(resolved).toEqual({
-      body: resolved.body,
-      parts: resolved.parts,
-    });
+    expect(resolved.parts).toEqual([
+      { type: "text", text: "Check " },
+      microphone,
+      { type: "text", text: ", then mute " },
+      microphone,
+      { type: "text", text: "." },
+    ]);
   });
 
   it("inherits message values in answer templates", () => {

@@ -1,5 +1,5 @@
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
 import {
   Color,
   decodeProfileName,
@@ -59,13 +59,16 @@ const make = Effect.fn("ProfileService.make")(function* () {
       FROM app_settings WHERE singleton_id = 1`,
   });
 
-  const list = Effect.all([findProfiles(undefined), findDefault(undefined)]).pipe(
-    Effect.map(([profiles, settings]) => ({
-      profiles,
-      defaultProfileId: settings.defaultProfileId,
-    })),
-    Effect.mapError((cause) => rpcError("Could not load profiles.", cause)),
-  );
+  const list = sql
+    .withTransaction(
+      Effect.all([findProfiles(undefined), findDefault(undefined)]).pipe(
+        Effect.map(([profiles, settings]) => ({
+          profiles,
+          defaultProfileId: settings.defaultProfileId,
+        })),
+      ),
+    )
+    .pipe(Effect.mapError((cause) => rpcError("Could not load profiles.", cause)));
 
   const create = Effect.fn("ProfileService.create")(function* (params: {
     readonly name: string;
@@ -140,9 +143,20 @@ const make = Effect.fn("ProfileService.make")(function* () {
       sql.withTransaction,
     );
 
-  const mapPersistenceError = <A>(effect: Effect.Effect<A, unknown>, message: string) =>
+  const mapPersistenceError = <A>(
+    effect: Effect.Effect<A, unknown>,
+    message: string,
+    uniqueViolationMessage?: string,
+  ) =>
     effect.pipe(
-      Effect.mapError((cause) => (cause instanceof RpcError ? cause : rpcError(message, cause))),
+      Effect.mapError((cause) => {
+        if (cause instanceof RpcError) return cause;
+        if (uniqueViolationMessage && SqlError.isSqlError(cause)) {
+          if (cause.reason._tag === "UniqueViolation")
+            return rpcError(uniqueViolationMessage, cause);
+        }
+        return rpcError(message, cause);
+      }),
     );
 
   return ProfileService.of({
@@ -150,10 +164,15 @@ const make = Effect.fn("ProfileService.make")(function* () {
     create: (params) =>
       mapPersistenceError(
         create(params),
+        "Could not create profile.",
         "Could not create profile. Profile names must be unique.",
       ),
     edit: (params) =>
-      mapPersistenceError(edit(params), "Could not update profile. Profile names must be unique."),
+      mapPersistenceError(
+        edit(params),
+        "Could not update profile.",
+        "Could not update profile. Profile names must be unique.",
+      ),
     delete: (id) => mapPersistenceError(deleteProfile(id), "Could not delete profile."),
     setDefault: (id) =>
       mapPersistenceError(setDefault(id), "Could not change the default profile."),

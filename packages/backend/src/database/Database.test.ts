@@ -137,6 +137,27 @@ describe("Showtime database", () => {
     ).rejects.toBeDefined();
   });
 
+  it("repairs an unbootstrapped baseline safely across concurrent startups", async () => {
+    const home = await makeHome();
+    await runDatabase(home, Effect.void);
+    const filename = path.join(home, ".showtime", "showtime.db");
+    const db = new DatabaseSync(filename);
+    db.exec("BEGIN; DELETE FROM app_settings; DELETE FROM profiles; COMMIT;");
+    db.close();
+
+    const readBootstrapState = Effect.flatMap(
+      SqlClient.SqlClient,
+      (sql) => sql<{ settings: number; profiles: number }>`SELECT
+        (SELECT COUNT(*) FROM app_settings) AS settings,
+        (SELECT COUNT(*) FROM profiles) AS profiles`,
+    );
+    const states = await Promise.all([
+      runDatabase(home, readBootstrapState),
+      runDatabase(home, readBootstrapState),
+    ]);
+    expect(states).toEqual([[{ settings: 1, profiles: 1 }], [{ settings: 1, profiles: 1 }]]);
+  });
+
   it.each([
     ["settings.json", "{}"],
     ["profiles.json", "{}"],

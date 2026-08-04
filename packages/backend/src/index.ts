@@ -70,7 +70,10 @@ export class ConnectionManager extends Context.Service<
       name: string | undefined,
       clientProfile: string,
       scopes: ReadonlyArray<ShowtimeConnectionScope>,
-    ) => Effect.Effect<import("@showtime/shared").ShowtimeConnectionsState>;
+    ) => Effect.Effect<
+      import("@showtime/shared").ShowtimeConnectionsState,
+      ConnectionStore.ConnectionInputError
+    >;
     readonly pairingInfo: (invitationId: string) => Effect.Effect<ShowtimeConnectionInfo>;
     readonly removeConnection: (
       id: string,
@@ -242,13 +245,12 @@ const makeRpcProtocol = (desktopCapability: string) =>
             );
             if (grant) return grant;
           }
-          return HttpServerResponse.jsonUnsafe(
-            yield* connectionManager.createInvitation(
-              name,
-              decoded.value.clientProfile,
-              decoded.value.scopes,
-            ),
-          );
+          const created = yield* connectionManager
+            .createInvitation(name, decoded.value.clientProfile, decoded.value.scopes)
+            .pipe(Effect.option);
+          return created._tag === "Some"
+            ? HttpServerResponse.jsonUnsafe(created.value)
+            : HttpServerResponse.jsonUnsafe({ error: "Profile not found." }, { status: 400 });
         }),
       );
       yield* router.add(
@@ -276,12 +278,14 @@ const makeRpcProtocol = (desktopCapability: string) =>
             params.capability,
             decoded.value.clientProfile,
           );
-          return updated
-            ? HttpServerResponse.jsonUnsafe({ updated: true })
-            : HttpServerResponse.jsonUnsafe(
+          if (updated === "invalid-profile")
+            return HttpServerResponse.jsonUnsafe({ error: "Profile not found." }, { status: 400 });
+          return updated === "revoked"
+            ? HttpServerResponse.jsonUnsafe(
                 { error: "Invalid connection credentials." },
                 { status: 401 },
-              );
+              )
+            : HttpServerResponse.jsonUnsafe({ updated: updated === "updated" });
         }),
       );
       yield* router.add(
@@ -476,10 +480,12 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
               if ((yield* settings.get).hostName === hostName) return yield* state;
               // Persist URL and credential revocation atomically. Active sessions are disconnected
               // only after the database transaction commits.
-              yield* sql
+              const revoked = yield* sql
                 .withTransaction(
                   connections.removeAllPersisted.pipe(
-                    Effect.andThen(settings.setHostName(hostName)),
+                    Effect.flatMap((counts) =>
+                      settings.setHostName(hostName).pipe(Effect.as(counts)),
+                    ),
                   ),
                 )
                 .pipe(Effect.orDie);
@@ -488,6 +494,7 @@ const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: 
               yield* Effect.logInfo("Changed the local host name and revoked all clients").pipe(
                 Effect.annotateLogs({
                   hostname: showtimeLocalHostname(showtimeHostnameLabel(hostName)),
+                  ...revoked,
                 }),
               );
               return yield* state;

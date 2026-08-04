@@ -254,12 +254,18 @@ const make = Effect.gen(function* () {
         ORDER BY name COLLATE NOCASE, created_at`) as unknown as ReadonlyArray<PresetRow>;
       const presets: Array<ChatPreset> = [];
       for (const row of rows) {
-        presets.push(
-          yield* Effect.try({
-            try: () => toPreset(row),
-            catch: (cause) => cause,
-          }),
+        const preset = yield* Effect.try({
+          try: () => toPreset(row),
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch(() =>
+            Effect.logWarning("Skipping invalid stored chat preset").pipe(
+              Effect.annotateLogs({ presetId: row.id, showId: row.show_id }),
+              Effect.as(undefined),
+            ),
+          ),
         );
+        if (preset !== undefined) presets.push(preset);
       }
       return presets;
     });

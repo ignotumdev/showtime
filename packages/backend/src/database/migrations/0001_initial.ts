@@ -157,7 +157,7 @@ const initial = Effect.fn("ShowtimeMigration0001Initial")(function* () {
     body TEXT NOT NULL,
     parts_json TEXT,
     answer_json TEXT,
-    reply_to_message_id TEXT REFERENCES chat_messages(id) ON DELETE RESTRICT,
+    reply_to_message_id TEXT REFERENCES chat_messages(id) ON DELETE CASCADE,
     sent_at TEXT NOT NULL
   )`;
   yield* sql`CREATE INDEX chat_messages_channel_sequence ON chat_messages(channel_id, sequence)`;
