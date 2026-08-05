@@ -39,13 +39,7 @@ jobs:
             artifact: linux
     runs-on: ${{ matrix.os }}
     env:
-      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -57,24 +51,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Validate tag and signing credentials
-        shell: bash
-        run: |
-          node -e "const p=require('./apps/desktop/package.json'); if (process.env.GITHUB_REF_NAME !== 'v'+p.version) throw new Error('Tag must equal v'+p.version)"
-          if [ "$RUNNER_OS" = "Windows" ] && [ -z "$WIN_CSC_LINK" ]; then
-            echo "WIN_CSC_LINK is required for a release" >&2
-            exit 1
-          fi
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-              if [ -z "${!name}" ]; then
-                echo "$name is required for a release" >&2
-                exit 1
-              fi
-            done
-          fi
-      - name: Build signed release artifacts
-        run: pnpm --filter @showtime/desktop release:build -- ${{ runner.os == 'Windows' && '-c.win.forceCodeSigning=true' || runner.os == 'macOS' && '-c.mac.forceCodeSigning=true' || '' }}
+      - name: Validate tag
+        run: node -e "const p=require('./apps/desktop/package.json'); if (process.env.GITHUB_REF_NAME !== 'v'+p.version) throw new Error('Tag must equal v'+p.version)"
+      - name: Build unsigned release artifacts
+        run: pnpm --filter @showtime/desktop release:build
       - uses: actions/upload-artifact@v4
         with:
           name: showtime-${{ matrix.artifact }}
