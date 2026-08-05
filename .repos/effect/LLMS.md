@@ -42,8 +42,8 @@ Effect.gen(function*() {
   })
 )
 
-// Use Schema.TaggedErrorClass to define a custom error
-export class FileProcessingError extends Schema.TaggedErrorClass<FileProcessingError>()("FileProcessingError", {
+// Use Schema.TaggedError to define a custom error
+export class FileProcessingError extends Schema.TaggedError<FileProcessingError>()("FileProcessingError", {
   message: Schema.String
 }) {}
 ```
@@ -82,8 +82,8 @@ export const effectFunction = Effect.fn("effectFunction")(
   })
 )
 
-// Use Schema.TaggedErrorClass to define a custom error
-export class SomeError extends Schema.TaggedErrorClass<SomeError>()("SomeError", {
+// Use Schema.TaggedError to define a custom error
+export class SomeError extends Schema.TaggedError<SomeError>()("SomeError", {
   message: Schema.String
 }) {}
 ```
@@ -150,7 +150,7 @@ export class Database extends Context.Service<Database, {
   )
 }
 
-export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()("DatabaseError", {
+export class DatabaseError extends Schema.TaggedError<DatabaseError>()("DatabaseError", {
   cause: Schema.Defect()
 }) {}
 
@@ -175,14 +175,14 @@ Defining custom errors and handling them with Effect.catch and Effect.catchTag.
 ```ts
 import { Effect, Schema } from "effect"
 
-// Define custom errors using Schema.TaggedErrorClass
-export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseError", {
+// Define custom errors using Schema.TaggedError
+export class ParseError extends Schema.TaggedError<ParseError>()("ParseError", {
   input: Schema.String,
   message: Schema.String
 }) {}
 
-export class ReservedPortError extends Schema.TaggedErrorClass<ReservedPortError>()("ReservedPortError", {
-  port: Schema.Number
+export class ReservedPortError extends Schema.TaggedError<ReservedPortError>()("ReservedPortError", {
+  port: Schema.Int
 }) {}
 
 declare const loadPort: (input: string) => Effect.Effect<number, ParseError | ReservedPortError>
@@ -345,7 +345,7 @@ Build http clients with the `HttpClient` module.
 
 ## Working with child processes
 
-Use the `effect/unstable/process` modules to define child processes and run them with `ChildProcessSpawner.
+Use the `effect/unstable/process` modules to define child processes and run them with `ChildProcessSpawner`.
 
 - **[Working with child processes](./ai-docs/src/60_child-process/10_working-with-child-processes.ts)**: This example shows how to collect process output, compose pipelines, and stream long-running command output.
 

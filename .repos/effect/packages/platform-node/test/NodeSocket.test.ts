@@ -1,5 +1,5 @@
 import { NodeSocket, NodeSocketServer } from "@effect/platform-node"
-import { assert, describe, expect, it } from "@effect/vitest"
+import { assert, describe, it } from "@effect/vitest"
 import { Effect, Queue } from "effect"
 import * as Fiber from "effect/Fiber"
 import * as Stream from "effect/Stream"
@@ -59,10 +59,8 @@ describe("Socket", () => {
           yield* write(new TextEncoder().encode("Hello"))
           yield* write(new TextEncoder().encode("World"))
         }).pipe(Effect.scoped)
-        yield* Effect.promise(async () => {
-          await expect(server).toReceiveMessage(new TextEncoder().encode("Hello"))
-          await expect(server).toReceiveMessage(new TextEncoder().encode("World"))
-        })
+        assert.deepStrictEqual(yield* Effect.promise(() => server.nextMessage), new TextEncoder().encode("Hello"))
+        assert.deepStrictEqual(yield* Effect.promise(() => server.nextMessage), new TextEncoder().encode("World"))
 
         server.send("Right back at you!")
         let message = yield* Queue.take(messages)
@@ -104,6 +102,43 @@ describe("Socket", () => {
       }).pipe(
         Effect.provideService(Socket.WebSocketConstructor, (url) => new globalThis.WebSocket(url))
       ))
+
+    it.effect("reports send errors as SocketError", () =>
+      Effect.gen(function*() {
+        class ThrowingWebSocket extends EventTarget {
+          readonly readyState = globalThis.WebSocket.OPEN
+
+          close(): void {}
+
+          send(): void {
+            throw new Error("send failed")
+          }
+        }
+        const webSocket = new ThrowingWebSocket()
+        const socket = yield* Socket.makeWebSocket(Effect.succeed(url), { closeCodeIsError: () => false }).pipe(
+          Effect.provideService(
+            Socket.WebSocketConstructor,
+            () => webSocket as unknown as globalThis.WebSocket
+          )
+        )
+        const exit = yield* Effect.scoped(Effect.gen(function*() {
+          const run = yield* Effect.forkChild(socket.runRaw(() => {}))
+          const write = yield* socket.writer
+          const exit = yield* Effect.exit(write(new Uint8Array([1])))
+          webSocket.dispatchEvent(new CloseEvent("close", { code: 1000 }))
+          yield* Fiber.join(run)
+          return exit
+        }))
+        assert.strictEqual(exit._tag, "Failure")
+        if (exit._tag === "Failure") {
+          assert.strictEqual(exit.cause.reasons[0]?._tag, "Fail")
+          const reason = exit.cause.reasons[0]
+          if (reason?._tag === "Fail") {
+            assert.isTrue(Socket.SocketError.is(reason.error))
+            assert.strictEqual(reason.error.reason._tag, "SocketWriteError")
+          }
+        }
+      }))
   })
 
   describe("TransformStream", () => {
@@ -148,6 +183,32 @@ describe("Socket", () => {
 
         assert.deepStrictEqual(chunks, ["Hello", "World"])
         assert.deepStrictEqual(received, ["A", "B", "C"])
+      }))
+
+    it.effect("reports writable stream rejection as SocketError", () =>
+      Effect.gen(function*() {
+        const socket = yield* Socket.fromTransformStream(Effect.succeed({
+          readable: new ReadableStream<Uint8Array>({}),
+          writable: new WritableStream<Uint8Array>({
+            write: () => Promise.reject(new Error("write failed"))
+          })
+        }))
+        const exit = yield* Effect.scoped(Effect.gen(function*() {
+          const run = yield* Effect.forkChild(socket.runRaw(() => {}))
+          const write = yield* socket.writer
+          const exit = yield* Effect.exit(write(new Uint8Array([1])))
+          yield* Fiber.interrupt(run)
+          return exit
+        }))
+        assert.strictEqual(exit._tag, "Failure")
+        if (exit._tag === "Failure") {
+          assert.strictEqual(exit.cause.reasons[0]?._tag, "Fail")
+          const reason = exit.cause.reasons[0]
+          if (reason?._tag === "Fail") {
+            assert.isTrue(Socket.SocketError.is(reason.error))
+            assert.strictEqual(reason.error.reason._tag, "SocketWriteError")
+          }
+        }
       }))
   })
 })
