@@ -139,7 +139,7 @@
     overscroll-behavior: none;
   }
   body {
-    @apply m-0 h-full min-w-80 overflow-hidden bg-[#0a0a0a] text-[#fafafa];
+    @apply m-0 h-full min-w-80 overflow-hidden bg-background text-foreground;
     position: relative;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;

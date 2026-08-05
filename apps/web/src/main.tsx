@@ -24,8 +24,6 @@ if (import.meta.hot) import.meta.hot.dispose(uninstallMobileViewport);
 restorePwaConnectionHandoff();
 void registerServiceWorker();
 const pairing = await capturePairingFragment();
-document.documentElement.classList.add("dark");
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {pairing.status === "failed" ? (
@@ -58,7 +56,7 @@ function SynchronizedApp() {
           )}
           {!revoked && (
             <div
-              className="app-height bg-[#0a0a0a]"
+              className="app-height bg-background"
               aria-hidden={expectsConnection && connection.status !== "connected"}
               inert={expectsConnection && connection.status !== "connected" ? true : undefined}
             >

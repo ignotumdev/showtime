@@ -92,6 +92,7 @@ function createWindow() {
 
   win = new BrowserWindow({
     autoHideMenuBar: true,
+    backgroundColor: "#0a0a0a",
     icon: getAppIconPath(),
     titleBarStyle: "hidden",
     titleBarOverlay: {
