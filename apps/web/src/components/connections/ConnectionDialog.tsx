@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import QRCode from "qrcode";
-import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon, WifiOffIcon } from "lucide-react";
 import type {
   ShowtimeConnectionCandidate,
   ShowtimeConnectionsState,
@@ -23,8 +23,23 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Item,
@@ -61,6 +76,7 @@ import { profileAtoms } from "@/client";
 import { useProfileSelection } from "@/profiles";
 import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
 import { showColorClassNames } from "@/components/shows/show-color";
+import { useIsMobileDrawer } from "@/hooks/use-mobile-drawer";
 
 const emptyState: ShowtimeConnectionsState = {
   enabled: false,
@@ -85,6 +101,7 @@ export function ConnectionDialog({
   readonly compact?: boolean;
 }) {
   const [manager] = React.useState(getConnectionManagementClient);
+  const isMobile = useIsMobileDrawer();
   const profilesResult = useAtomValue(profileAtoms.state);
   const profilesState = currentProfilesState(profilesResult);
   const [open, setOpen] = React.useState(false);
@@ -163,8 +180,8 @@ export function ConnectionDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger
+      <Drawer open={open} onOpenChange={setOpen} swipeDirection={isMobile ? "down" : "right"}>
+        <DrawerTrigger
           render={
             <Button
               size={compact ? "icon-sm" : "sm"}
@@ -175,130 +192,157 @@ export function ConnectionDialog({
           }
         >
           <WifiIcon /> {!compact && "Connections"}
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Connections</DialogTitle>
-            <DialogDescription>
+        </DrawerTrigger>
+        <DrawerContent
+          className={
+            isMobile
+              ? "[--drawer-height:calc(var(--app-height)-3rem)]"
+              : "data-[swipe-axis=x]:[--drawer-content-width:min(32rem,100vw)]"
+          }
+        >
+          <DrawerHeader>
+            <DrawerTitle>Connections</DrawerTitle>
+            <DrawerDescription>
               Manage access to Showtime from devices on this network.
-            </DialogDescription>
-          </DialogHeader>
-          {manager.isOwner && (
-            <>
-              <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
-                <ItemContent>
-                  <ItemTitle>Allow connections</ItemTitle>
-                  <ItemDescription>
-                    Host the web app and let approved devices connect.
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Switch
-                    id="showtime-connections-enabled"
-                    checked={state.enabled}
-                    disabled={loading}
-                    onCheckedChange={updateEnabled}
-                  />
-                </ItemActions>
-              </Item>
-              <Item variant="outline">
-                <ItemContent>
-                  <ItemTitle>Host name</ItemTitle>
-                  <ItemDescription>{state.hostname}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={loading || !state.enabled}
-                    onClick={() => setHostNameOpen(true)}
-                  >
-                    Change
-                  </Button>
-                </ItemActions>
-              </Item>
-            </>
-          )}
-          <ItemGroup>
-            {state.clients.map((client) => {
-              const id = client.kind === "pending" ? client.invitationId : client.clientId;
-              const connected = client.kind === "paired" && client.connected;
-              return (
-                <Item key={id} variant="outline">
-                  <ItemMedia>
-                    <span
-                      className={`size-2.5 rounded-full ${connected ? "bg-primary" : "bg-destructive"}`}
-                      aria-label={connected ? "Connected" : "Not connected"}
-                    />
-                  </ItemMedia>
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+            {manager.isOwner && (
+              <>
+                <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
                   <ItemContent>
-                    <ItemTitle className="flex items-center gap-2">
-                      <span className="truncate">{client.name}</span>
-                      <ClientProfileBadge
-                        profile={profilesState?.profiles.find(
-                          (profile) => profile.id === client.clientProfile,
-                        )}
-                      />
-                    </ItemTitle>
+                    <ItemTitle>Allow connections</ItemTitle>
                     <ItemDescription>
-                      {client.kind === "pending"
-                        ? timeUntil(client.expiresAt, now)
-                        : connected
-                          ? "Connected now"
-                          : "Not currently connected"}
-                      {hasShowtimeConnectionManagementScopes(client.scopes)
-                        ? " · Can manage connections"
-                        : ""}
+                      Host the web app and let approved devices connect.
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                    {client.kind === "pending" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={loading || !state.enabled}
-                        onClick={() => setPairingClient(client)}
-                      >
-                        Connect
-                      </Button>
-                    )}
-                    {manager.canDelete && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        disabled={loading}
-                        aria-label={`Remove ${client.name}`}
-                        onClick={() => remove(id)}
-                      >
-                        <Trash2Icon />
-                      </Button>
-                    )}
+                    <Switch
+                      id="showtime-connections-enabled"
+                      checked={state.enabled}
+                      disabled={loading}
+                      onCheckedChange={updateEnabled}
+                    />
                   </ItemActions>
                 </Item>
-              );
-            })}
-          </ItemGroup>
-          {state.enabled && manager.canCreate && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-              onClick={() => setCreateOpen(true)}
-            >
-              <PlusIcon /> Add a new client
-            </Button>
-          )}
-          {!loading && state.clients.length === 0 && (
-            <p className="text-sm text-muted-foreground">No clients have access yet.</p>
-          )}
-          {(error ?? loadError) && (
-            <p role="alert" className="text-sm text-destructive">
-              {error ?? loadError}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
+                <Item variant="outline">
+                  <ItemContent>
+                    <ItemTitle>Host name</ItemTitle>
+                    <ItemDescription>{state.hostname}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loading || !state.enabled}
+                      onClick={() => setHostNameOpen(true)}
+                    >
+                      Change
+                    </Button>
+                  </ItemActions>
+                </Item>
+              </>
+            )}
+            {state.clients.length > 0 && (
+              <ItemGroup>
+                {state.clients.map((client) => {
+                  const id = client.kind === "pending" ? client.invitationId : client.clientId;
+                  const connected = client.kind === "paired" && client.connected;
+                  return (
+                    <Item key={id} variant="outline">
+                      <ItemMedia>
+                        <span
+                          className={`size-2.5 rounded-full ${connected ? "bg-primary" : "bg-destructive"}`}
+                          aria-label={connected ? "Connected" : "Not connected"}
+                        />
+                      </ItemMedia>
+                      <ItemContent>
+                        <ItemTitle className="flex items-center gap-2">
+                          <span className="truncate">{client.name}</span>
+                          <ClientProfileBadge
+                            profile={profilesState?.profiles.find(
+                              (profile) => profile.id === client.clientProfile,
+                            )}
+                          />
+                        </ItemTitle>
+                        <ItemDescription>
+                          {client.kind === "pending"
+                            ? timeUntil(client.expiresAt, now)
+                            : connected
+                              ? "Connected now"
+                              : "Not currently connected"}
+                          {hasShowtimeConnectionManagementScopes(client.scopes)
+                            ? " · Can manage connections"
+                            : ""}
+                        </ItemDescription>
+                      </ItemContent>
+                      <ItemActions>
+                        {client.kind === "pending" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={loading || !state.enabled}
+                            onClick={() => setPairingClient(client)}
+                          >
+                            Connect
+                          </Button>
+                        )}
+                        {manager.canDelete && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            disabled={loading}
+                            aria-label={`Remove ${client.name}`}
+                            onClick={() => remove(id)}
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        )}
+                      </ItemActions>
+                    </Item>
+                  );
+                })}
+              </ItemGroup>
+            )}
+            {state.clients.length > 0 && state.enabled && manager.canCreate && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => setCreateOpen(true)}
+              >
+                <PlusIcon /> Add a new client
+              </Button>
+            )}
+            {!loading && state.clients.length === 0 && (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <WifiOffIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No connected clients</EmptyTitle>
+                  <EmptyDescription>
+                    Add a client to give another device access to Showtime.
+                  </EmptyDescription>
+                </EmptyHeader>
+                {state.enabled && manager.canCreate && (
+                  <EmptyContent>
+                    <Button type="button" variant="outline" onClick={() => setCreateOpen(true)}>
+                      <PlusIcon /> Add a new client
+                    </Button>
+                  </EmptyContent>
+                )}
+              </Empty>
+            )}
+            {(error ?? loadError) && (
+              <p role="alert" className="text-sm text-destructive">
+                {error ?? loadError}
+              </p>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
       <CreateClientDialog
         manager={manager}
         open={createOpen}

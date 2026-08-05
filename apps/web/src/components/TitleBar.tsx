@@ -109,7 +109,9 @@ export function TitleBar({
         {actions}
         {desktopHost && !isLiveRoute && <DesktopUpdateDialog />}
         {!desktopHost && isShowsRoute && <PwaInstallButton compact />}
-        {!isLiveRoute && (
+        {isLiveRoute ? (
+          <ConnectionDialog compact />
+        ) : (
           <>
             <ConnectionDialog compact className="md:hidden" />
             <ConnectionDialog className="hidden md:inline-flex" />
