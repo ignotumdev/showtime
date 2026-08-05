@@ -366,6 +366,8 @@ function InlineSongFields({
   const [isSaving, setIsSaving] = React.useState(false);
   const nameFocusedRef = React.useRef(false);
   const artistFocusedRef = React.useRef(false);
+  const cancelNameBlurSaveRef = React.useRef(false);
+  const cancelArtistBlurSaveRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!nameFocusedRef.current) setName(song.name);
@@ -397,15 +399,21 @@ function InlineSongFields({
         className="pointer-events-auto w-auto max-w-full border-transparent bg-transparent shadow-none [field-sizing:content] focus-visible:bg-input/30 disabled:bg-transparent dark:bg-transparent dark:disabled:bg-transparent dark:focus-visible:bg-input/30"
         onFocus={() => {
           nameFocusedRef.current = true;
+          cancelNameBlurSaveRef.current = false;
         }}
         onChange={(event) => setName(event.target.value)}
         onBlur={() => {
           nameFocusedRef.current = false;
+          if (cancelNameBlurSaveRef.current) {
+            cancelNameBlurSaveRef.current = false;
+            return;
+          }
           void save();
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
           if (event.key === "Escape") {
+            cancelNameBlurSaveRef.current = true;
             setName(song.name);
             event.currentTarget.blur();
           }
@@ -421,15 +429,21 @@ function InlineSongFields({
             className="h-auto min-w-0 max-w-full w-auto border-0 bg-transparent p-0 leading-none shadow-none [field-sizing:content] focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
             onFocus={() => {
               artistFocusedRef.current = true;
+              cancelArtistBlurSaveRef.current = false;
             }}
             onChange={(event) => setArtist(event.target.value)}
             onBlur={() => {
               artistFocusedRef.current = false;
+              if (cancelArtistBlurSaveRef.current) {
+                cancelArtistBlurSaveRef.current = false;
+                return;
+              }
               void save();
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
               if (event.key === "Escape") {
+                cancelArtistBlurSaveRef.current = true;
                 setArtist(song.artist);
                 event.currentTarget.blur();
               }
