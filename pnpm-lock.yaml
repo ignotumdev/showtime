@@ -10,14 +10,14 @@ catalogs:
       specifier: ^1.6.0
       version: 1.6.0
     '@effect/atom-react':
-      specifier: 4.0.0-beta.97
-      version: 4.0.0-beta.97
+      specifier: 4.0.0-beta.103
+      version: 4.0.0-beta.103
     '@effect/platform-node':
-      specifier: 4.0.0-beta.97
-      version: 4.0.0-beta.97
+      specifier: 4.0.0-beta.103
+      version: 4.0.0-beta.103
     '@effect/sql-sqlite-node':
-      specifier: 4.0.0-beta.97
-      version: 4.0.0-beta.97
+      specifier: 4.0.0-beta.103
+      version: 4.0.0-beta.103
     '@fontsource-variable/inter':
       specifier: ^5.2.8
       version: 5.2.8
@@ -49,8 +49,8 @@ catalogs:
       specifier: ^2.1.1
       version: 2.1.1
     effect:
-      specifier: 4.0.0-beta.97
-      version: 4.0.0-beta.97
+      specifier: 4.0.0-beta.103
+      version: 4.0.0-beta.103
     electron-builder:
       specifier: ^26.15.3
       version: 26.15.3
@@ -112,7 +112,7 @@ importers:
     dependencies:
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-beta.97(effect@4.0.0-beta.97)(ioredis@5.11.1)
+        version: 4.0.0-beta.103(effect@4.0.0-beta.103)(ioredis@5.11.1)
       '@showtime/backend':
         specifier: workspace:*
         version: link:../../packages/backend
@@ -121,7 +121,7 @@ importers:
         version: link:../../packages/shared
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -158,7 +158,7 @@ importers:
         version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@effect/atom-react':
         specifier: 'catalog:'
-        version: 4.0.0-beta.97(effect@4.0.0-beta.97)(react@19.2.7)(scheduler@0.27.0)
+        version: 4.0.0-beta.103(effect@4.0.0-beta.103)(react@19.2.7)(scheduler@0.27.0)
       '@fontsource-variable/inter':
         specifier: 'catalog:'
         version: 5.2.8
@@ -185,7 +185,7 @@ importers:
         version: 2.1.1
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
       lucide-react:
         specifier: 'catalog:'
         version: 1.23.0(react@19.2.7)
@@ -255,10 +255,10 @@ importers:
     dependencies:
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-beta.97(effect@4.0.0-beta.97)(ioredis@5.11.1)
+        version: 4.0.0-beta.103(effect@4.0.0-beta.103)(ioredis@5.11.1)
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
-        version: 4.0.0-beta.97(effect@4.0.0-beta.97)
+        version: 4.0.0-beta.103(effect@4.0.0-beta.103)
       '@homebridge/ciao':
         specifier: 'catalog:'
         version: 1.3.10(patch_hash=6cca4a032db7128fb21b8621d83c09126372fedb75503dc2ef9e4f0b1f054820)
@@ -270,7 +270,7 @@ importers:
         version: link:../shared
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
       nanoid:
         specifier: 'catalog:'
         version: 5.1.16
@@ -289,7 +289,7 @@ importers:
     dependencies:
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
 
   packages/frontend:
     dependencies:
@@ -298,7 +298,7 @@ importers:
         version: link:../contracts
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
     devDependencies:
       vite-plus:
         specifier: 'catalog:'
@@ -311,7 +311,7 @@ importers:
     dependencies:
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.97
+        version: 4.0.0-beta.103
     devDependencies:
       vite-plus:
         specifier: 'catalog:'
@@ -492,30 +492,30 @@ packages:
   '@dotenvx/primitives@0.8.0':
     resolution: {integrity: sha512-VYJy0uhFm9zTJ1TxBaW/pA8bjbOM/OttaNMwZ1RHG4JKyRG7DhSdiqD1ipQoAyoD22olUtxbP78W9xY3Wd11bg==}
 
-  '@effect/atom-react@4.0.0-beta.97':
-    resolution: {integrity: sha512-yKj5KqgDuAayxkVdXzt0kJaqob0QLozqepPVhGj/I0QPIvGSEfX3OaBGt09irGMyqbP4CKMGtiewyHwRwPZSsw==}
+  '@effect/atom-react@4.0.0-beta.103':
+    resolution: {integrity: sha512-1HJ+Cyq4ssLnH2UZ8OVnhtMGAySabtzZo7imKC+vEfxOW3lvJYpGZeicxQX5Ii/7AdvlR+19p/6K2a5IPKYAow==}
     peerDependencies:
-      effect: ^4.0.0-beta.97
+      effect: ^4.0.0-beta.103
       react: ^19.2.4
       scheduler: '*'
 
-  '@effect/platform-node-shared@4.0.0-beta.97':
-    resolution: {integrity: sha512-sAlygOlDLLERk7fC24f7Aa4G3wkEbGyyMEileHTHU2fThiPYSGMqNRK1LLnNr17m2+JR7BHbycwXkJkM18BAQw==}
+  '@effect/platform-node-shared@4.0.0-beta.103':
+    resolution: {integrity: sha512-0aCZMBid5ifqmY55TkfCDLaGTIM8qu3bNFUW7qL9vh/7jFOkaIAMX2MA8muG4deqW17XWxawddWu4v0fK+UW3g==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.97
+      effect: ^4.0.0-beta.103
 
-  '@effect/platform-node@4.0.0-beta.97':
-    resolution: {integrity: sha512-Vd40VLh+Y08Bs37KWtbe9AgO2+t3RKZKGX9YC6ZKAcswu4tXR3CwSI7V2MN+GgS+ez/GLmqH1WrzDDlaIAxKPA==}
+  '@effect/platform-node@4.0.0-beta.103':
+    resolution: {integrity: sha512-VD8fbpendwFokMwzC7/MxazjhEVDihPC5NZtomYEyZwGaA1LXMvwP1y8pfXwfshUkG56TN4EMQqzu72c0B9FhA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.97
+      effect: ^4.0.0-beta.103
       ioredis: ^5.7.0
 
-  '@effect/sql-sqlite-node@4.0.0-beta.97':
-    resolution: {integrity: sha512-mzP67KmXK2vGU3GrlOdM0TWST7mWI8kMNqPu7Gl2I30eSv+DmBes1qYVIQWUnE3b5ka2LCP7iFzjxNjtIfqn8g==}
+  '@effect/sql-sqlite-node@4.0.0-beta.103':
+    resolution: {integrity: sha512-abODpsX80oHt6TExeSEFNklrC3M4LpR63n1IbJaTFSzK6nOPFtwegg7Zgn8ErZkOcShD7cg38dqf055qBijn6w==}
     peerDependencies:
-      effect: ^4.0.0-beta.97
+      effect: ^4.0.0-beta.103
 
   '@electron-internal/extract-zip@1.0.4':
     resolution: {integrity: sha512-Zr1Vs7E9tpCNhZHDAbFVXc2gEVCG9RqPDjrno5+bdgB6LRAuvgyMHJut4NCVyYwtAieapMzc3fiQ3CSTi75ARg==}
@@ -2053,8 +2053,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@4.0.0-beta.97:
-    resolution: {integrity: sha512-pK03HpQVxGZOWdwDAy/iwvV8u3KYcUf2mOWyWqaut2zau8V2u6ejWP7b4BELjyUIiZWW1fl/s/VJpgZUcTjThg==}
+  effect@4.0.0-beta.103:
+    resolution: {integrity: sha512-pE8TxF4m2tQzVI+77dIlm3s+81TACV1AiX1JEkvY+zVuxgQQ8aGSkqXNJF6b/ST+coCSk5cUdbULpQ7sm4oHyw==}
 
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
@@ -4166,25 +4166,25 @@ snapshots:
 
   '@dotenvx/primitives@0.8.0': {}
 
-  '@effect/atom-react@4.0.0-beta.97(effect@4.0.0-beta.97)(react@19.2.7)(scheduler@0.27.0)':
+  '@effect/atom-react@4.0.0-beta.103(effect@4.0.0-beta.103)(react@19.2.7)(scheduler@0.27.0)':
     dependencies:
-      effect: 4.0.0-beta.97
+      effect: 4.0.0-beta.103
       react: 19.2.7
       scheduler: 0.27.0
 
-  '@effect/platform-node-shared@4.0.0-beta.97(effect@4.0.0-beta.97)':
+  '@effect/platform-node-shared@4.0.0-beta.103(effect@4.0.0-beta.103)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-beta.97
+      effect: 4.0.0-beta.103
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.0-beta.97(effect@4.0.0-beta.97)(ioredis@5.11.1)':
+  '@effect/platform-node@4.0.0-beta.103(effect@4.0.0-beta.103)(ioredis@5.11.1)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.97(effect@4.0.0-beta.97)
-      effect: 4.0.0-beta.97
+      '@effect/platform-node-shared': 4.0.0-beta.103(effect@4.0.0-beta.103)
+      effect: 4.0.0-beta.103
       ioredis: 5.11.1
       mime: 4.1.0
       undici: 8.7.0
@@ -4192,9 +4192,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-sqlite-node@4.0.0-beta.97(effect@4.0.0-beta.97)':
+  '@effect/sql-sqlite-node@4.0.0-beta.103(effect@4.0.0-beta.103)':
     dependencies:
-      effect: 4.0.0-beta.97
+      effect: 4.0.0-beta.103
 
   '@electron-internal/extract-zip@1.0.4': {}
 
@@ -5608,7 +5608,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.0.0-beta.97:
+  effect@4.0.0-beta.103:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.9.0
