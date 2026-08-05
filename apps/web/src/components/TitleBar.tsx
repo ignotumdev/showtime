@@ -60,7 +60,7 @@ export function TitleBar({
           : undefined
       }
       className={cn(
-        "title-bar-height title-bar-padding fixed inset-x-0 top-0 z-10 flex min-w-0 select-none items-center bg-[#0a0a0a] px-2 pb-0 sm:px-3",
+        "title-bar-height title-bar-padding fixed inset-x-0 top-0 z-10 flex min-w-0 select-none items-center bg-background px-2 pb-0 sm:px-3",
         desktopHost && "drag-region",
         stack === "below-content" && "z-0",
         stack === "above-content" && "z-30",
