@@ -33,7 +33,7 @@
   icon: "../../assets/icon.png",
   mac: {
     target: ["dmg", "zip"],
-    notarize: true,
+    notarize: false,
     artifactName: "${productName}-Mac-${version}-Installer.${ext}",
   },
   win: {
