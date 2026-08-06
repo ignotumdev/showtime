@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { useAtomSet } from "@effect/atom-react";
 import { showDialogAtom } from "@/client";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
-import { ArrowLeftIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { showColorClassNames } from "./shows/show-color";
 import { isDesktopHost } from "@/platform";
-import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ShowPageAction } from "@/components/shows/ShowPageAction";
 import { PwaInstallButton } from "@/components/connections/PwaInstallButton";
 import { DesktopUpdateDialog } from "@/components/updates/DesktopUpdateDialog";
@@ -26,6 +25,7 @@ type TitleBarProps = {
   };
   onLiveBack?: () => void;
   actions?: React.ReactNode;
+  hideSettings?: boolean;
   stack?: "default" | "above-content" | "below-content";
 };
 
@@ -37,6 +37,7 @@ export function TitleBar({
   liveShow,
   onLiveBack,
   actions,
+  hideSettings = false,
   stack = "default",
 }: TitleBarProps) {
   const pathname = useRouterState({
@@ -46,6 +47,7 @@ export function TitleBar({
   const setDialog = useAtomSet(showDialogAtom);
   const isShowsRoute = pathname === "/";
   const isLiveRoute = pathname.includes("/live");
+  const isSettingsRoute = pathname.includes("/settings");
   const showId = typeof params.showId === "string" ? params.showId : undefined;
   const showColorClassName = showColorClassNames[liveShow?.color ?? "neutral"];
   const desktopHost = isDesktopHost();
@@ -109,14 +111,35 @@ export function TitleBar({
         {actions}
         {desktopHost && !isLiveRoute && <DesktopUpdateDialog />}
         {!desktopHost && isShowsRoute && <PwaInstallButton compact />}
-        {isLiveRoute ? (
-          <ConnectionDialog compact />
-        ) : (
-          <>
-            <ConnectionDialog compact className="md:hidden" />
-            <ConnectionDialog className="hidden md:inline-flex" />
-          </>
-        )}
+        {!hideSettings &&
+          !isSettingsRoute &&
+          (showId ? (
+            <Button
+              nativeButton={false}
+              size={isLiveRoute ? "icon-sm" : "sm"}
+              variant="ghost"
+              aria-label="Settings"
+              render={
+                <Link
+                  to="/shows/$showId/settings/$section"
+                  params={{ showId, section: "general" }}
+                />
+              }
+            >
+              <SettingsIcon />{" "}
+              <span className={isLiveRoute ? "sr-only" : "hidden md:inline"}>Settings</span>
+            </Button>
+          ) : (
+            <Button
+              nativeButton={false}
+              size="sm"
+              variant="ghost"
+              aria-label="Settings"
+              render={<Link to="/settings/$section" params={{ section: "updates" }} />}
+            >
+              <SettingsIcon /> <span className="hidden md:inline">Settings</span>
+            </Button>
+          ))}
         {isShowsRoute && (
           <Button size="sm" aria-label="New show" onClick={() => setDialog({ type: "create" })}>
             <PlusIcon />

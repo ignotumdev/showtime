@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Item, ItemActions, ItemContent, ItemGroup } from "@/components/ui/item";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -31,15 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { showColorClassNames } from "@/components/shows/show-color";
 import { cn } from "@/lib/utils";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
+import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia } from "@/components/ui/item";
 import { ColorPickerPopover } from "@/components/ColorPickerPopover";
+import { SettingsHeader, SettingsSection } from "@/components/settings/SettingsPage";
 
 const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 
@@ -244,6 +239,42 @@ function ProfileDialog({
   readonly state: ProfilesState | undefined;
   readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Profiles</DialogTitle>
+          <DialogDescription>
+            Choose names and colors, and set the profile used by default.
+          </DialogDescription>
+        </DialogHeader>
+        <ProfilesSettingsContent state={state} loadResult={loadResult} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ProfilesSettings() {
+  const result = useAtomValue(profileAtoms.state);
+  const state = currentProfilesState(result);
+
+  return (
+    <div className="space-y-6">
+      <SettingsHeader>Profiles</SettingsHeader>
+      <SettingsSection>
+        <ProfilesSettingsContent state={state} loadResult={result} />
+      </SettingsSection>
+    </div>
+  );
+}
+
+function ProfilesSettingsContent({
+  state,
+  loadResult,
+}: {
+  readonly state: ProfilesState | undefined;
+  readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
+}) {
   const create = useAtomSet(profileAtoms.create, { mode: "promiseExit" });
   const [error, setError] = React.useState<string>();
   const [adding, setAdding] = React.useState(false);
@@ -266,38 +297,32 @@ function ProfileDialog({
       : undefined;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Profiles</DialogTitle>
-          <DialogDescription>
-            Choose names and colors, and set the profile used by default.
-          </DialogDescription>
-        </DialogHeader>
-        <ItemGroup>
-          {state?.profiles.map((profile) => (
-            <ProfileRow
-              key={profile.id}
-              profile={profile}
-              isDefault={profile.id === state.defaultProfileId}
-              onError={setError}
-            />
-          ))}
-        </ItemGroup>
+    <div className="space-y-4">
+      <div className="flex min-h-8 items-center justify-end">
         <Button type="button" variant="outline" disabled={!state || adding} onClick={add}>
           <PlusIcon /> {adding ? "Adding…" : "Add profile"}
         </Button>
-        {(error ?? loadError) && (
-          <p role="alert" className="text-sm text-destructive">
-            {error ?? loadError}
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
+      </div>
+      <ItemGroup className="gap-0 divide-y">
+        {state?.profiles.map((profile) => (
+          <ProfileItem
+            key={profile.id}
+            profile={profile}
+            isDefault={profile.id === state.defaultProfileId}
+            onError={setError}
+          />
+        ))}
+      </ItemGroup>
+      {(error ?? loadError) && (
+        <p role="alert" className="text-sm text-destructive">
+          {error ?? loadError}
+        </p>
+      )}
+    </div>
   );
 }
 
-function ProfileRow({
+function ProfileItem({
   profile,
   isDefault,
   onError,
@@ -353,9 +378,28 @@ function ProfileRow({
   };
 
   return (
-    <Item variant="outline" className="flex-nowrap">
+    <Item className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
+      <ItemMedia>
+        <ColorPickerPopover
+          color={color}
+          onColorChange={(nextColor) => {
+            setColor(nextColor);
+            save(name, nextColor);
+          }}
+          trigger={
+            <button
+              type="button"
+              className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label={`Choose color for ${profile.name}`}
+              disabled={pending}
+            />
+          }
+        >
+          <ProfileAvatar name={name || profile.name} color={color} className="size-11 text-sm" />
+        </ColorPickerPopover>
+      </ItemMedia>
       <ItemContent className="min-w-0">
-        <InputGroup>
+        <InputGroup variant="ghost" className="max-w-md">
           <InputGroupInput
             aria-label={`Name for ${profile.name}`}
             value={name}
@@ -378,36 +422,19 @@ function ProfileRow({
               }
             }}
           />
-          <InputGroupAddon>
-            <ColorPickerPopover
-              color={color}
-              onColorChange={(nextColor) => {
-                setColor(nextColor);
-                save(name, nextColor);
-              }}
-              trigger={
-                <InputGroupButton
-                  size="icon-xs"
-                  aria-label={`Choose color for ${profile.name}`}
-                  disabled={pending}
-                />
-              }
-            >
-              <span className={cn(showColorClassNames[color], "size-3 rounded-full")} />
-            </ColorPickerPopover>
-          </InputGroupAddon>
         </InputGroup>
       </ItemContent>
-      <ItemActions>
+      <ItemActions className="ml-auto shrink-0">
         <Button
           type="button"
-          size="icon-sm"
+          size={isDefault ? "sm" : "icon-sm"}
           variant={isDefault ? "secondary" : "ghost"}
           aria-label={isDefault ? `${profile.name} is default` : `Set ${profile.name} as default`}
           disabled={busy || pending || isDefault}
           onClick={() => run(() => setDefault({ payload: { id: profile.id }, ...mutationOptions }))}
         >
           <StarIcon className={isDefault ? "fill-current" : undefined} />
+          {isDefault && "Default"}
         </Button>
         <Button
           type="button"
