@@ -5,7 +5,9 @@ export type { ChatOpenRequest } from "./ChatNavigationState";
 
 const eventName = "showtime-chat-open";
 
-const activeShowId = () => {
+const activeChatShowId = () => {
+  const pathname = router.state.location.pathname;
+  if (!pathname.includes("/live/") && !pathname.endsWith("/chat")) return undefined;
   for (const match of router.state.matches) {
     const showId = (match.params as { readonly showId?: unknown }).showId;
     if (typeof showId === "string") return showId;
@@ -14,8 +16,8 @@ const activeShowId = () => {
 };
 
 const chatNavigation = makeChatNavigation({
-  getActiveShowId: activeShowId,
-  navigateToShow: (showId) => router.navigate({ to: "/shows/$showId", params: { showId } }),
+  getActiveShowId: activeChatShowId,
+  navigateToShow: (showId) => router.navigate({ to: "/shows/$showId/chat", params: { showId } }),
   publishOpenRequest: () => window.dispatchEvent(new Event(eventName)),
 });
 
