@@ -17,6 +17,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,11 +51,7 @@ import {
 } from "@/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemGroup } from "@/components/ui/item";
 import { ColorPickerPopover } from "@/components/ColorPickerPopover";
-import {
-  SettingsHeader,
-  SettingsItem,
-  SettingsSection,
-} from "@/components/settings/SettingsPage";
+import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
 import { colorPreviewClassNames } from "@/components/color";
 
 const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
@@ -367,7 +374,10 @@ function ProfilesSettingsContent({
                 if (!profile || profile.id === state?.defaultProfileId) return;
                 setSettingDefault(true);
                 setError(undefined);
-                const result = await setDefault({ payload: { id: profile.id }, ...mutationOptions });
+                const result = await setDefault({
+                  payload: { id: profile.id },
+                  ...mutationOptions,
+                });
                 if (Exit.isFailure(result)) setError(rpcErrorMessageFromCause(result.cause));
                 setSettingDefault(false);
               }}
@@ -446,6 +456,8 @@ function ProfileItem({
   const [name, setName] = React.useState(profile.name as string);
   const [color, setColor] = React.useState<Color>(profile.color);
   const [busy, setBusy] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string>();
   const pending = isPendingProfile(profile);
   const saveQueue = React.useRef(Promise.resolve());
   const suppressNextBlurSave = React.useRef(false);
@@ -453,17 +465,6 @@ function ProfileItem({
     setName(profile.name);
     setColor(profile.color);
   }, [profile.color, profile.name]);
-
-  const run = (operation: () => Promise<Exit.Exit<unknown, unknown>>) => {
-    setBusy(true);
-    onError(undefined);
-    saveQueue.current = saveQueue.current
-      .then(async () => {
-        const result = await operation();
-        if (Exit.isFailure(result)) onError(rpcErrorMessageFromCause(result.cause));
-      })
-      .finally(() => setBusy(false));
-  };
 
   const save = (nextName: string, nextColor: Color) => {
     const trimmedName = nextName.trim();
@@ -486,70 +487,114 @@ function ProfileItem({
     });
   };
 
+  const deleteProfile = async () => {
+    setBusy(true);
+    setDeleteError(undefined);
+    const result = await remove({ payload: { id: profile.id }, ...mutationOptions });
+    if (Exit.isFailure(result)) {
+      setDeleteError(rpcErrorMessageFromCause(result.cause));
+    } else {
+      setDeleteOpen(false);
+    }
+    setBusy(false);
+  };
+
   return (
-    <Item className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
-      <ItemContent className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <InputGroup variant="ghost" className="w-fit max-w-full">
-            <InputGroupAddon className="pl-3">
-              <ColorPickerPopover
-                color={color}
-                onColorChange={(nextColor) => {
-                  setColor(nextColor);
-                  save(name, nextColor);
-                }}
-                trigger={
-                  <button
-                    type="button"
-                    className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                    aria-label={`Choose color for ${profile.name}`}
-                    disabled={pending}
+    <>
+      <Item className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
+        <ItemContent className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <InputGroup variant="ghost" className="w-fit max-w-full">
+              <InputGroupAddon className="pl-3">
+                <ColorPickerPopover
+                  color={color}
+                  onColorChange={(nextColor) => {
+                    setColor(nextColor);
+                    save(name, nextColor);
+                  }}
+                  trigger={
+                    <button
+                      type="button"
+                      className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      aria-label={`Choose color for ${profile.name}`}
+                      disabled={pending}
+                    />
+                  }
+                >
+                  <span
+                    className={cn("block size-3 rounded-full", colorPreviewClassNames[color])}
                   />
-                }
-              >
-                <span className={cn("block size-3 rounded-full", colorPreviewClassNames[color])} />
-              </ColorPickerPopover>
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label={`Name for ${profile.name}`}
-              className="w-auto min-w-0 flex-none [field-sizing:content]"
-              size={Math.max(1, name.length)}
-              value={name}
-              maxLength={80}
-              disabled={pending}
-              onChange={(event) => setName(event.currentTarget.value)}
-              onBlur={() => {
-                if (suppressNextBlurSave.current) {
-                  suppressNextBlurSave.current = false;
-                  return;
-                }
-                save(name, color);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") {
-                  suppressNextBlurSave.current = true;
-                  setName(profile.name);
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-          </InputGroup>
-          {isDefault && <Badge variant="outline">Default</Badge>}
-        </div>
-      </ItemContent>
-      <ItemActions className="ml-auto shrink-0">
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          aria-label={`Delete ${profile.name}`}
-          disabled={busy || pending || isDefault}
-          onClick={() => run(() => remove({ payload: { id: profile.id }, ...mutationOptions }))}
-        >
-          <Trash2Icon /> Delete
-        </Button>
-      </ItemActions>
-    </Item>
+                </ColorPickerPopover>
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label={`Name for ${profile.name}`}
+                className="w-auto min-w-0 flex-none [field-sizing:content]"
+                size={Math.max(1, name.length)}
+                value={name}
+                maxLength={80}
+                disabled={pending}
+                onChange={(event) => setName(event.currentTarget.value)}
+                onBlur={() => {
+                  if (suppressNextBlurSave.current) {
+                    suppressNextBlurSave.current = false;
+                    return;
+                  }
+                  save(name, color);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") {
+                    suppressNextBlurSave.current = true;
+                    setName(profile.name);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </InputGroup>
+            {isDefault && <Badge variant="outline">Default</Badge>}
+          </div>
+        </ItemContent>
+        <ItemActions className="ml-auto shrink-0">
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            aria-label={`Delete ${profile.name}`}
+            disabled={busy || pending || isDefault}
+            onClick={() => {
+              setDeleteError(undefined);
+              setDeleteOpen(true);
+            }}
+          >
+            <Trash2Icon /> Delete
+          </Button>
+        </ItemActions>
+      </Item>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete profile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong className="font-semibold text-foreground">{profile.name}</strong> will be
+              permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy} onClick={deleteProfile}>
+              {busy ? "Deleting..." : "Delete profile"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

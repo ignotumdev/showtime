@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { ArrowLeftIcon, Settings2Icon } from "lucide-react";
 import { showsAtom } from "@/client";
 import {
   Select,
@@ -57,11 +58,16 @@ export function ShowSwitcher({
       <Select value={showId ?? allShowsValue} onValueChange={select}>
         <SelectTrigger aria-label="Active show">
           <SelectValue>
-            {selected ? <ShowLabel name={selected.name} color={selected.color} /> : "All shows"}
+            {selected ? (
+              <ShowLabel name={selected.name} color={selected.color} />
+            ) : destination === "settings" ? (
+              "General"
+            ) : (
+              "All shows"
+            )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={allShowsValue}>All shows</SelectItem>
           {shows.map((show) => (
             <SelectItem
               key={show.id}
@@ -71,6 +77,18 @@ export function ShowSwitcher({
               <ShowLabel name={show.name} color={show.color} />
             </SelectItem>
           ))}
+          <SelectItem value={allShowsValue}>
+            <span className="flex items-center gap-2">
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                {destination === "settings" ? (
+                  <Settings2Icon className="size-3.5" />
+                ) : (
+                  <ArrowLeftIcon className="size-3.5" />
+                )}
+              </span>
+              <span>{destination === "settings" ? "General" : "All shows"}</span>
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -86,7 +104,7 @@ function ShowLabel({
 }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className={cn(showColorClassNames[color], "size-3 shrink-0 rounded-sm")} />
+      <span className={cn(showColorClassNames[color], "size-4 shrink-0 rounded-[2px]")} />
       <span className="truncate">{name}</span>
     </span>
   );

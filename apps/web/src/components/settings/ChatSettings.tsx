@@ -5,7 +5,6 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import {
   chatsSyncKey,
   type ChatChannel,
-  type ChatChannelId,
   type ChatChannelName,
   type ChatSnapshot,
   type Profile,
@@ -19,16 +18,18 @@ import { currentProfilesState } from "@/components/profiles/ProfileSwitcher";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   InputGroup,
   InputGroupAddon,
@@ -205,25 +206,30 @@ function ChatSettingsLoaded({
         </div>
       </SettingsSection>
 
-      <Dialog
+      <AlertDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(undefined)}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete channel?</DialogTitle>
-            <DialogDescription>
-              All messages in #{deleteTarget?.name} will be permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" disabled={busy} onClick={remove}>
-              <Trash2Icon /> Delete channel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete channel?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All messages in{" "}
+              <strong className="font-semibold text-foreground">#{deleteTarget?.name}</strong> will
+              be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy} onClick={remove}>
+              Delete channel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -377,28 +383,37 @@ function ChannelNotifications({
           />
         ),
       )}
-      <Card>
-        <CardContent>
+      <Card className="p-0">
+        <CardContent className="p-0">
           {ready ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Profile</TableHead>
-                  {channels.map((channel) => (
-                    <TableHead key={channel.id} scope="col" className="text-center">
-                      #{channel.name}
+                  <TableHead scope="col" className="w-1">
+                    Channel
+                  </TableHead>
+                  {profiles.map((profile) => (
+                    <TableHead key={profile.id} scope="col" className="text-center">
+                      <span className="flex items-center justify-center gap-2">
+                        <ProfileAvatar
+                          name={profile.name}
+                          color={profile.color}
+                          className="size-6 text-[10px]"
+                        />
+                        {profile.name}
+                      </span>
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {profiles.map((profile) => (
-                  <NotificationProfileRow
-                    key={profile.id}
+                {channels.map((channel) => (
+                  <NotificationChannelRow
+                    key={channel.id}
                     showId={showId}
-                    profile={profile}
-                    channels={channels}
-                    snapshot={snapshotFor(profile)!}
+                    channel={channel}
+                    profiles={profiles}
+                    snapshotFor={(profile) => snapshotFor(profile)!}
                     onError={setError}
                   />
                 ))}
@@ -422,62 +437,83 @@ function ChannelNotifications({
   );
 }
 
-function NotificationProfileRow({
+function NotificationChannelRow({
   showId,
+  channel,
+  profiles,
+  snapshotFor,
+  onError,
+}: {
+  readonly showId: ShowId;
+  readonly channel: ChatChannel;
+  readonly profiles: ReadonlyArray<Profile>;
+  readonly snapshotFor: (profile: Profile) => ChatSnapshot;
+  readonly onError: (message: string | undefined) => void;
+}) {
+  return (
+    <TableRow>
+      <TableHead scope="row" className="w-1">
+        #{channel.name}
+      </TableHead>
+      {profiles.map((profile) => (
+        <NotificationToggleCell
+          key={profile.id}
+          showId={showId}
+          channel={channel}
+          profile={profile}
+          snapshot={snapshotFor(profile)}
+          onError={onError}
+        />
+      ))}
+    </TableRow>
+  );
+}
+
+function NotificationToggleCell({
+  showId,
+  channel,
   profile,
-  channels,
   snapshot,
   onError,
 }: {
   readonly showId: ShowId;
+  readonly channel: ChatChannel;
   readonly profile: Profile;
-  readonly channels: ReadonlyArray<ChatChannel>;
   readonly snapshot: ChatSnapshot;
   readonly onError: (message: string | undefined) => void;
 }) {
   const setNotifications = useAtomSet(chatAtoms(showId, profile.id).setNotifications, {
     mode: "promiseExit",
   });
-  const [savingChannelId, setSavingChannelId] = React.useState<ChatChannelId>();
+  const [saving, setSaving] = React.useState(false);
 
-  const toggle = async (channel: ChatChannel, enabled: boolean) => {
-    setSavingChannelId(channel.id);
+  const toggle = async (enabled: boolean) => {
+    setSaving(true);
     onError(undefined);
     const exit = await setNotifications({
       payload: { showId, channelId: channel.id, profileId: profile.id, enabled },
       reactivityKeys: chatsSyncKey(showId),
     });
     if (Exit.isFailure(exit)) onError(rpcErrorMessageFromCause(exit.cause));
-    setSavingChannelId(undefined);
+    setSaving(false);
   };
 
+  const profileChannel = snapshot.channels.find((item) => item.id === channel.id)!;
+
   return (
-    <TableRow>
-      <TableHead scope="row">
-        <span className="flex items-center gap-2">
-          <ProfileAvatar name={profile.name} color={profile.color} className="size-6 text-[10px]" />
-          {profile.name}
-        </span>
-      </TableHead>
-      {channels.map((channel) => {
-        const profileChannel = snapshot.channels.find((item) => item.id === channel.id)!;
-        return (
-          <TableCell key={channel.id} className="text-center">
-            <Button
-              type="button"
-              size="xs"
-              variant={profileChannel.notificationsEnabled ? "secondary" : "destructive"}
-              aria-label={`${channel.name} notifications for ${profile.name}`}
-              aria-pressed={profileChannel.notificationsEnabled}
-              disabled={savingChannelId === channel.id}
-              onClick={() => void toggle(channel, !profileChannel.notificationsEnabled)}
-            >
-              {profileChannel.notificationsEnabled ? <BellIcon /> : <BellOffIcon />}
-              {profileChannel.notificationsEnabled ? "On" : "Off"}
-            </Button>
-          </TableCell>
-        );
-      })}
-    </TableRow>
+    <TableCell className="text-center">
+      <Button
+        type="button"
+        size="xs"
+        variant={profileChannel.notificationsEnabled ? "secondary" : "destructive"}
+        aria-label={`${channel.name} notifications for ${profile.name}`}
+        aria-pressed={profileChannel.notificationsEnabled}
+        disabled={saving}
+        onClick={() => void toggle(!profileChannel.notificationsEnabled)}
+      >
+        {profileChannel.notificationsEnabled ? <BellIcon /> : <BellOffIcon />}
+        {profileChannel.notificationsEnabled ? "On" : "Off"}
+      </Button>
+    </TableCell>
   );
 }

@@ -3,6 +3,17 @@ import type { ShowtimeDesktopUpdateState } from "@showtime/shared";
 import { DownloadIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -106,71 +117,82 @@ export function DesktopUpdateDialogView({
   const version = "version" in state ? state.version : undefined;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) setConfirmInstall(false);
-      }}
-    >
-      <DialogTrigger render={<Button variant="ghost" size="sm" aria-label={label} />}>
-        {state.kind === "downloading" ? (
-          <RefreshCwIcon className="animate-spin" />
-        ) : (
-          <DownloadIcon />
-        )}
-        <span className="hidden md:inline">{label}</span>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{confirmInstall ? "Restart Showtime now?" : "Showtime update"}</DialogTitle>
-          <DialogDescription>
-            {confirmInstall
-              ? "The app and its local server will close. Connected devices will disconnect until Showtime restarts."
-              : `Installed version ${state.currentVersion}${version ? ` · Available version ${version}` : ""}`}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) setConfirmInstall(false);
+        }}
+      >
+        <DialogTrigger render={<Button variant="ghost" size="sm" aria-label={label} />}>
+          {state.kind === "downloading" ? (
+            <RefreshCwIcon className="animate-spin" />
+          ) : (
+            <DownloadIcon />
+          )}
+          <span className="hidden md:inline">{label}</span>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Showtime update</DialogTitle>
+            <DialogDescription>
+              {`Installed version ${state.currentVersion}${version ? ` · Available version ${version}` : ""}`}
+            </DialogDescription>
+          </DialogHeader>
 
-        {!confirmInstall && <UpdateStatus state={state} />}
+          <UpdateStatus state={state} />
 
-        <DialogFooter showCloseButton={!confirmInstall}>
-          {confirmInstall ? (
-            <>
-              <Button variant="outline" onClick={() => setConfirmInstall(false)}>
-                Not now
+          <DialogFooter showCloseButton>
+            {state.kind === "available" ? (
+              <Button onClick={download}>Download update</Button>
+            ) : state.kind === "ready" ? (
+              <Button onClick={() => setConfirmInstall(true)}>Install &amp; restart</Button>
+            ) : state.kind === "blocked-live" ? (
+              <Button
+                onClick={state.action === "download" ? download : () => setConfirmInstall(true)}
+              >
+                Try again
               </Button>
-              <Button onClick={install}>Confirm restart</Button>
-            </>
-          ) : state.kind === "available" ? (
-            <Button onClick={download}>Download update</Button>
-          ) : state.kind === "ready" ? (
-            <Button onClick={() => setConfirmInstall(true)}>Install &amp; restart</Button>
-          ) : state.kind === "blocked-live" ? (
-            <Button
-              onClick={state.action === "download" ? download : () => setConfirmInstall(true)}
-            >
-              Try again
-            </Button>
-          ) : state.kind === "error" ? (
-            <Button
-              onClick={
-                state.retry === "check"
-                  ? check
+            ) : state.kind === "error" ? (
+              <Button
+                onClick={
+                  state.retry === "check"
+                    ? check
+                    : state.retry === "install"
+                      ? () => setConfirmInstall(true)
+                      : download
+                }
+              >
+                {state.retry === "check"
+                  ? "Check again"
                   : state.retry === "install"
-                    ? () => setConfirmInstall(true)
-                    : download
-              }
-            >
-              {state.retry === "check"
-                ? "Check again"
-                : state.retry === "install"
-                  ? "Retry install"
-                  : "Retry download"}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                    ? "Retry install"
+                    : "Retry download"}
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={confirmInstall} onOpenChange={setConfirmInstall}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <RefreshCwIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Restart Showtime now?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The app and its local server will close. Connected devices will disconnect until
+              Showtime restarts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={install}>Confirm restart</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

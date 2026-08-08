@@ -1,7 +1,15 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import QRCode from "qrcode";
-import { CheckIcon, CopyIcon, PlusIcon, QrCodeIcon, Trash2Icon, WifiOffIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  PlusIcon,
+  QrCodeIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  WifiOffIcon,
+} from "lucide-react";
 import type {
   ShowtimeConnectionCandidate,
   ShowtimeConnectionsState,
@@ -17,6 +25,17 @@ import {
 } from "@showtime/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -98,6 +117,11 @@ export function ConnectionsSettings() {
   const profilesState = currentProfilesState(profilesResult);
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<{
+    readonly id: string;
+    readonly name: string;
+  }>();
+  const [deleteError, setDeleteError] = React.useState<string>();
   const [hostNameDraft, setHostNameDraft] = React.useState(emptyState.hostName);
   const [hostNameConfirmOpen, setHostNameConfirmOpen] = React.useState(false);
   const [hostNameError, setHostNameError] = React.useState<string>();
@@ -172,14 +196,16 @@ export function ConnectionsSettings() {
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async () => {
+    if (!deleteTarget) return;
     setLoading(true);
-    setError(undefined);
+    setDeleteError(undefined);
     try {
       if (!manager) return;
-      setState(await manager.removeConnection(id));
+      setState(await manager.removeConnection(deleteTarget.id));
+      setDeleteTarget(undefined);
     } catch {
-      setError("Showtime could not remove this client.");
+      setDeleteError("Showtime could not remove this client.");
     } finally {
       setLoading(false);
     }
@@ -349,7 +375,10 @@ export function ConnectionsSettings() {
                           variant="destructive"
                           disabled={loading}
                           aria-label={`Revoke ${client.name}`}
-                          onClick={() => remove(id)}
+                          onClick={() => {
+                            setDeleteError(undefined);
+                            setDeleteTarget({ id, name: client.name });
+                          }}
                         >
                           <Trash2Icon /> Revoke
                         </Button>
@@ -388,40 +417,69 @@ export function ConnectionsSettings() {
         profilesState={profilesState}
         profilesResult={profilesResult}
       />
-      <Dialog open={hostNameConfirmOpen} onOpenChange={setHostNameConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change the host name?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={hostNameConfirmOpen} onOpenChange={setHostNameConfirmOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Change the host name?</AlertDialogTitle>
+            <AlertDialogDescription>
               The old address will stop working. Every paired client and pending connection will be
-              removed.
-            </DialogDescription>
-          </DialogHeader>
-          <p className="text-sm">
-            Change <strong>{state.hostname}</strong> to{" "}
-            <strong>showtime-{hostNameCandidate}.local</strong> and remove {state.clients.length}{" "}
-            connection{state.clients.length === 1 ? "" : "s"}?
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-              onClick={() => setHostNameConfirmOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" disabled={loading} onClick={changeHostName}>
-              {loading ? "Changing..." : "Change and remove connections"}
-            </Button>
-          </div>
+              removed. Change{" "}
+              <strong className="font-semibold text-foreground">{state.hostname}</strong> to{" "}
+              <strong className="font-semibold text-foreground">
+                showtime-{hostNameCandidate}.local
+              </strong>{" "}
+              and remove {state.clients.length} connection{state.clients.length === 1 ? "" : "s"}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           {hostNameError && (
             <p role="alert" className="text-sm text-destructive">
               {hostNameError}
             </p>
           )}
-        </DialogContent>
-      </Dialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={loading}
+              onClick={changeHostName}
+            >
+              {loading ? "Changing..." : "Change and remove connections"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={deleteTarget !== undefined}
+        onOpenChange={(open) => !open && setDeleteTarget(undefined)}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Revoke device?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong className="font-semibold text-foreground">{deleteTarget?.name}</strong> will
+              no longer be able to connect to Showtime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={loading} onClick={remove}>
+              {loading ? "Revoking..." : "Revoke device"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
