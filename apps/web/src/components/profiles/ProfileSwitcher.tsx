@@ -9,10 +9,11 @@ import {
   type ProfileName,
   type ProfilesState,
 } from "@showtime/contracts";
-import { PencilIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react";
+import { PencilIcon, Trash2Icon } from "lucide-react";
 import { profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { useSelectedProfile } from "@/profiles";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -31,10 +32,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
-import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia } from "@/components/ui/item";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Item, ItemActions, ItemContent, ItemGroup } from "@/components/ui/item";
 import { ColorPickerPopover } from "@/components/ColorPickerPopover";
-import { SettingsHeader, SettingsSection } from "@/components/settings/SettingsPage";
+import {
+  SettingsHeader,
+  SettingsItem,
+  SettingsSection,
+} from "@/components/settings/SettingsPage";
+import { colorPreviewClassNames } from "@/components/color";
 
 const mutationOptions = { reactivityKeys: profilesSyncKey } as const;
 
@@ -261,9 +272,7 @@ export function ProfilesSettings() {
   return (
     <div className="space-y-6">
       <SettingsHeader>Profiles</SettingsHeader>
-      <SettingsSection>
-        <ProfilesSettingsContent state={state} loadResult={result} />
-      </SettingsSection>
+      <ProfilesSettingsContent state={state} loadResult={result} />
     </div>
   );
 }
@@ -276,18 +285,25 @@ function ProfilesSettingsContent({
   readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
 }) {
   const create = useAtomSet(profileAtoms.create, { mode: "promiseExit" });
+  const setDefault = useAtomSet(profileAtoms.setDefault, { mode: "promiseExit" });
+  const { selected, select } = useSelectedProfile(state);
   const [error, setError] = React.useState<string>();
+  const [newName, setNewName] = React.useState("");
   const [adding, setAdding] = React.useState(false);
+  const [settingDefault, setSettingDefault] = React.useState(false);
 
-  const add = async () => {
-    if (!state || adding) return;
+  const add = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = newName.trim();
+    if (!state || !name || adding) return;
     setAdding(true);
     setError(undefined);
     const result = await create({
-      payload: { name: `Profile ${state.profiles.length + 1}` as ProfileName, color: "sky" },
+      payload: { name: name as ProfileName, color: "sky" },
       ...mutationOptions,
     });
     if (Exit.isFailure(result)) setError(rpcErrorMessageFromCause(result.cause));
+    else setNewName("");
     setAdding(false);
   };
 
@@ -295,24 +311,118 @@ function ProfilesSettingsContent({
     AsyncResult.isFailure(loadResult) && !state
       ? rpcErrorMessageFromCause(loadResult.cause)
       : undefined;
+  const defaultProfile = state?.profiles.find((profile) => profile.id === state.defaultProfileId);
 
   return (
-    <div className="space-y-4">
-      <div className="flex min-h-8 items-center justify-end">
-        <Button type="button" variant="outline" disabled={!state || adding} onClick={add}>
-          <PlusIcon /> {adding ? "Adding…" : "Add profile"}
-        </Button>
-      </div>
-      <ItemGroup className="gap-0 divide-y">
-        {state?.profiles.map((profile) => (
-          <ProfileItem
-            key={profile.id}
-            profile={profile}
-            isDefault={profile.id === state.defaultProfileId}
-            onError={setError}
-          />
-        ))}
-      </ItemGroup>
+    <div className="space-y-6">
+      <SettingsSection
+        title="Available profiles"
+        action={
+          <form onSubmit={add}>
+            <InputGroup className="w-56">
+              <InputGroupInput
+                aria-label="New profile name"
+                value={newName}
+                maxLength={80}
+                placeholder="New profile"
+                disabled={!state || adding}
+                onChange={(event) => setNewName(event.currentTarget.value)}
+              />
+              {newName.length > 0 && (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    type="submit"
+                    variant="outline"
+                    disabled={!state || !newName.trim() || adding}
+                  >
+                    {adding ? "Adding…" : "Add"}
+                  </InputGroupButton>
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+          </form>
+        }
+      >
+        <ItemGroup className="gap-0">
+          {state?.profiles.map((profile) => (
+            <ProfileItem
+              key={profile.id}
+              profile={profile}
+              isDefault={profile.id === state.defaultProfileId}
+              onError={setError}
+            />
+          ))}
+        </ItemGroup>
+      </SettingsSection>
+      <SettingsSection title="Profile selection">
+        <SettingsItem
+          title="Default profile"
+          description="Used when a device has not selected a profile."
+          action={
+            <Select
+              value={state?.defaultProfileId ?? ""}
+              disabled={!state || settingDefault}
+              onValueChange={async (id) => {
+                const profile = state?.profiles.find((item) => item.id === id);
+                if (!profile || profile.id === state?.defaultProfileId) return;
+                setSettingDefault(true);
+                setError(undefined);
+                const result = await setDefault({ payload: { id: profile.id }, ...mutationOptions });
+                if (Exit.isFailure(result)) setError(rpcErrorMessageFromCause(result.cause));
+                setSettingDefault(false);
+              }}
+            >
+              <SelectTrigger aria-label="Default profile" className="w-48 max-w-full">
+                <SelectValue placeholder="Select a profile">
+                  {defaultProfile && <ProfileLabel profile={defaultProfile} />}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {state?.profiles.map((profile) => (
+                  <SelectItem
+                    key={profile.id}
+                    value={profile.id}
+                    disabled={isPendingProfile(profile)}
+                  >
+                    <ProfileLabel profile={profile} />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+        <SettingsItem
+          title="Profile on this device"
+          description="Used for your messages and activity on this device."
+          action={
+            <Select
+              value={selected?.id ?? ""}
+              disabled={!state}
+              onValueChange={(id) => {
+                const profile = state?.profiles.find((item) => item.id === id);
+                if (profile) select(profile);
+              }}
+            >
+              <SelectTrigger aria-label="Profile on this device" className="w-48 max-w-full">
+                <SelectValue placeholder="Select a profile">
+                  {selected && <ProfileLabel profile={selected} />}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {state?.profiles.map((profile) => (
+                  <SelectItem
+                    key={profile.id}
+                    value={profile.id}
+                    disabled={isPendingProfile(profile)}
+                  >
+                    <ProfileLabel profile={profile} />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+      </SettingsSection>
       {(error ?? loadError) && (
         <p role="alert" className="text-sm text-destructive">
           {error ?? loadError}
@@ -333,7 +443,6 @@ function ProfileItem({
 }) {
   const edit = useAtomSet(profileAtoms.edit, { mode: "promiseExit" });
   const remove = useAtomSet(profileAtoms.delete, { mode: "promiseExit" });
-  const setDefault = useAtomSet(profileAtoms.setDefault, { mode: "promiseExit" });
   const [name, setName] = React.useState(profile.name as string);
   const [color, setColor] = React.useState<Color>(profile.color);
   const [busy, setBusy] = React.useState(false);
@@ -379,72 +488,66 @@ function ProfileItem({
 
   return (
     <Item className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
-      <ItemMedia>
-        <ColorPickerPopover
-          color={color}
-          onColorChange={(nextColor) => {
-            setColor(nextColor);
-            save(name, nextColor);
-          }}
-          trigger={
-            <button
-              type="button"
-              className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              aria-label={`Choose color for ${profile.name}`}
-              disabled={pending}
-            />
-          }
-        >
-          <ProfileAvatar name={name || profile.name} color={color} className="size-11 text-sm" />
-        </ColorPickerPopover>
-      </ItemMedia>
       <ItemContent className="min-w-0">
-        <InputGroup variant="ghost" className="max-w-md">
-          <InputGroupInput
-            aria-label={`Name for ${profile.name}`}
-            value={name}
-            maxLength={80}
-            disabled={pending}
-            onChange={(event) => setName(event.currentTarget.value)}
-            onBlur={() => {
-              if (suppressNextBlurSave.current) {
-                suppressNextBlurSave.current = false;
-                return;
-              }
-              save(name, color);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-              if (event.key === "Escape") {
-                suppressNextBlurSave.current = true;
-                setName(profile.name);
-                event.currentTarget.blur();
-              }
-            }}
-          />
-        </InputGroup>
+        <div className="flex min-w-0 items-center gap-2">
+          <InputGroup variant="ghost" className="w-fit max-w-full">
+            <InputGroupAddon className="pl-3">
+              <ColorPickerPopover
+                color={color}
+                onColorChange={(nextColor) => {
+                  setColor(nextColor);
+                  save(name, nextColor);
+                }}
+                trigger={
+                  <button
+                    type="button"
+                    className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    aria-label={`Choose color for ${profile.name}`}
+                    disabled={pending}
+                  />
+                }
+              >
+                <span className={cn("block size-3 rounded-full", colorPreviewClassNames[color])} />
+              </ColorPickerPopover>
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label={`Name for ${profile.name}`}
+              className="w-auto min-w-0 flex-none [field-sizing:content]"
+              size={Math.max(1, name.length)}
+              value={name}
+              maxLength={80}
+              disabled={pending}
+              onChange={(event) => setName(event.currentTarget.value)}
+              onBlur={() => {
+                if (suppressNextBlurSave.current) {
+                  suppressNextBlurSave.current = false;
+                  return;
+                }
+                save(name, color);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  suppressNextBlurSave.current = true;
+                  setName(profile.name);
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          </InputGroup>
+          {isDefault && <Badge variant="outline">Default</Badge>}
+        </div>
       </ItemContent>
       <ItemActions className="ml-auto shrink-0">
         <Button
           type="button"
-          size={isDefault ? "sm" : "icon-sm"}
-          variant={isDefault ? "secondary" : "ghost"}
-          aria-label={isDefault ? `${profile.name} is default` : `Set ${profile.name} as default`}
-          disabled={busy || pending || isDefault}
-          onClick={() => run(() => setDefault({ payload: { id: profile.id }, ...mutationOptions }))}
-        >
-          <StarIcon className={isDefault ? "fill-current" : undefined} />
-          {isDefault && "Default"}
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
+          size="sm"
+          variant="destructive"
           aria-label={`Delete ${profile.name}`}
           disabled={busy || pending || isDefault}
           onClick={() => run(() => remove({ payload: { id: profile.id }, ...mutationOptions }))}
         >
-          <Trash2Icon />
+          <Trash2Icon /> Delete
         </Button>
       </ItemActions>
     </Item>

@@ -12,12 +12,14 @@ import {
   type ProfileId,
   type ShowId,
 } from "@showtime/contracts";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { BellIcon, BellOffIcon, Trash2Icon } from "lucide-react";
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { currentProfilesState } from "@/components/profiles/ProfileSwitcher";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -30,10 +32,19 @@ import {
 import {
   InputGroup,
   InputGroupAddon,
+  InputGroupButton,
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
-import { Switch } from "@/components/ui/switch";
+import { Item, ItemActions, ItemContent } from "@/components/ui/item";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 
 const currentChatSnapshot = (
@@ -114,50 +125,66 @@ function ChatSettingsLoaded({
 
   return (
     <>
-      <SettingsSection title="Channels">
-        {channels.map((channel) => (
-          <SettingsItem
-            key={channel.id}
-            title={
-              <ChannelNameInput
-                showId={showId}
-                ownerProfileId={ownerProfile.id}
-                channel={channel}
-                onError={setError}
+      <SettingsSection
+        title="Channels"
+        action={
+          <form onSubmit={add}>
+            <InputGroup className="w-56">
+              <InputGroupAddon>
+                <InputGroupText>#</InputGroupText>
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label="New channel name"
+                className="pl-0!"
+                value={newName}
+                maxLength={60}
+                placeholder="New channel"
+                onChange={(event) => setNewName(event.currentTarget.value)}
               />
-            }
-            description={`${channel.messageCount} message${channel.messageCount === 1 ? "" : "s"}`}
-            action={
+              {newName.length > 0 && (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    type="submit"
+                    variant="outline"
+                    disabled={!newName.trim() || busy}
+                  >
+                    Add
+                  </InputGroupButton>
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+          </form>
+        }
+      >
+        {channels.map((channel) => (
+          <Item key={channel.id} className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
+            <ItemContent className="min-w-0">
+              <div className="flex items-center gap-2">
+                <ChannelNameInput
+                  showId={showId}
+                  ownerProfileId={ownerProfile.id}
+                  channel={channel}
+                  onError={setError}
+                />
+                <Badge variant="outline">
+                  {channel.messageCount} message{channel.messageCount === 1 ? "" : "s"}
+                </Badge>
+              </div>
+            </ItemContent>
+            <ItemActions className="ml-auto shrink-0">
               <Button
                 type="button"
-                size="icon-sm"
-                variant="ghost"
+                size="sm"
+                variant="destructive"
                 aria-label={`Delete ${channel.name}`}
                 disabled={channels.length === 1}
                 onClick={() => setDeleteTarget(channel)}
               >
-                <Trash2Icon />
+                <Trash2Icon /> Delete
               </Button>
-            }
-          />
+            </ItemActions>
+          </Item>
         ))}
-        <form className="flex max-w-xl flex-col gap-2 pt-4 sm:flex-row" onSubmit={add}>
-          <InputGroup variant="ghost">
-            <InputGroupAddon>
-              <InputGroupText>#</InputGroupText>
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="New channel name"
-              value={newName}
-              maxLength={60}
-              placeholder="New channel"
-              onChange={(event) => setNewName(event.currentTarget.value)}
-            />
-          </InputGroup>
-          <Button type="submit" variant="outline" disabled={!newName.trim() || busy}>
-            <PlusIcon /> Add channel
-          </Button>
-        </form>
         {error && (
           <p role="alert" className="pt-3 text-sm text-destructive">
             {error}
@@ -166,14 +193,16 @@ function ChatSettingsLoaded({
       </SettingsSection>
 
       <SettingsSection title="Notifications">
-        <ChannelNotifications
-          key={`${showId}:${ownerProfile.id}`}
-          showId={showId}
-          profiles={profiles}
-          channels={channels}
-          ownerProfileId={ownerProfile.id}
-          ownerResult={result}
-        />
+        <div className="py-3">
+          <ChannelNotifications
+            key={`${showId}:${ownerProfile.id}`}
+            showId={showId}
+            profiles={profiles}
+            channels={channels}
+            ownerProfileId={ownerProfile.id}
+            ownerResult={result}
+          />
+        </div>
       </SettingsSection>
 
       <Dialog
@@ -240,12 +269,14 @@ function ChannelNameInput({
   };
 
   return (
-    <InputGroup variant="ghost" className="max-w-sm">
+    <InputGroup variant="ghost" className="w-fit max-w-full">
       <InputGroupAddon>
         <InputGroupText>#</InputGroupText>
       </InputGroupAddon>
       <InputGroupInput
         aria-label={`Name for ${channel.name}`}
+        className="w-auto min-w-0 flex-none pl-0! [field-sizing:content]"
+        size={Math.max(1, name.length)}
         value={name}
         maxLength={60}
         disabled={saving}
@@ -346,54 +377,47 @@ function ChannelNotifications({
           />
         ),
       )}
-      <p className="pb-2 text-sm text-muted-foreground">
-        Choose which channel notifications each profile receives.
-      </p>
-      {ready ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-lg border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th scope="col" className="h-10 pr-4 font-medium text-muted-foreground">
-                  Profile
-                </th>
-                {channels.map((channel) => (
-                  <th
-                    key={channel.id}
-                    scope="col"
-                    className="h-10 px-3 text-center font-medium whitespace-nowrap text-muted-foreground"
-                  >
-                    # {channel.name}
-                  </th>
+      <Card>
+        <CardContent>
+          {ready ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Profile</TableHead>
+                  {channels.map((channel) => (
+                    <TableHead key={channel.id} scope="col" className="text-center">
+                      #{channel.name}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {profiles.map((profile) => (
+                  <NotificationProfileRow
+                    key={profile.id}
+                    showId={showId}
+                    profile={profile}
+                    channels={channels}
+                    snapshot={snapshotFor(profile)!}
+                    onError={setError}
+                  />
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {profiles.map((profile) => (
-                <NotificationProfileRow
-                  key={profile.id}
-                  showId={showId}
-                  profile={profile}
-                  channels={channels}
-                  snapshot={snapshotFor(profile)!}
-                  onError={setError}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="py-4 text-sm text-muted-foreground" role={failed ? "alert" : undefined}>
-          {failed
-            ? "Notification settings could not be loaded."
-            : "Loading notification settings\u2026"}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="pt-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-sm text-muted-foreground" role={failed ? "alert" : undefined}>
+              {failed
+                ? "Notification settings could not be loaded."
+                : "Loading notification settings\u2026"}
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="pt-3 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }
@@ -428,26 +452,32 @@ function NotificationProfileRow({
   };
 
   return (
-    <tr>
-      <th scope="row" className="h-14 pr-4 text-left font-medium whitespace-nowrap">
+    <TableRow>
+      <TableHead scope="row">
         <span className="flex items-center gap-2">
           <ProfileAvatar name={profile.name} color={profile.color} className="size-6 text-[10px]" />
           {profile.name}
         </span>
-      </th>
+      </TableHead>
       {channels.map((channel) => {
         const profileChannel = snapshot.channels.find((item) => item.id === channel.id)!;
         return (
-          <td key={channel.id} className="h-14 px-3 text-center">
-            <Switch
+          <TableCell key={channel.id} className="text-center">
+            <Button
+              type="button"
+              size="xs"
+              variant={profileChannel.notificationsEnabled ? "secondary" : "destructive"}
               aria-label={`${channel.name} notifications for ${profile.name}`}
-              checked={profileChannel.notificationsEnabled}
+              aria-pressed={profileChannel.notificationsEnabled}
               disabled={savingChannelId === channel.id}
-              onCheckedChange={(enabled) => void toggle(channel, enabled)}
-            />
-          </td>
+              onClick={() => void toggle(channel, !profileChannel.notificationsEnabled)}
+            >
+              {profileChannel.notificationsEnabled ? <BellIcon /> : <BellOffIcon />}
+              {profileChannel.notificationsEnabled ? "On" : "Off"}
+            </Button>
+          </TableCell>
         );
       })}
-    </tr>
+    </TableRow>
   );
 }

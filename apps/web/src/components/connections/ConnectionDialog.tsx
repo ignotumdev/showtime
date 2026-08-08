@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
+  InputGroupButton,
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
@@ -235,54 +236,52 @@ export function ConnectionsSettings() {
               title="Host name"
               description="The local address used to open Showtime. Changing it removes existing and pending client connections."
               action={
-                <div className="flex items-center gap-2">
-                  <InputGroup className="w-fit max-w-full">
-                    <InputGroupAddon>
-                      <InputGroupText>showtime-</InputGroupText>
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      aria-label="Showtime host name"
-                      className="w-auto min-w-0 flex-none px-0! [field-sizing:content]"
-                      size={Math.max(1, Math.min(showtimeHostNameMaxLength, hostNameDraft.length))}
-                      value={hostNameDraft}
-                      maxLength={showtimeHostNameMaxLength}
-                      pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      disabled={loading || !state.enabled}
-                      onChange={(event) =>
-                        setHostNameDraft(
-                          event.currentTarget.value
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, "")
-                            .slice(0, showtimeHostNameMaxLength),
-                        )
+                <InputGroup className="w-fit max-w-full">
+                  <InputGroupAddon>
+                    <InputGroupText>showtime-</InputGroupText>
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    aria-label="Showtime host name"
+                    className="w-auto min-w-0 flex-none px-0! [field-sizing:content]"
+                    size={Math.max(1, Math.min(showtimeHostNameMaxLength, hostNameDraft.length))}
+                    value={hostNameDraft}
+                    maxLength={showtimeHostNameMaxLength}
+                    pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    disabled={loading || !state.enabled}
+                    onChange={(event) =>
+                      setHostNameDraft(
+                        event.currentTarget.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9-]/g, "")
+                          .slice(0, showtimeHostNameMaxLength),
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && hostNameChanged) {
+                        setHostNameError(undefined);
+                        setHostNameConfirmOpen(true);
                       }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && hostNameChanged) {
+                      if (event.key === "Escape") setHostNameDraft(state.hostName);
+                    }}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupText>.local</InputGroupText>
+                    {hostNameChanged && (
+                      <InputGroupButton
+                        variant="destructive"
+                        disabled={loading || !state.enabled}
+                        onClick={() => {
                           setHostNameError(undefined);
                           setHostNameConfirmOpen(true);
-                        }
-                        if (event.key === "Escape") setHostNameDraft(state.hostName);
-                      }}
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupText>.local</InputGroupText>
-                    </InputGroupAddon>
-                  </InputGroup>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={loading || !state.enabled || !hostNameChanged}
-                    onClick={() => {
-                      setHostNameError(undefined);
-                      setHostNameConfirmOpen(true);
-                    }}
-                  >
-                    Change
-                  </Button>
-                </div>
+                        }}
+                      >
+                        Change
+                      </InputGroupButton>
+                    )}
+                  </InputGroupAddon>
+                </InputGroup>
               }
             />
           </SettingsSection>
