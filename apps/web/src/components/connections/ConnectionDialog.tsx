@@ -167,7 +167,7 @@ export function ConnectionsSettings() {
   }, [manager]);
 
   React.useEffect(() => {
-    if (!pageVisible) return;
+    if (!manager || !pageVisible) return;
     const update = () => void refresh();
     update();
     const poll = window.setInterval(update, 1_000);
@@ -723,6 +723,7 @@ function PairClientPopover({
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
+    setError(undefined);
     if (!selectedUrl) return;
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 640 }).then(

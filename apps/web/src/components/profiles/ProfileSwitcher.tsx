@@ -490,13 +490,17 @@ function ProfileItem({
   const deleteProfile = async () => {
     setBusy(true);
     setDeleteError(undefined);
-    const result = await remove({ payload: { id: profile.id }, ...mutationOptions });
-    if (Exit.isFailure(result)) {
-      setDeleteError(rpcErrorMessageFromCause(result.cause));
-    } else {
-      setDeleteOpen(false);
-    }
-    setBusy(false);
+    saveQueue.current = saveQueue.current
+      .then(async () => {
+        const result = await remove({ payload: { id: profile.id }, ...mutationOptions });
+        if (Exit.isFailure(result)) {
+          setDeleteError(rpcErrorMessageFromCause(result.cause));
+        } else {
+          setDeleteOpen(false);
+        }
+      })
+      .finally(() => setBusy(false));
+    await saveQueue.current;
   };
 
   return (

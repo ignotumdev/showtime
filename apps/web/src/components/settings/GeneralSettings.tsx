@@ -37,7 +37,7 @@ export function GeneralSettings() {
   } else if (!show) {
     content = <p className="text-sm text-muted-foreground">This show could not be found.</p>;
   } else {
-    content = <GeneralSettingsLoaded show={show} />;
+    content = <GeneralSettingsLoaded key={show.id} show={show} />;
   }
 
   return (
@@ -59,19 +59,15 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
   const saveQueue = React.useRef(Promise.resolve());
   const pendingSaves = React.useRef(0);
   const suppressNextBlurSave = React.useRef(false);
-
-  React.useEffect(() => {
-    setName(show.name);
-    setColor(show.color);
-  }, [show]);
+  const committed = React.useRef({ name: show.name as string, color: show.color });
 
   const save = (nextName: string, nextColor: Color) => {
     const trimmed = nextName.trim();
     if (!trimmed) {
-      setName(show.name);
+      setName(committed.current.name);
       return;
     }
-    if (trimmed === show.name && nextColor === show.color) return;
+    if (trimmed === committed.current.name && nextColor === committed.current.color) return;
     pendingSaves.current += 1;
     setSaving(true);
     setError(undefined);
@@ -81,7 +77,12 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
           payload: { id: show.id, name: trimmed as ShowName, color: nextColor },
           ...showMutationOptions,
         });
-        if (Exit.isFailure(result)) setError(rpcErrorMessageFromCause(result.cause));
+        if (Exit.isFailure(result)) {
+          setError(rpcErrorMessageFromCause(result.cause));
+        } else {
+          committed.current = { name: trimmed, color: nextColor };
+          setError(undefined);
+        }
       })
       .finally(() => {
         pendingSaves.current -= 1;
@@ -115,7 +116,7 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
                   if (event.key === "Enter") event.currentTarget.blur();
                   if (event.key === "Escape") {
                     suppressNextBlurSave.current = true;
-                    setName(show.name);
+                    setName(committed.current.name);
                     event.currentTarget.blur();
                   }
                 }}

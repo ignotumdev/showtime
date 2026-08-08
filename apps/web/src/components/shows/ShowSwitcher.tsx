@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { ArrowLeftIcon, Settings2Icon } from "lucide-react";
@@ -15,6 +15,11 @@ import { showColorClassNames } from "@/components/shows/show-color";
 import { cn } from "@/lib/utils";
 
 const allShowsValue = "all-shows";
+const globalSettingsLabels = {
+  connections: "Connections",
+  profiles: "Profiles",
+  updates: "Updates",
+} as const;
 
 export function ShowSwitcher({
   showId,
@@ -24,6 +29,7 @@ export function ShowSwitcher({
   readonly destination: "show" | "settings";
 }) {
   const navigate = useNavigate();
+  const params = useParams({ strict: false });
   const result = useAtomValue(showsAtom);
   const shows = AsyncResult.isSuccess(result)
     ? result.value
@@ -31,6 +37,10 @@ export function ShowSwitcher({
       ? (Option.getOrUndefined(result.previousSuccess)?.value ?? [])
       : [];
   const selected = shows.find((show) => show.id === showId);
+  const globalSettingsLabel =
+    typeof params.section === "string" && params.section in globalSettingsLabels
+      ? globalSettingsLabels[params.section as keyof typeof globalSettingsLabels]
+      : globalSettingsLabels.updates;
 
   const select = (value: string | null) => {
     if (!value) return;
@@ -61,7 +71,7 @@ export function ShowSwitcher({
             {selected ? (
               <ShowLabel name={selected.name} color={selected.color} />
             ) : destination === "settings" ? (
-              "General"
+              globalSettingsLabel
             ) : (
               "All shows"
             )}
@@ -86,7 +96,7 @@ export function ShowSwitcher({
                   <ArrowLeftIcon className="size-3.5" />
                 )}
               </span>
-              <span>{destination === "settings" ? "General" : "All shows"}</span>
+              <span>{destination === "settings" ? "Updates" : "All shows"}</span>
             </span>
           </SelectItem>
         </SelectContent>

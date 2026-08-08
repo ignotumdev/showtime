@@ -140,6 +140,7 @@ function ChatSettingsLoaded({
                 value={newName}
                 maxLength={60}
                 placeholder="New channel"
+                disabled={busy}
                 onChange={(event) => setNewName(event.currentTarget.value)}
               />
               {newName.length > 0 && (
