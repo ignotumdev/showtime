@@ -1,4 +1,4 @@
-import type * as React from "react";
+import * as React from "react";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
 
@@ -17,11 +17,17 @@ export function SettingsSection({
   readonly children: React.ReactNode;
   readonly className?: string;
 }) {
+  const titleId = React.useId();
+
   return (
-    <section className={cn("space-y-1.5", className)}>
+    <section aria-labelledby={title ? titleId : undefined} className={cn("space-y-1.5", className)}>
       {(title || action) && (
         <div className="flex min-h-8 items-center justify-between gap-3">
-          {title && <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>}
+          {title && (
+            <h2 id={titleId} className="text-sm font-medium text-muted-foreground">
+              {title}
+            </h2>
+          )}
           {action && <div className="ml-auto">{action}</div>}
         </div>
       )}

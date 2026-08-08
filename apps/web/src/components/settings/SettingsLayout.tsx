@@ -109,11 +109,7 @@ export function SettingsLayout() {
                       icon={RefreshCwIcon}
                     />
                   ) : (
-                    <SettingsGlobalLink
-                      section="updates"
-                      label="Updates"
-                      icon={RefreshCwIcon}
-                    />
+                    <SettingsGlobalLink section="updates" label="Updates" icon={RefreshCwIcon} />
                   )}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -173,9 +169,9 @@ export function SettingsLayout() {
             )}
           </nav>
           <ScrollArea className="min-h-0 flex-1">
-            <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-5 sm:px-5 sm:py-6 lg:px-8">
+            <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-5 sm:px-5 sm:py-6 lg:px-8">
               <Outlet />
-            </main>
+            </div>
           </ScrollArea>
         </SidebarInset>
       </SidebarProvider>

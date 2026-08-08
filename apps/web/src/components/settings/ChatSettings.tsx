@@ -166,55 +166,14 @@ function ChatSettingsLoaded({
       </SettingsSection>
 
       <SettingsSection title="Notifications">
-        <p className="pb-2 text-sm text-muted-foreground">
-          Choose which channel notifications each profile receives.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-lg border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th scope="col" className="h-10 pr-4 font-medium text-muted-foreground">
-                  Profile
-                </th>
-                {channels.map((channel) => (
-                  <th
-                    key={channel.id}
-                    scope="col"
-                    className="h-10 px-3 text-center font-medium whitespace-nowrap text-muted-foreground"
-                  >
-                    # {channel.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {profiles.map((profile) => (
-                <tr key={profile.id}>
-                  <th scope="row" className="h-14 pr-4 text-left font-medium whitespace-nowrap">
-                    <span className="flex items-center gap-2">
-                      <ProfileAvatar
-                        name={profile.name}
-                        color={profile.color}
-                        className="size-6 text-[10px]"
-                      />
-                      {profile.name}
-                    </span>
-                  </th>
-                  {channels.map((channel) => (
-                    <td key={channel.id} className="h-14 px-3 text-center">
-                      <ChannelNotificationSwitch
-                        showId={showId}
-                        profile={profile}
-                        channelId={channel.id}
-                        channelName={channel.name}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ChannelNotifications
+          key={`${showId}:${ownerProfile.id}`}
+          showId={showId}
+          profiles={profiles}
+          channels={channels}
+          ownerProfileId={ownerProfile.id}
+          ownerResult={result}
+        />
       </SettingsSection>
 
       <Dialog
@@ -314,48 +273,181 @@ function ChannelNameInput({
   );
 }
 
-function ChannelNotificationSwitch({
+type ChatSnapshotResult = AsyncResult.AsyncResult<ChatSnapshot, unknown>;
+
+function NotificationStateLoader({
   showId,
   profile,
-  channelId,
-  channelName,
+  onResult,
 }: {
   readonly showId: ShowId;
   readonly profile: Profile;
-  readonly channelId: ChatChannelId;
-  readonly channelName: string;
+  readonly onResult: (profileId: ProfileId, result: ChatSnapshotResult) => void;
 }) {
-  const atoms = chatAtoms(showId, profile.id);
-  const result = useAtomValue(atoms.state);
-  const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
-  const channel = currentChatSnapshot(result)?.channels.find((item) => item.id === channelId);
-  const [saving, setSaving] = React.useState(false);
-  const [failed, setFailed] = React.useState(false);
+  const result = useAtomValue(chatAtoms(showId, profile.id).state);
 
-  const toggle = async (enabled: boolean) => {
-    setSaving(true);
-    setFailed(false);
-    const exit = await setNotifications({
-      payload: { showId, channelId, profileId: profile.id, enabled },
-      reactivityKeys: chatsSyncKey(showId),
+  React.useEffect(() => onResult(profile.id, result), [onResult, profile.id, result]);
+  return null;
+}
+
+function ChannelNotifications({
+  showId,
+  profiles,
+  channels,
+  ownerProfileId,
+  ownerResult,
+}: {
+  readonly showId: ShowId;
+  readonly profiles: ReadonlyArray<Profile>;
+  readonly channels: ReadonlyArray<ChatChannel>;
+  readonly ownerProfileId: ProfileId;
+  readonly ownerResult: ChatSnapshotResult;
+}) {
+  const [results, setResults] = React.useState<ReadonlyMap<ProfileId, ChatSnapshotResult>>(
+    () => new Map(),
+  );
+  const [error, setError] = React.useState<string>();
+  const recordResult = React.useCallback((profileId: ProfileId, result: ChatSnapshotResult) => {
+    setResults((current) => {
+      if (current.get(profileId) === result) return current;
+      const next = new Map(current);
+      next.set(profileId, result);
+      return next;
     });
-    if (Exit.isFailure(exit)) setFailed(true);
-    setSaving(false);
+  }, []);
+  const resultFor = (profile: Profile) =>
+    profile.id === ownerProfileId ? ownerResult : results.get(profile.id);
+  const snapshotFor = (profile: Profile) => {
+    const profileResult = resultFor(profile);
+    return profileResult ? currentChatSnapshot(profileResult) : undefined;
   };
+  const snapshotIsCurrent = (snapshot: ChatSnapshot | undefined) =>
+    snapshot !== undefined &&
+    channels.every((channel) => snapshot.channels.some((item) => item.id === channel.id));
+  const ready = profiles.every((profile) => snapshotIsCurrent(snapshotFor(profile)));
+  const failed = profiles.some((profile) => {
+    const profileResult = resultFor(profile);
+    return (
+      profileResult !== undefined &&
+      AsyncResult.isFailure(profileResult) &&
+      !snapshotIsCurrent(currentChatSnapshot(profileResult))
+    );
+  });
 
   return (
     <>
-      <Switch
-        aria-label={`${channelName} notifications for ${profile.name}`}
-        checked={channel?.notificationsEnabled ?? false}
-        disabled={!channel || saving}
-        onCheckedChange={toggle}
-      />
-      {failed && (
-        <span role="alert" className="sr-only">
-          Could not update {channelName} notifications for {profile.name}.
-        </span>
+      {profiles.map((profile) =>
+        profile.id === ownerProfileId ? null : (
+          <NotificationStateLoader
+            key={profile.id}
+            showId={showId}
+            profile={profile}
+            onResult={recordResult}
+          />
+        ),
+      )}
+      <p className="pb-2 text-sm text-muted-foreground">
+        Choose which channel notifications each profile receives.
+      </p>
+      {ready ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-lg border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th scope="col" className="h-10 pr-4 font-medium text-muted-foreground">
+                  Profile
+                </th>
+                {channels.map((channel) => (
+                  <th
+                    key={channel.id}
+                    scope="col"
+                    className="h-10 px-3 text-center font-medium whitespace-nowrap text-muted-foreground"
+                  >
+                    # {channel.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {profiles.map((profile) => (
+                <NotificationProfileRow
+                  key={profile.id}
+                  showId={showId}
+                  profile={profile}
+                  channels={channels}
+                  snapshot={snapshotFor(profile)!}
+                  onError={setError}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="py-4 text-sm text-muted-foreground" role={failed ? "alert" : undefined}>
+          {failed
+            ? "Notification settings could not be loaded."
+            : "Loading notification settings\u2026"}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="pt-3 text-sm text-destructive">
+          {error}
+        </p>
       )}
     </>
+  );
+}
+
+function NotificationProfileRow({
+  showId,
+  profile,
+  channels,
+  snapshot,
+  onError,
+}: {
+  readonly showId: ShowId;
+  readonly profile: Profile;
+  readonly channels: ReadonlyArray<ChatChannel>;
+  readonly snapshot: ChatSnapshot;
+  readonly onError: (message: string | undefined) => void;
+}) {
+  const setNotifications = useAtomSet(chatAtoms(showId, profile.id).setNotifications, {
+    mode: "promiseExit",
+  });
+  const [savingChannelId, setSavingChannelId] = React.useState<ChatChannelId>();
+
+  const toggle = async (channel: ChatChannel, enabled: boolean) => {
+    setSavingChannelId(channel.id);
+    onError(undefined);
+    const exit = await setNotifications({
+      payload: { showId, channelId: channel.id, profileId: profile.id, enabled },
+      reactivityKeys: chatsSyncKey(showId),
+    });
+    if (Exit.isFailure(exit)) onError(rpcErrorMessageFromCause(exit.cause));
+    setSavingChannelId(undefined);
+  };
+
+  return (
+    <tr>
+      <th scope="row" className="h-14 pr-4 text-left font-medium whitespace-nowrap">
+        <span className="flex items-center gap-2">
+          <ProfileAvatar name={profile.name} color={profile.color} className="size-6 text-[10px]" />
+          {profile.name}
+        </span>
+      </th>
+      {channels.map((channel) => {
+        const profileChannel = snapshot.channels.find((item) => item.id === channel.id)!;
+        return (
+          <td key={channel.id} className="h-14 px-3 text-center">
+            <Switch
+              aria-label={`${channel.name} notifications for ${profile.name}`}
+              checked={profileChannel.notificationsEnabled}
+              disabled={savingChannelId === channel.id}
+              onCheckedChange={(enabled) => void toggle(channel, enabled)}
+            />
+          </td>
+        );
+      })}
+    </tr>
   );
 }

@@ -53,7 +53,21 @@ export function useDesktopUpdateState() {
 }
 
 export function DesktopUpdateDialog({ showIdle = false }: { readonly showIdle?: boolean }) {
-  const { bridge, state, applyState } = useDesktopUpdateState();
+  const updateState = useDesktopUpdateState();
+
+  return <DesktopUpdateDialogView {...updateState} showIdle={showIdle} />;
+}
+
+type DesktopUpdateDialogViewProps = ReturnType<typeof useDesktopUpdateState> & {
+  readonly showIdle?: boolean;
+};
+
+export function DesktopUpdateDialogView({
+  bridge,
+  state,
+  applyState,
+  showIdle = false,
+}: DesktopUpdateDialogViewProps) {
   const [open, setOpen] = React.useState(false);
   const [confirmInstall, setConfirmInstall] = React.useState(false);
 

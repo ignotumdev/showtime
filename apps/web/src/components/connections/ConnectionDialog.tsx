@@ -1,17 +1,11 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import QRCode from "qrcode";
-import {
-  CheckIcon,
-  CopyIcon,
-  PlusIcon,
-  QrCodeIcon,
-  Trash2Icon,
-  WifiOffIcon,
-} from "lucide-react";
+import { CheckIcon, CopyIcon, PlusIcon, QrCodeIcon, Trash2Icon, WifiOffIcon } from "lucide-react";
 import type {
   ShowtimeConnectionCandidate,
   ShowtimeConnectionsState,
+  ShowtimeLocalDiscoveryState,
   ShowtimePendingClient,
 } from "@showtime/shared";
 import type { Profile } from "@showtime/contracts";
@@ -101,23 +95,33 @@ export function ConnectionsSettings() {
   const [manager] = React.useState(getConnectionManagementClient);
   const profilesResult = useAtomValue(profileAtoms.state);
   const profilesState = currentProfilesState(profilesResult);
-  const open = true;
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [hostNameDraft, setHostNameDraft] = React.useState(emptyState.hostName);
+  const [hostNameConfirmOpen, setHostNameConfirmOpen] = React.useState(false);
+  const [hostNameError, setHostNameError] = React.useState<string>();
   const [loadError, setLoadError] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [loading, setLoading] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
   const refreshGeneration = React.useRef(0);
   const refreshInFlight = React.useRef(false);
-  const suppressNextHostNameBlur = React.useRef(false);
+  const [pageVisible, setPageVisible] = React.useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
   const hostNameCandidate = hostNameDraft.trim()
     ? normalizeShowtimeHostName(hostNameDraft)
     : undefined;
   const hostNameChanged = hostNameCandidate !== undefined && hostNameCandidate !== state.hostName;
+  const hasPendingClients = state.clients.some((client) => client.kind === "pending");
 
   React.useEffect(() => setHostNameDraft(state.hostName), [state.hostName]);
+
+  React.useEffect(() => {
+    const updateVisibility = () => setPageVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
 
   const refresh = React.useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -138,19 +142,21 @@ export function ConnectionsSettings() {
   }, [manager]);
 
   React.useEffect(() => {
-    if (!open) return;
-    let active = true;
+    if (!pageVisible) return;
     const update = () => void refresh();
     update();
     const poll = window.setInterval(update, 1_000);
-    const clock = window.setInterval(() => active && setNow(Date.now()), 1_000);
     return () => {
-      active = false;
       refreshGeneration.current += 1;
       window.clearInterval(poll);
-      window.clearInterval(clock);
     };
-  }, [open, refresh]);
+  }, [pageVisible, refresh]);
+
+  React.useEffect(() => {
+    if (!pageVisible || !hasPendingClients) return;
+    const clock = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(clock);
+  }, [hasPendingClients, pageVisible]);
 
   const updateEnabled = async (enabled: boolean) => {
     setLoading(true);
@@ -181,11 +187,12 @@ export function ConnectionsSettings() {
   const changeHostName = async () => {
     if (!hostNameCandidate || !hostNameChanged || !manager?.setHostName) return;
     setLoading(true);
-    setError(undefined);
+    setHostNameError(undefined);
     try {
       setState(await manager.setHostName(hostNameCandidate));
+      setHostNameConfirmOpen(false);
     } catch {
-      setError("Showtime could not change the host name.");
+      setHostNameError("Showtime could not change the host name.");
     } finally {
       setLoading(false);
     }
@@ -228,49 +235,54 @@ export function ConnectionsSettings() {
               title="Host name"
               description="The local address used to open Showtime. Changing it removes existing and pending client connections."
               action={
-                <InputGroup className="w-fit max-w-full">
-                  <InputGroupAddon>
-                    <InputGroupText>showtime-</InputGroupText>
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    aria-label="Showtime host name"
-                    className="w-auto min-w-0 flex-none px-0! [field-sizing:content]"
-                    size={Math.max(1, Math.min(showtimeHostNameMaxLength, hostNameDraft.length))}
-                    value={hostNameDraft}
-                    maxLength={showtimeHostNameMaxLength}
-                    pattern="[a-z0-9]*"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    disabled={loading || !state.enabled}
-                    onChange={(event) =>
-                      setHostNameDraft(
-                        event.currentTarget.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]/g, "")
-                          .slice(0, showtimeHostNameMaxLength),
-                      )
-                    }
-                    onBlur={() => {
-                      if (suppressNextHostNameBlur.current) {
-                        suppressNextHostNameBlur.current = false;
-                        return;
+                <div className="flex items-center gap-2">
+                  <InputGroup className="w-fit max-w-full">
+                    <InputGroupAddon>
+                      <InputGroupText>showtime-</InputGroupText>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      aria-label="Showtime host name"
+                      className="w-auto min-w-0 flex-none px-0! [field-sizing:content]"
+                      size={Math.max(1, Math.min(showtimeHostNameMaxLength, hostNameDraft.length))}
+                      value={hostNameDraft}
+                      maxLength={showtimeHostNameMaxLength}
+                      pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      disabled={loading || !state.enabled}
+                      onChange={(event) =>
+                        setHostNameDraft(
+                          event.currentTarget.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, "")
+                            .slice(0, showtimeHostNameMaxLength),
+                        )
                       }
-                      if (hostNameChanged) void changeHostName();
-                      else if (!hostNameCandidate) setHostNameDraft(state.hostName);
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && hostNameChanged) {
+                          setHostNameError(undefined);
+                          setHostNameConfirmOpen(true);
+                        }
+                        if (event.key === "Escape") setHostNameDraft(state.hostName);
+                      }}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupText>.local</InputGroupText>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={loading || !state.enabled || !hostNameChanged}
+                    onClick={() => {
+                      setHostNameError(undefined);
+                      setHostNameConfirmOpen(true);
                     }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                      if (event.key === "Escape") {
-                        suppressNextHostNameBlur.current = true;
-                        setHostNameDraft(state.hostName);
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupText>.local</InputGroupText>
-                  </InputGroupAddon>
-                </InputGroup>
+                  >
+                    Change
+                  </Button>
+                </div>
               }
             />
           </SettingsSection>
@@ -377,6 +389,40 @@ export function ConnectionsSettings() {
         profilesState={profilesState}
         profilesResult={profilesResult}
       />
+      <Dialog open={hostNameConfirmOpen} onOpenChange={setHostNameConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change the host name?</DialogTitle>
+            <DialogDescription>
+              The old address will stop working. Every paired client and pending connection will be
+              removed.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm">
+            Change <strong>{state.hostname}</strong> to{" "}
+            <strong>showtime-{hostNameCandidate}.local</strong> and remove {state.clients.length}{" "}
+            connection{state.clients.length === 1 ? "" : "s"}?
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setHostNameConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" disabled={loading} onClick={changeHostName}>
+              {loading ? "Changing..." : "Change and remove connections"}
+            </Button>
+          </div>
+          {hostNameError && (
+            <p role="alert" className="text-sm text-destructive">
+              {hostNameError}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -523,37 +569,89 @@ function PairClientPopover({
     [],
   );
   const [selectedUrl, setSelectedUrl] = React.useState("");
+  const [discovery, setDiscovery] = React.useState<ShowtimeLocalDiscoveryState>({
+    kind: "disabled",
+  });
   const [qrCode, setQrCode] = React.useState<string>();
   const [copied, setCopied] = React.useState(false);
+  const [error, setError] = React.useState<string>();
   React.useEffect(() => {
     if (!open) return;
     let active = true;
+    setCandidates([]);
+    setSelectedUrl("");
+    setDiscovery({ kind: "probing" });
+    setQrCode(undefined);
     setCopied(false);
-    let timer: number | undefined;
+    setError(undefined);
+    let loadTimer: number | undefined;
+    let expiryTimer: number | undefined;
     let consecutiveFailures = 0;
     let expiresAt = Date.parse(client.expiresAt);
     let hasRequestedPairingInfo = false;
+    const setExpired = () => {
+      if (!active) return;
+      setCandidates([]);
+      setSelectedUrl("");
+      setQrCode(undefined);
+      setError("This connection link has expired.");
+    };
+    const scheduleExpiry = () => {
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
+      const wait = expiresAt - Date.now();
+      if (!Number.isFinite(wait) || wait <= 0) {
+        setExpired();
+        return false;
+      }
+      expiryTimer = window.setTimeout(setExpired, wait);
+      return true;
+    };
     const hasExpired = () => pairingInfoRetryWait(expiresAt, 0) === undefined;
     const scheduleLoad = (delay: number) => {
       const wait = pairingInfoRetryWait(expiresAt, delay);
-      if (wait !== undefined) timer = window.setTimeout(load, wait);
+      if (wait === undefined) {
+        setExpired();
+        return;
+      }
+      loadTimer = window.setTimeout(load, wait);
     };
     const load = () => {
-      if (!active || !canLoadPairingInfo(hasRequestedPairingInfo, expiresAt)) return;
+      if (!active) return;
+      if (!canLoadPairingInfo(hasRequestedPairingInfo, expiresAt)) {
+        setExpired();
+        return;
+      }
       hasRequestedPairingInfo = true;
       void manager.pairingInfo(client.invitationId).then(
         (info) => {
-          if (!active || info.expiresAt === null) return;
+          if (!active) return;
+          if (info.expiresAt === null) {
+            setExpired();
+            return;
+          }
           expiresAt = Date.parse(info.expiresAt);
-          if (hasExpired()) return;
+          if (hasExpired() || !scheduleExpiry()) return;
           consecutiveFailures = 0;
+          setDiscovery(info.discovery);
           setCandidates(info.candidates);
           setSelectedUrl((currentUrl) => selectPairingCandidateUrl(info.candidates, currentUrl));
+          if (info.discovery.kind === "probing") {
+            setError(undefined);
+          } else if (info.candidates.length === 0) {
+            setError("No local network was found on this computer.");
+          } else {
+            setError(undefined);
+          }
           if (shouldPollPairingInfo(info.discovery)) scheduleLoad(pairingInfoPollDelay);
         },
         () => {
-          if (!active || hasExpired()) return;
+          if (!active) return;
+          if (hasExpired()) {
+            setExpired();
+            return;
+          }
           consecutiveFailures += 1;
+          setError("Showtime could not refresh the connection link. Retrying...");
           scheduleLoad(pairingInfoRetryDelay(consecutiveFailures));
         },
       );
@@ -561,9 +659,10 @@ function PairClientPopover({
     load();
     return () => {
       active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (loadTimer !== undefined) window.clearTimeout(loadTimer);
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
     };
-  }, [client, manager, open]);
+  }, [client.expiresAt, client.invitationId, manager, open]);
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
@@ -585,31 +684,46 @@ function PairClientPopover({
         <QrCodeIcon /> Connect
       </PopoverTrigger>
       <PopoverContent align="end" className="grid w-80 gap-3">
-        <Select
-          value={selectedUrl}
-          disabled={candidates.length === 0}
-          onValueChange={(value) => value && setSelectedUrl(value)}
-        >
-          <SelectTrigger aria-label="Connection address">
-            <SelectValue>{selected?.label ?? "Choose address"}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {candidates.map((candidate) => (
-              <SelectItem key={candidate.url} value={candidate.url}>
-                {candidate.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="aspect-square w-full overflow-hidden rounded-lg">
-          {qrCode && (
+        {candidates.length > 0 && (
+          <Select value={selectedUrl} onValueChange={(value) => value && setSelectedUrl(value)}>
+            <SelectTrigger aria-label="Connection address">
+              <SelectValue>{selected?.label ?? "Choose address"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {candidates.map((candidate) => (
+                <SelectItem key={candidate.url} value={candidate.url}>
+                  {candidate.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {selectedUrl && (
+          <Input
+            aria-label="Connection link"
+            type="url"
+            value={selectedUrl}
+            readOnly
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        )}
+        {qrCode && (
+          <div className="aspect-square w-full overflow-hidden rounded-lg">
             <img
               src={qrCode}
               alt={`QR code for connecting ${client.name}`}
               className="block size-full rounded-lg"
             />
-          )}
-        </div>
+          </div>
+        )}
+        {discovery.kind === "probing" && !error && (
+          <p className="text-sm text-muted-foreground">Finding an easy local address...</p>
+        )}
+        {discovery.kind === "degraded" && candidates.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            The easy local name is unavailable on this network. The IP address will still work.
+          </p>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -618,14 +732,23 @@ function PairClientPopover({
             try {
               await copyText(selectedUrl);
               setCopied(true);
+              setError(undefined);
             } catch {
               setCopied(false);
+              setError(
+                "Could not copy automatically. Select the connection link above to copy it.",
+              );
             }
           }}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}
           {copied ? "Copied" : "Copy connection link"}
         </Button>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </PopoverContent>
     </Popover>
   );

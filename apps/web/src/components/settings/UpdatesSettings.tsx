@@ -2,14 +2,17 @@ import type { ShowtimeDesktopUpdateState } from "@showtime/shared";
 import desktopPackage from "../../../../desktop/package.json";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
 import {
-  DesktopUpdateDialog,
+  DesktopUpdateDialogView,
   useDesktopUpdateState,
 } from "@/components/updates/DesktopUpdateDialog";
 
 export function UpdatesSettings() {
-  const { bridge, state } = useDesktopUpdateState();
-  const currentVersion = state?.currentVersion ?? desktopPackage.version;
-  const displayVersion = formatVersion(currentVersion);
+  const { bridge, state, applyState } = useDesktopUpdateState();
+  const displayVersion = state
+    ? formatVersion(state.currentVersion)
+    : bridge
+      ? "Loading…"
+      : formatVersion(desktopPackage.version);
 
   return (
     <div className="space-y-6">
@@ -22,7 +25,16 @@ export function UpdatesSettings() {
         <SettingsItem
           title="Updates"
           description={updateDescription(state)}
-          action={bridge ? <DesktopUpdateDialog showIdle /> : undefined}
+          action={
+            bridge ? (
+              <DesktopUpdateDialogView
+                bridge={bridge}
+                state={state}
+                applyState={applyState}
+                showIdle
+              />
+            ) : undefined
+          }
         />
       </SettingsSection>
     </div>

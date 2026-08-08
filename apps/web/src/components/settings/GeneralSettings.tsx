@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronsUpDownIcon, Trash2Icon } from "lucide-react";
 import type { Color, ShowName } from "@showtime/contracts";
@@ -9,6 +10,7 @@ import {
   rpcErrorMessageFromCause,
   showDialogAtom,
   showMutationOptions,
+  type ShowListItem,
 } from "@/client";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
@@ -20,12 +22,38 @@ import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { cn } from "@/lib/utils";
 
 export function GeneralSettings() {
-  const { show } = useShowFromParams();
+  const { show, result } = useShowFromParams();
   const navigate = useNavigate();
+  let content: React.ReactNode;
+
+  if (AsyncResult.isInitial(result)) {
+    content = <p className="text-sm text-muted-foreground">Loading show…</p>;
+  } else if (AsyncResult.isFailure(result) && !show) {
+    content = (
+      <p role="alert" className="text-sm text-destructive">
+        {rpcErrorMessageFromCause(result.cause)}
+      </p>
+    );
+  } else if (!show) {
+    content = <p className="text-sm text-muted-foreground">This show could not be found.</p>;
+  } else {
+    content = <GeneralSettingsLoaded show={show} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <SettingsHeader>General</SettingsHeader>
+      {content}
+      <ShowDeleteDialog onDeleted={() => navigate({ to: "/", replace: true })} />
+    </div>
+  );
+}
+
+function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
   const editShow = useAtomSet(editShowAtom, { mode: "promiseExit" });
   const setDialog = useAtomSet(showDialogAtom);
-  const [name, setName] = React.useState(show?.name ?? "");
-  const [color, setColor] = React.useState<Color>(show?.color ?? "neutral");
+  const [name, setName] = React.useState<string>(show.name);
+  const [color, setColor] = React.useState<Color>(show.color);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string>();
   const saveQueue = React.useRef(Promise.resolve());
@@ -33,19 +61,9 @@ export function GeneralSettings() {
   const suppressNextBlurSave = React.useRef(false);
 
   React.useEffect(() => {
-    if (!show) return;
     setName(show.name);
     setColor(show.color);
   }, [show]);
-
-  if (!show) {
-    return (
-      <div className="space-y-6">
-        <SettingsHeader>General</SettingsHeader>
-        <p className="text-sm text-muted-foreground">This show could not be found.</p>
-      </div>
-    );
-  }
 
   const save = (nextName: string, nextColor: Color) => {
     const trimmed = nextName.trim();
@@ -72,8 +90,7 @@ export function GeneralSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <SettingsHeader>General</SettingsHeader>
+    <>
       <div className="space-y-4">
         <SettingsSection title="General">
           <SettingsItem
@@ -143,7 +160,6 @@ export function GeneralSettings() {
           }
         />
       </SettingsSection>
-      <ShowDeleteDialog onDeleted={() => navigate({ to: "/" })} />
-    </div>
+    </>
   );
 }
