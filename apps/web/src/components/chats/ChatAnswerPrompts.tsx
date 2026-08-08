@@ -6,6 +6,7 @@ import { chatAtoms, profileAtoms } from "@/client";
 import { registerChatAnswerDialog } from "@/chats/ChatAnswerDialogPresence";
 import {
   planChatAnswerRequests,
+  reconcileChatAnswerRequests,
   type AnswerRequest,
   type ChatAnswerRequestSequences,
 } from "@/chats/ChatAnswerRequestPolicy";
@@ -89,12 +90,10 @@ function ReadyChatAnswerPrompts({
       shouldPrompt: !chatOpen,
     });
     newestSequences.current = sequences;
-    if (requests.length > 0) {
-      setPendingAnswers((current) => [
-        ...current,
-        ...requests.filter((request) => !current.some((item) => item.id === request.id)),
-      ]);
-    }
+    const channelIds = new Set(snapshot.channels.map((channel) => channel.id));
+    setPendingAnswers((current) =>
+      reconcileChatAnswerRequests({ queued: current, incoming: requests, channelIds }),
+    );
   }, [chatOpen, profile.id, snapshot]);
 
   React.useEffect(() => {

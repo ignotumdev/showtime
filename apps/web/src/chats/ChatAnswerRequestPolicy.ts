@@ -11,6 +11,26 @@ export type AnswerRequest = ChatMessage & { readonly answer: ChatPresetAnswer };
 
 export type ChatAnswerRequestSequences = ReadonlyMap<ChatChannelId, ChatSequence>;
 
+export const reconcileChatAnswerRequests = ({
+  queued,
+  incoming,
+  channelIds,
+}: {
+  readonly queued: ReadonlyArray<AnswerRequest>;
+  readonly incoming: ReadonlyArray<AnswerRequest>;
+  readonly channelIds: ReadonlySet<ChatChannelId>;
+}): ReadonlyArray<AnswerRequest> => {
+  const next = queued.filter((request) => channelIds.has(request.channelId));
+  for (const request of incoming) {
+    if (channelIds.has(request.channelId) && !next.some((item) => item.id === request.id)) {
+      next.push(request);
+    }
+  }
+  return next.length === queued.length && next.every((request, index) => request === queued[index])
+    ? queued
+    : next;
+};
+
 const isAnswerRequest = (message: ChatMessage): message is AnswerRequest =>
   message.answer !== undefined;
 
