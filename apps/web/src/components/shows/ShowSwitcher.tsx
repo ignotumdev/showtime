@@ -21,6 +21,14 @@ const globalSettingsLabels = {
   updates: "Updates",
 } as const;
 
+type GlobalSettingsSection = keyof typeof globalSettingsLabels;
+
+export function globalSettingsSectionFromParams(section: unknown): GlobalSettingsSection {
+  return typeof section === "string" && section in globalSettingsLabels
+    ? (section as GlobalSettingsSection)
+    : "updates";
+}
+
 export function ShowSwitcher({
   showId,
   destination,
@@ -37,17 +45,15 @@ export function ShowSwitcher({
       ? (Option.getOrUndefined(result.previousSuccess)?.value ?? [])
       : [];
   const selected = shows.find((show) => show.id === showId);
-  const globalSettingsLabel =
-    typeof params.section === "string" && params.section in globalSettingsLabels
-      ? globalSettingsLabels[params.section as keyof typeof globalSettingsLabels]
-      : globalSettingsLabels.updates;
+  const globalSettingsSection = globalSettingsSectionFromParams(params.section);
+  const globalSettingsLabel = globalSettingsLabels[globalSettingsSection];
 
   const select = (value: string | null) => {
     if (!value) return;
     if (value === allShowsValue) {
       void navigate(
         destination === "settings"
-          ? { to: "/settings/$section", params: { section: "updates" } }
+          ? { to: "/settings/$section", params: { section: globalSettingsSection } }
           : { to: "/" },
       );
       return;
