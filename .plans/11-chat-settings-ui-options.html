@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime chat settings UI options</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --bg:#141414; --panel:#1d1d1d; --muted:#a0a0a0; --line:#343434; --accent:#2978b8; --danger:#e26b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:#f4f4f4; line-height:1.45; }
+      main { max-width:78rem; margin:auto; padding:2rem; }
+      h1 { font-size:2rem; margin:0 0 .5rem; } h2 { margin:0 0 .35rem; } h3 { margin:0; font-size:1rem; }
+      p { color:var(--muted); margin:.25rem 0; }
+      .intro { max-width:54rem; margin-bottom:2rem; }
+      .option { border-top:1px solid var(--line); padding:2.25rem 0; }
+      .meta { display:flex; gap:.5rem; margin:.75rem 0 1.25rem; flex-wrap:wrap; }
+      .tag { border:1px solid var(--line); border-radius:999px; padding:.2rem .55rem; color:var(--muted); font-size:.75rem; }
+      .recommended { color:#9bd3ff; border-color:#386887; }
+      .mock { background:var(--panel); border:1px solid var(--line); border-radius:.8rem; overflow:hidden; min-height:22rem; }
+      .mock-head { padding:1rem 1.25rem; border-bottom:1px solid var(--line); font-weight:650; }
+      .section-title { padding:1rem 1.25rem .45rem; color:var(--muted); font-size:.78rem; font-weight:650; }
+      .row { min-height:4.3rem; padding:.85rem 1.25rem; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:1rem; }
+      .grow { flex:1; min-width:0; } .label { font-weight:600; } .desc { color:var(--muted); font-size:.85rem; }
+      .button,.select { border:1px solid #464646; background:#252525; border-radius:.5rem; padding:.45rem .7rem; color:#eee; white-space:nowrap; }
+      .button.primary { background:var(--accent); border-color:var(--accent); }
+      .switch { width:2.3rem; height:1.25rem; padding:.15rem; border-radius:999px; background:#555; display:flex; align-items:center; }
+      .switch.on { background:var(--accent); justify-content:flex-end; } .switch::after { content:""; width:.95rem; height:.95rem; background:white; border-radius:50%; }
+      .avatar { width:1.7rem; height:1.7rem; border-radius:50%; display:inline-grid; place-items:center; background:#7957a8; font-size:.7rem; font-weight:700; }
+      .channel { display:flex; align-items:center; gap:.45rem; } .channel::before { content:"#"; color:var(--muted); }
+      .two { display:grid; grid-template-columns:15rem 1fr; min-height:22rem; }
+      .side { border-right:1px solid var(--line); padding:.65rem; } .side-item { padding:.65rem; border-radius:.45rem; margin:.15rem 0; } .side-item.active { background:#2a2a2a; }
+      .matrix { overflow:auto; padding:1rem; } table { width:100%; border-collapse:collapse; min-width:38rem; } th,td { padding:.75rem; border-bottom:1px solid var(--line); text-align:left; } th:not(:first-child),td:not(:first-child) { text-align:center; }
+      .pros { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; } .pros div { border-left:2px solid var(--line); padding-left:.8rem; } .pros strong { display:block; }
+      .profile-head { padding:.8rem 1.25rem; display:flex; align-items:center; gap:.65rem; background:#202020; border-bottom:1px solid var(--line); }
+      .chips { display:flex; gap:.35rem; flex-wrap:wrap; justify-content:flex-end; } .chip { display:flex; gap:.35rem; align-items:center; border:1px solid var(--line); border-radius:999px; padding:.25rem .45rem; font-size:.75rem; }
+      @media (max-width:700px) { main{padding:1rem}.pros{grid-template-columns:1fr}.two{grid-template-columns:1fr}.side{border-right:0;border-bottom:1px solid var(--line);display:flex;overflow:auto}.side-item{white-space:nowrap} }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="intro">
+        <h1>Chat settings: five presentation options</h1>
+        <p>All options use Showtime's existing SettingsHeader, SettingsSection, SettingsItem, Button, Switch, Input, Dialog, and profile/avatar language. They require no RPC changes.</p>
+      </div>
+
+      <section class="option">
+        <h2>1. Profile-first notification sections</h2>
+        <p>Channels are managed once, followed by one short notification section per profile.</p>
+        <div class="meta"><span class="tag recommended">Recommended</span><span class="tag">Best on mobile</span><span class="tag">Lowest learning cost</span></div>
+        <div class="mock">
+          <div class="mock-head">Chat</div><div class="section-title">CHANNELS</div>
+          <div class="row"><div class="grow"><div class="label channel">Production</div><div class="desc">142 messages</div></div><button class="button">Rename</button></div>
+          <div class="row"><div class="grow"><div class="label channel">Stage</div><div class="desc">38 messages</div></div><button class="button">Rename</button></div>
+          <div class="profile-head"><span class="avatar">FO</span><strong>Notifications for FOH</strong></div>
+          <div class="row"><div class="grow"><div class="label channel">Production</div><div class="desc">Receive notifications</div></div><span class="switch on"></span></div>
+          <div class="row"><div class="grow"><div class="label channel">Stage</div><div class="desc">Muted for FOH</div></div><span class="switch"></span></div>
+        </div>
+        <div class="pros"><div><strong>Strengths</strong><p>Reads naturally, scales vertically, and makes “for whom?” unambiguous.</p></div><div><strong>Tradeoff</strong><p>Longer when there are many profiles and channels.</p></div></div>
+      </section>
+
+      <section class="option">
+        <h2>2. Channel-first rows with profile chips</h2>
+        <p>Each channel row shows which profiles are muted. Clicking the chips opens a small popover.</p>
+        <div class="meta"><span class="tag">Compact</span><span class="tag">Channel-oriented</span></div>
+        <div class="mock">
+          <div class="mock-head">Chat</div><div class="section-title">CHANNELS &amp; NOTIFICATIONS</div>
+          <div class="row"><div class="grow"><div class="label channel">Production</div><div class="desc">Notifications on for all profiles</div></div><div class="chips"><span class="chip"><span class="avatar">FO</span> FOH ✓</span><span class="chip"><span class="avatar">ST</span> Stage ✓</span></div></div>
+          <div class="row"><div class="grow"><div class="label channel">Stage</div><div class="desc">Muted for 1 profile</div></div><div class="chips"><span class="chip"><span class="avatar">FO</span> FOH —</span><span class="chip"><span class="avatar">ST</span> Stage ✓</span></div></div>
+          <div class="row"><div class="grow"><input class="select" value="New channel" /></div><button class="button primary">Add channel</button></div>
+        </div>
+        <div class="pros"><div><strong>Strengths</strong><p>Very compact and keeps channel management with notification state.</p></div><div><strong>Tradeoff</strong><p>Chip interactions are less obvious and become crowded with many profiles.</p></div></div>
+      </section>
+
+      <section class="option">
+        <h2>3. Notification matrix</h2>
+        <p>A spreadsheet-like overview: profiles are rows and channels are columns.</p>
+        <div class="meta"><span class="tag">Fastest overview</span><span class="tag">Best for power users</span></div>
+        <div class="mock"><div class="mock-head">Chat</div><div class="section-title">NOTIFICATION MATRIX</div><div class="matrix">
+          <table><thead><tr><th>Profile</th><th># Production</th><th># Stage</th><th># RF</th></tr></thead><tbody>
+            <tr><td><span class="avatar">FO</span> FOH</td><td><span class="switch on"></span></td><td><span class="switch"></span></td><td><span class="switch on"></span></td></tr>
+            <tr><td><span class="avatar">ST</span> Stage</td><td><span class="switch on"></span></td><td><span class="switch on"></span></td><td><span class="switch"></span></td></tr>
+          </tbody></table>
+        </div></div>
+        <div class="pros"><div><strong>Strengths</strong><p>Best at exposing every relationship and spotting inconsistent settings.</p></div><div><strong>Tradeoff</strong><p>Horizontal scrolling on phones and less consistent with the simple SettingsItem language.</p></div></div>
+      </section>
+
+      <section class="option">
+        <h2>4. Profile selector with focused channel list</h2>
+        <p>Select one profile, then edit only that profile's notification preferences.</p>
+        <div class="meta"><span class="tag">Focused</span><span class="tag">Scales to many profiles</span></div>
+        <div class="mock two"><aside class="side"><div class="side-item active"><span class="avatar">FO</span> FOH</div><div class="side-item"><span class="avatar">ST</span> Stage</div><div class="side-item"><span class="avatar">PM</span> Production</div></aside><div>
+          <div class="mock-head">Notifications for FOH</div>
+          <div class="row"><div class="grow"><div class="label channel">Production</div><div class="desc">Receive notifications</div></div><span class="switch on"></span></div>
+          <div class="row"><div class="grow"><div class="label channel">Stage</div><div class="desc">Muted</div></div><span class="switch"></span></div>
+          <div class="row"><div class="grow"><div class="label channel">RF</div><div class="desc">Receive notifications</div></div><span class="switch on"></span></div>
+        </div></div>
+        <div class="pros"><div><strong>Strengths</strong><p>Low visual noise even with dozens of profiles and channels.</p></div><div><strong>Tradeoff</strong><p>Comparing profiles requires switching back and forth.</p></div></div>
+      </section>
+
+      <section class="option">
+        <h2>5. Notification modes with a custom editor</h2>
+        <p>Each profile starts with a simple mode: all channels, no channels, or custom.</p>
+        <div class="meta"><span class="tag">Simplest defaults</span><span class="tag">Progressive disclosure</span></div>
+        <div class="mock"><div class="mock-head">Chat</div><div class="section-title">NOTIFICATIONS</div>
+          <div class="row"><span class="avatar">FO</span><div class="grow"><div class="label">FOH</div><div class="desc">Production and RF; Stage muted</div></div><button class="select">Custom ▾</button></div>
+          <div class="row"><span class="avatar">ST</span><div class="grow"><div class="label">Stage</div><div class="desc">Every channel</div></div><button class="select">All channels ▾</button></div>
+          <div class="row"><span class="avatar">PM</span><div class="grow"><div class="label">Production</div><div class="desc">No channel notifications</div></div><button class="select">Muted ▾</button></div>
+        </div>
+        <div class="pros"><div><strong>Strengths</strong><p>Most users make one easy choice; custom complexity stays hidden.</p></div><div><strong>Tradeoff</strong><p>Adds a derived “mode” concept and more interaction states to explain.</p></div></div>
+      </section>
+
+      <section class="option"><h2>Recommendation</h2><p><strong>Choose option 1</strong> for the current product stage. It is the most predictable, uses the existing design system directly, works on every viewport, and needs no hidden popovers or derived concepts. Choose option 4 instead if real shows commonly have more than roughly six profiles.</p></section>
+    </main>
+  </body>
+</html>

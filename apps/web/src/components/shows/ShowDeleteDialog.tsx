@@ -1,16 +1,17 @@
 import * as React from "react";
 import { Trash2Icon } from "lucide-react";
 import { Exit } from "effect";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAtom, useAtomSet } from "@effect/atom-react";
 import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
@@ -84,29 +85,36 @@ export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete show?</DialogTitle>
-          <DialogDescription>
-            This will permanently delete "{showName}". This cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
+    <AlertDialog open={isOpen} onOpenChange={(open) => !open && close()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogMedia>
+            <Trash2Icon />
+          </AlertDialogMedia>
+          <AlertDialogTitle>Delete show?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete{" "}
+            <strong className="font-semibold text-foreground">{showName}</strong>. This cannot be
+            undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         {deleteError && (
           <p role="alert" className="text-sm text-destructive">
             {deleteError}
           </p>
         )}
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" disabled={isDeleting} />}>
-            Cancel
-          </DialogClose>
-          <Button type="button" variant="destructive" disabled={isDeleting} onClick={confirmDelete}>
-            <Trash2Icon />
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            type="button"
+            variant="destructive"
+            disabled={isDeleting}
+            onClick={confirmDelete}
+          >
             {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

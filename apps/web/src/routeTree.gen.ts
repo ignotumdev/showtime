@@ -9,16 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as LiveRouteRouteImport } from './routes/live/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as LiveShowIdRouteImport } from './routes/live/$showId'
 import { Route as ShowsShowIdRouteRouteImport } from './routes/shows/$showId/route'
 import { Route as ShowsShowIdIndexRouteImport } from './routes/shows/$showId/index'
 import { Route as ShowsShowIdMixesRouteImport } from './routes/shows/$showId/mixes'
 import { Route as ShowsShowIdMicrophonesRouteImport } from './routes/shows/$showId/microphones'
+import { Route as ShowsShowIdSettingsRouteRouteImport } from './routes/shows/$showId/settings/route'
+import { Route as ShowsShowIdSettingsIndexRouteImport } from './routes/shows/$showId/settings/index'
 import { Route as ShowsShowIdSetlistIndexRouteImport } from './routes/shows/$showId/setlist/index'
+import { Route as ShowsShowIdSettingsSectionRouteImport } from './routes/shows/$showId/settings/$section'
 import { Route as ShowsShowIdSetlistSongIdRouteImport } from './routes/shows/$showId/setlist/$songId'
 
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LiveRouteRoute = LiveRouteRouteImport.update({
   id: '/live',
   path: '/live',
@@ -28,6 +39,16 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => SettingsRouteRoute,
 } as any)
 const LiveShowIdRoute = LiveShowIdRouteImport.update({
   id: '/$showId',
@@ -54,11 +75,29 @@ const ShowsShowIdMicrophonesRoute = ShowsShowIdMicrophonesRouteImport.update({
   path: '/microphones',
   getParentRoute: () => ShowsShowIdRouteRoute,
 } as any)
+const ShowsShowIdSettingsRouteRoute =
+  ShowsShowIdSettingsRouteRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ShowsShowIdRouteRoute,
+  } as any)
+const ShowsShowIdSettingsIndexRoute =
+  ShowsShowIdSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ShowsShowIdSettingsRouteRoute,
+  } as any)
 const ShowsShowIdSetlistIndexRoute = ShowsShowIdSetlistIndexRouteImport.update({
   id: '/setlist/',
   path: '/setlist/',
   getParentRoute: () => ShowsShowIdRouteRoute,
 } as any)
+const ShowsShowIdSettingsSectionRoute =
+  ShowsShowIdSettingsSectionRouteImport.update({
+    id: '/$section',
+    path: '/$section',
+    getParentRoute: () => ShowsShowIdSettingsRouteRoute,
+  } as any)
 const ShowsShowIdSetlistSongIdRoute =
   ShowsShowIdSetlistSongIdRouteImport.update({
     id: '/setlist/$songId',
@@ -69,79 +108,119 @@ const ShowsShowIdSetlistSongIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/live': typeof LiveRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/shows/$showId': typeof ShowsShowIdRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/shows/$showId/settings': typeof ShowsShowIdSettingsRouteRouteWithChildren
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
+  '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
   '/shows/$showId/setlist/': typeof ShowsShowIdSetlistIndexRoute
+  '/shows/$showId/settings/': typeof ShowsShowIdSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/live': typeof LiveRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings': typeof SettingsIndexRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
+  '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
   '/shows/$showId/setlist': typeof ShowsShowIdSetlistIndexRoute
+  '/shows/$showId/settings': typeof ShowsShowIdSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/live': typeof LiveRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/shows/$showId': typeof ShowsShowIdRouteRouteWithChildren
   '/live/$showId': typeof LiveShowIdRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/shows/$showId/settings': typeof ShowsShowIdSettingsRouteRouteWithChildren
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
+  '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
   '/shows/$showId/setlist/': typeof ShowsShowIdSetlistIndexRoute
+  '/shows/$showId/settings/': typeof ShowsShowIdSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/live'
+    | '/settings'
     | '/shows/$showId'
     | '/live/$showId'
+    | '/settings/$section'
+    | '/settings/'
+    | '/shows/$showId/settings'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId/'
     | '/shows/$showId/setlist/$songId'
+    | '/shows/$showId/settings/$section'
     | '/shows/$showId/setlist/'
+    | '/shows/$showId/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/live'
     | '/live/$showId'
+    | '/settings/$section'
+    | '/settings'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId'
     | '/shows/$showId/setlist/$songId'
+    | '/shows/$showId/settings/$section'
     | '/shows/$showId/setlist'
+    | '/shows/$showId/settings'
   id:
     | '__root__'
     | '/'
     | '/live'
+    | '/settings'
     | '/shows/$showId'
     | '/live/$showId'
+    | '/settings/$section'
+    | '/settings/'
+    | '/shows/$showId/settings'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
     | '/shows/$showId/'
     | '/shows/$showId/setlist/$songId'
+    | '/shows/$showId/settings/$section'
     | '/shows/$showId/setlist/'
+    | '/shows/$showId/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LiveRouteRoute: typeof LiveRouteRouteWithChildren
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   ShowsShowIdRouteRoute: typeof ShowsShowIdRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/live': {
       id: '/live'
       path: '/live'
@@ -155,6 +234,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/$section': {
+      id: '/settings/$section'
+      path: '/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
+      parentRoute: typeof SettingsRouteRoute
     }
     '/live/$showId': {
       id: '/live/$showId'
@@ -191,12 +284,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShowsShowIdMicrophonesRouteImport
       parentRoute: typeof ShowsShowIdRouteRoute
     }
+    '/shows/$showId/settings': {
+      id: '/shows/$showId/settings'
+      path: '/settings'
+      fullPath: '/shows/$showId/settings'
+      preLoaderRoute: typeof ShowsShowIdSettingsRouteRouteImport
+      parentRoute: typeof ShowsShowIdRouteRoute
+    }
+    '/shows/$showId/settings/': {
+      id: '/shows/$showId/settings/'
+      path: '/'
+      fullPath: '/shows/$showId/settings/'
+      preLoaderRoute: typeof ShowsShowIdSettingsIndexRouteImport
+      parentRoute: typeof ShowsShowIdSettingsRouteRoute
+    }
     '/shows/$showId/setlist/': {
       id: '/shows/$showId/setlist/'
       path: '/setlist'
       fullPath: '/shows/$showId/setlist/'
       preLoaderRoute: typeof ShowsShowIdSetlistIndexRouteImport
       parentRoute: typeof ShowsShowIdRouteRoute
+    }
+    '/shows/$showId/settings/$section': {
+      id: '/shows/$showId/settings/$section'
+      path: '/$section'
+      fullPath: '/shows/$showId/settings/$section'
+      preLoaderRoute: typeof ShowsShowIdSettingsSectionRouteImport
+      parentRoute: typeof ShowsShowIdSettingsRouteRoute
     }
     '/shows/$showId/setlist/$songId': {
       id: '/shows/$showId/setlist/$songId'
@@ -220,7 +334,38 @@ const LiveRouteRouteWithChildren = LiveRouteRoute._addFileChildren(
   LiveRouteRouteChildren,
 )
 
+interface SettingsRouteRouteChildren {
+  SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
+  SettingsSectionRoute: SettingsSectionRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
+
+interface ShowsShowIdSettingsRouteRouteChildren {
+  ShowsShowIdSettingsSectionRoute: typeof ShowsShowIdSettingsSectionRoute
+  ShowsShowIdSettingsIndexRoute: typeof ShowsShowIdSettingsIndexRoute
+}
+
+const ShowsShowIdSettingsRouteRouteChildren: ShowsShowIdSettingsRouteRouteChildren =
+  {
+    ShowsShowIdSettingsSectionRoute: ShowsShowIdSettingsSectionRoute,
+    ShowsShowIdSettingsIndexRoute: ShowsShowIdSettingsIndexRoute,
+  }
+
+const ShowsShowIdSettingsRouteRouteWithChildren =
+  ShowsShowIdSettingsRouteRoute._addFileChildren(
+    ShowsShowIdSettingsRouteRouteChildren,
+  )
+
 interface ShowsShowIdRouteRouteChildren {
+  ShowsShowIdSettingsRouteRoute: typeof ShowsShowIdSettingsRouteRouteWithChildren
   ShowsShowIdMicrophonesRoute: typeof ShowsShowIdMicrophonesRoute
   ShowsShowIdMixesRoute: typeof ShowsShowIdMixesRoute
   ShowsShowIdIndexRoute: typeof ShowsShowIdIndexRoute
@@ -229,6 +374,7 @@ interface ShowsShowIdRouteRouteChildren {
 }
 
 const ShowsShowIdRouteRouteChildren: ShowsShowIdRouteRouteChildren = {
+  ShowsShowIdSettingsRouteRoute: ShowsShowIdSettingsRouteRouteWithChildren,
   ShowsShowIdMicrophonesRoute: ShowsShowIdMicrophonesRoute,
   ShowsShowIdMixesRoute: ShowsShowIdMixesRoute,
   ShowsShowIdIndexRoute: ShowsShowIdIndexRoute,
@@ -242,6 +388,7 @@ const ShowsShowIdRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LiveRouteRoute: LiveRouteRouteWithChildren,
+  SettingsRouteRoute: SettingsRouteRouteWithChildren,
   ShowsShowIdRouteRoute: ShowsShowIdRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
