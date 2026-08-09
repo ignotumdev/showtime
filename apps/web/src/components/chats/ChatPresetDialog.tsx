@@ -72,7 +72,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
-type Mode =
+export type ChatPresetDialogMode =
   | { readonly type: "list" }
   | { readonly type: "use"; readonly preset: ChatPreset }
   | { readonly type: "edit"; readonly preset?: ChatPreset }
@@ -93,6 +93,7 @@ export function ChatPresetDialog({
   profileId,
   presets,
   onSend,
+  initialMode = { type: "list" },
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -104,8 +105,9 @@ export function ChatPresetDialog({
     parts: ReadonlyArray<ChatMessagePart>,
     answer?: ChatPresetAnswer,
   ) => Promise<string | undefined>;
+  readonly initialMode?: ChatPresetDialogMode;
 }) {
-  const [mode, setMode] = React.useState<Mode>({ type: "list" });
+  const [mode, setMode] = React.useState<ChatPresetDialogMode>(initialMode);
 
   React.useEffect(() => {
     if (!open) setMode({ type: "list" });

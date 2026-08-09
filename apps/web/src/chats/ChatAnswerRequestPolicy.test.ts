@@ -9,7 +9,12 @@ import type {
   ProfileId,
   ShowId,
 } from "@showtime/contracts";
-import { planChatAnswerRequests, type ChatAnswerRequestSequences } from "./ChatAnswerRequestPolicy";
+import {
+  planChatAnswerRequests,
+  reconcileChatAnswerRequests,
+  type AnswerRequest,
+  type ChatAnswerRequestSequences,
+} from "./ChatAnswerRequestPolicy";
 
 const showId = "show_0000000000000001" as ShowId;
 const channelId = "channel_0000000000000001" as ChatChannelId;
@@ -31,14 +36,14 @@ const message = (sequence: number, overrides: Partial<ChatMessage> = {}): ChatMe
   ...overrides,
 });
 
-const request = (sequence: number, overrides: Partial<ChatMessage> = {}): ChatMessage =>
+const request = (sequence: number, overrides: Partial<ChatMessage> = {}): AnswerRequest =>
   message(sequence, {
     answer: {
       template: "{{answer}}" as NonNullable<ChatMessage["answer"]>["template"],
       fields: [{ name: "answer", type: "text" }],
     },
     ...overrides,
-  });
+  }) as AnswerRequest;
 
 const channel = (overrides: Partial<ChatChannel> = {}): ChatChannel => ({
   id: channelId,
@@ -127,5 +132,18 @@ describe("chat answer request policy", () => {
 
     expect(planned.requests).toEqual([]);
     expect(planned.sequences.get(channelId)).toBe(2);
+  });
+
+  it("drops queued requests when their channel is deleted", () => {
+    const stale = request(2);
+    const available = request(3, { channelId: addedChannelId });
+
+    const reconciled = reconcileChatAnswerRequests({
+      queued: [stale, available],
+      incoming: [available],
+      channelIds: new Set([addedChannelId]),
+    });
+
+    expect(reconciled).toEqual([available]);
   });
 });

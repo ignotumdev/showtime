@@ -17,8 +17,10 @@ import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as LiveShowIdRouteImport } from './routes/live/$showId'
 import { Route as ShowsShowIdRouteRouteImport } from './routes/shows/$showId/route'
 import { Route as ShowsShowIdIndexRouteImport } from './routes/shows/$showId/index'
+import { Route as ShowsShowIdPresetsRouteImport } from './routes/shows/$showId/presets'
 import { Route as ShowsShowIdMixesRouteImport } from './routes/shows/$showId/mixes'
 import { Route as ShowsShowIdMicrophonesRouteImport } from './routes/shows/$showId/microphones'
+import { Route as ShowsShowIdChatRouteImport } from './routes/shows/$showId/chat'
 import { Route as ShowsShowIdSettingsRouteRouteImport } from './routes/shows/$showId/settings/route'
 import { Route as ShowsShowIdSettingsIndexRouteImport } from './routes/shows/$showId/settings/index'
 import { Route as ShowsShowIdSetlistIndexRouteImport } from './routes/shows/$showId/setlist/index'
@@ -65,6 +67,11 @@ const ShowsShowIdIndexRoute = ShowsShowIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ShowsShowIdRouteRoute,
 } as any)
+const ShowsShowIdPresetsRoute = ShowsShowIdPresetsRouteImport.update({
+  id: '/presets',
+  path: '/presets',
+  getParentRoute: () => ShowsShowIdRouteRoute,
+} as any)
 const ShowsShowIdMixesRoute = ShowsShowIdMixesRouteImport.update({
   id: '/mixes',
   path: '/mixes',
@@ -73,6 +80,11 @@ const ShowsShowIdMixesRoute = ShowsShowIdMixesRouteImport.update({
 const ShowsShowIdMicrophonesRoute = ShowsShowIdMicrophonesRouteImport.update({
   id: '/microphones',
   path: '/microphones',
+  getParentRoute: () => ShowsShowIdRouteRoute,
+} as any)
+const ShowsShowIdChatRoute = ShowsShowIdChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => ShowsShowIdRouteRoute,
 } as any)
 const ShowsShowIdSettingsRouteRoute =
@@ -114,8 +126,10 @@ export interface FileRoutesByFullPath {
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
   '/shows/$showId/settings': typeof ShowsShowIdSettingsRouteRouteWithChildren
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
+  '/shows/$showId/presets': typeof ShowsShowIdPresetsRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
   '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
@@ -128,8 +142,10 @@ export interface FileRoutesByTo {
   '/live/$showId': typeof LiveShowIdRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/settings': typeof SettingsIndexRoute
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
+  '/shows/$showId/presets': typeof ShowsShowIdPresetsRoute
   '/shows/$showId': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
   '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
@@ -146,8 +162,10 @@ export interface FileRoutesById {
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
   '/shows/$showId/settings': typeof ShowsShowIdSettingsRouteRouteWithChildren
+  '/shows/$showId/chat': typeof ShowsShowIdChatRoute
   '/shows/$showId/microphones': typeof ShowsShowIdMicrophonesRoute
   '/shows/$showId/mixes': typeof ShowsShowIdMixesRoute
+  '/shows/$showId/presets': typeof ShowsShowIdPresetsRoute
   '/shows/$showId/': typeof ShowsShowIdIndexRoute
   '/shows/$showId/setlist/$songId': typeof ShowsShowIdSetlistSongIdRoute
   '/shows/$showId/settings/$section': typeof ShowsShowIdSettingsSectionRoute
@@ -165,8 +183,10 @@ export interface FileRouteTypes {
     | '/settings/$section'
     | '/settings/'
     | '/shows/$showId/settings'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
+    | '/shows/$showId/presets'
     | '/shows/$showId/'
     | '/shows/$showId/setlist/$songId'
     | '/shows/$showId/settings/$section'
@@ -179,8 +199,10 @@ export interface FileRouteTypes {
     | '/live/$showId'
     | '/settings/$section'
     | '/settings'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
+    | '/shows/$showId/presets'
     | '/shows/$showId'
     | '/shows/$showId/setlist/$songId'
     | '/shows/$showId/settings/$section'
@@ -196,8 +218,10 @@ export interface FileRouteTypes {
     | '/settings/$section'
     | '/settings/'
     | '/shows/$showId/settings'
+    | '/shows/$showId/chat'
     | '/shows/$showId/microphones'
     | '/shows/$showId/mixes'
+    | '/shows/$showId/presets'
     | '/shows/$showId/'
     | '/shows/$showId/setlist/$songId'
     | '/shows/$showId/settings/$section'
@@ -270,6 +294,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShowsShowIdIndexRouteImport
       parentRoute: typeof ShowsShowIdRouteRoute
     }
+    '/shows/$showId/presets': {
+      id: '/shows/$showId/presets'
+      path: '/presets'
+      fullPath: '/shows/$showId/presets'
+      preLoaderRoute: typeof ShowsShowIdPresetsRouteImport
+      parentRoute: typeof ShowsShowIdRouteRoute
+    }
     '/shows/$showId/mixes': {
       id: '/shows/$showId/mixes'
       path: '/mixes'
@@ -282,6 +313,13 @@ declare module '@tanstack/react-router' {
       path: '/microphones'
       fullPath: '/shows/$showId/microphones'
       preLoaderRoute: typeof ShowsShowIdMicrophonesRouteImport
+      parentRoute: typeof ShowsShowIdRouteRoute
+    }
+    '/shows/$showId/chat': {
+      id: '/shows/$showId/chat'
+      path: '/chat'
+      fullPath: '/shows/$showId/chat'
+      preLoaderRoute: typeof ShowsShowIdChatRouteImport
       parentRoute: typeof ShowsShowIdRouteRoute
     }
     '/shows/$showId/settings': {
@@ -366,8 +404,10 @@ const ShowsShowIdSettingsRouteRouteWithChildren =
 
 interface ShowsShowIdRouteRouteChildren {
   ShowsShowIdSettingsRouteRoute: typeof ShowsShowIdSettingsRouteRouteWithChildren
+  ShowsShowIdChatRoute: typeof ShowsShowIdChatRoute
   ShowsShowIdMicrophonesRoute: typeof ShowsShowIdMicrophonesRoute
   ShowsShowIdMixesRoute: typeof ShowsShowIdMixesRoute
+  ShowsShowIdPresetsRoute: typeof ShowsShowIdPresetsRoute
   ShowsShowIdIndexRoute: typeof ShowsShowIdIndexRoute
   ShowsShowIdSetlistSongIdRoute: typeof ShowsShowIdSetlistSongIdRoute
   ShowsShowIdSetlistIndexRoute: typeof ShowsShowIdSetlistIndexRoute
@@ -375,8 +415,10 @@ interface ShowsShowIdRouteRouteChildren {
 
 const ShowsShowIdRouteRouteChildren: ShowsShowIdRouteRouteChildren = {
   ShowsShowIdSettingsRouteRoute: ShowsShowIdSettingsRouteRouteWithChildren,
+  ShowsShowIdChatRoute: ShowsShowIdChatRoute,
   ShowsShowIdMicrophonesRoute: ShowsShowIdMicrophonesRoute,
   ShowsShowIdMixesRoute: ShowsShowIdMixesRoute,
+  ShowsShowIdPresetsRoute: ShowsShowIdPresetsRoute,
   ShowsShowIdIndexRoute: ShowsShowIdIndexRoute,
   ShowsShowIdSetlistSongIdRoute: ShowsShowIdSetlistSongIdRoute,
   ShowsShowIdSetlistIndexRoute: ShowsShowIdSetlistIndexRoute,

@@ -32,14 +32,14 @@ import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Option } from "effect";
-import type { ChatChannelId, ShowId, SongId } from "@showtime/contracts";
+import type { ShowId, SongId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 import { ShowPageAction } from "./ShowPageAction";
-import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
-import { ChatPresetLauncher } from "@/components/chats/ChatPresetLauncher";
+import { ChatUnreadBadge } from "@/components/chats/ChatDrawer";
+import { ChatAnswerPrompts } from "@/components/chats/ChatAnswerPrompts";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShowSwitcher } from "@/components/shows/ShowSwitcher";
 
@@ -50,8 +50,6 @@ export function ShowLayout() {
 }
 
 function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
-  const [chatOpen, setChatOpen] = React.useState(false);
-  const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
   const { showId = "", show } = useShowFromParams();
   const showName = show?.name ?? "Show";
   const showColorClassName = showColorClassNames[show?.color ?? "neutral"];
@@ -61,6 +59,7 @@ function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const syncedSongsResult = useAtomValue(songAtoms(typedShowId).syncedSongs);
   const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
+  const isChatRoute = /\/chat\/?$/.test(pathname);
   const songs = AsyncResult.isSuccess(songsResult)
     ? songsResult.value
     : AsyncResult.isFailure(songsResult)
@@ -74,45 +73,7 @@ function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
   const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>
-      <TitleBar
-        hideName
-        hideSettings
-        stack="above-content"
-        className="hidden md:flex"
-        actions={
-          <>
-            <ChatPresetLauncher
-              showId={typedShowId}
-              channelId={selectedChannelId}
-              trigger={({ disabled, onClick }) => (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Open message presets"
-                  disabled={disabled}
-                  onClick={onClick}
-                >
-                  <LibraryIcon />
-                </Button>
-              )}
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="relative"
-              aria-label="Open chat"
-              onClick={() => setChatOpen(true)}
-            >
-              <MessageCircleIcon />
-              <span className="absolute -top-1 -right-1">
-                <ChatUnreadBadge showId={typedShowId} />
-              </span>
-            </Button>
-          </>
-        }
-      />
+      <TitleBar hideName hideSettings stack="above-content" className="hidden md:flex" />
       <SidebarProvider className="app-height relative overflow-hidden bg-background">
         <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
@@ -132,6 +93,19 @@ function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
                   params={{ showId }}
                   label="Mixes"
                   icon={SpeakerIcon}
+                />
+                <ShowSidebarLink
+                  to="/shows/$showId/chat"
+                  params={{ showId }}
+                  label="Chat"
+                  icon={MessageCircleIcon}
+                  badge={<ChatUnreadBadge showId={typedShowId} />}
+                />
+                <ShowSidebarLink
+                  to="/shows/$showId/presets"
+                  params={{ showId }}
+                  label="Presets"
+                  icon={LibraryIcon}
                 />
               </SidebarMenu>
             </SidebarGroup>
@@ -202,20 +176,21 @@ function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
             pathname={pathname}
             songCreator={songCreator}
           />
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="h-full px-3 py-3 sm:px-4 sm:py-4">
+          {isChatRoute ? (
+            <div className="min-h-0 flex-1 px-2 py-2 sm:px-4 sm:py-4">
               <Outlet />
             </div>
-          </ScrollArea>
-          <MobileBottomNavigation showId={showId} onChatOpen={() => setChatOpen(true)} />
+          ) : (
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="h-full px-3 py-3 sm:px-4 sm:py-4">
+                <Outlet />
+              </div>
+            </ScrollArea>
+          )}
+          <MobileBottomNavigation showId={showId} />
         </SidebarInset>
       </SidebarProvider>
-      <ChatDrawer
-        showId={typedShowId}
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-        onSelectedChannelChange={setSelectedChannelId}
-      />
+      <ChatAnswerPrompts showId={typedShowId} chatOpen={isChatRoute} />
     </React.Fragment>
   );
 }
@@ -276,17 +251,11 @@ function ShowHeader({
   );
 }
 
-function MobileBottomNavigation({
-  showId,
-  onChatOpen,
-}: {
-  readonly showId: string;
-  readonly onChatOpen: () => void;
-}) {
+function MobileBottomNavigation({ showId }: { readonly showId: string }) {
   return (
     <nav
       aria-label="Show navigation"
-      className="grid shrink-0 grid-cols-5 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="grid shrink-0 grid-cols-6 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <MobileNavigationLink
         to="/shows/$showId/microphones"
@@ -316,17 +285,19 @@ function MobileBottomNavigation({
         label="Songs"
         icon={ListMusicIcon}
       />
-      <button
-        type="button"
-        className="relative flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50"
-        onClick={onChatOpen}
-      >
-        <MessageCircleIcon className="size-5" />
-        Chat
-        <span className="absolute top-2 right-[calc(50%-1.5rem)]">
-          <ChatUnreadBadge showId={showId as ShowId} />
-        </span>
-      </button>
+      <MobileNavigationLink
+        to="/shows/$showId/chat"
+        showId={showId}
+        label="Chat"
+        icon={MessageCircleIcon}
+        badge={<ChatUnreadBadge showId={showId as ShowId} />}
+      />
+      <MobileNavigationLink
+        to="/shows/$showId/presets"
+        showId={showId}
+        label="Presets"
+        icon={LibraryIcon}
+      />
     </nav>
   );
 }
@@ -336,11 +307,18 @@ function MobileNavigationLink({
   showId,
   label,
   icon: Icon,
+  badge,
 }: {
-  readonly to: "/shows/$showId/microphones" | "/shows/$showId/mixes" | "/shows/$showId/setlist";
+  readonly to:
+    | "/shows/$showId/microphones"
+    | "/shows/$showId/mixes"
+    | "/shows/$showId/setlist"
+    | "/shows/$showId/chat"
+    | "/shows/$showId/presets";
   readonly showId: string;
   readonly label: string;
   readonly icon: React.ComponentType<{ className?: string }>;
+  readonly badge?: React.ReactNode;
 }) {
   return (
     <Link
@@ -348,10 +326,11 @@ function MobileNavigationLink({
       params={{ showId }}
       activeOptions={to === "/shows/$showId/setlist" ? { includeSearch: false } : undefined}
       activeProps={{ "data-active": true }}
-      className="flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 data-active:text-foreground"
+      className="relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[0.6875rem] font-medium text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 data-active:text-foreground"
     >
       <Icon className="size-5" />
-      {label}
+      <span className="max-w-full truncate">{label}</span>
+      {badge && <span className="absolute top-2 right-[calc(50%-1.5rem)]">{badge}</span>}
     </Link>
   );
 }
@@ -362,6 +341,8 @@ type ShowSidebarLinkProps = (
         | "/shows/$showId"
         | "/shows/$showId/microphones"
         | "/shows/$showId/mixes"
+        | "/shows/$showId/chat"
+        | "/shows/$showId/presets"
         | "/shows/$showId/setlist";
       readonly params: { readonly showId: string };
     }
@@ -375,7 +356,7 @@ type ShowSidebarLinkProps = (
     }
 ) & {
   readonly label: string;
-  readonly badge?: string;
+  readonly badge?: React.ReactNode;
   readonly number?: number;
   readonly icon?: React.ComponentType<{ className?: string }>;
 };
@@ -402,7 +383,7 @@ function ShowSidebarLink({ to, params, label, badge, number, icon: Icon }: ShowS
         <span className="min-w-0 flex-1 truncate" title={label}>
           {label}
         </span>
-        {badge && <Badge variant="outline">{badge}</Badge>}
+        {badge && (typeof badge === "string" ? <Badge variant="outline">{badge}</Badge> : badge)}
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
