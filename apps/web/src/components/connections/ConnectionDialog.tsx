@@ -1,7 +1,15 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import QRCode from "qrcode";
-import { CheckIcon, CopyIcon, PlusIcon, Trash2Icon, WifiIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  PlusIcon,
+  QrCodeIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  WifiOffIcon,
+} from "lucide-react";
 import type {
   ShowtimeConnectionCandidate,
   ShowtimeConnectionsState,
@@ -18,14 +26,39 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 import {
   Item,
   ItemActions,
@@ -61,6 +94,7 @@ import { profileAtoms } from "@/client";
 import { useProfileSelection } from "@/profiles";
 import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
 import { showColorClassNames } from "@/components/shows/show-color";
+import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
 
 const emptyState: ShowtimeConnectionsState = {
   enabled: false,
@@ -77,27 +111,42 @@ const timeUntil = (expiresAt: string, now: number) => {
   return `Link expires in ${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export function ConnectionDialog({
-  className,
-  compact = false,
-}: {
-  readonly className?: string;
-  readonly compact?: boolean;
-}) {
+export function ConnectionsSettings() {
   const [manager] = React.useState(getConnectionManagementClient);
   const profilesResult = useAtomValue(profileAtoms.state);
   const profilesState = currentProfilesState(profilesResult);
-  const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [hostNameOpen, setHostNameOpen] = React.useState(false);
-  const [pairingClient, setPairingClient] = React.useState<ShowtimePendingClient>();
+  const [deleteTarget, setDeleteTarget] = React.useState<{
+    readonly id: string;
+    readonly name: string;
+  }>();
+  const [deleteError, setDeleteError] = React.useState<string>();
+  const [hostNameDraft, setHostNameDraft] = React.useState(emptyState.hostName);
+  const [hostNameConfirmOpen, setHostNameConfirmOpen] = React.useState(false);
+  const [hostNameError, setHostNameError] = React.useState<string>();
   const [loadError, setLoadError] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [loading, setLoading] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
   const refreshGeneration = React.useRef(0);
   const refreshInFlight = React.useRef(false);
+  const [pageVisible, setPageVisible] = React.useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
+  const hostNameCandidate = hostNameDraft.trim()
+    ? normalizeShowtimeHostName(hostNameDraft)
+    : undefined;
+  const hostNameChanged = hostNameCandidate !== undefined && hostNameCandidate !== state.hostName;
+  const hasPendingClients = state.clients.some((client) => client.kind === "pending");
+
+  React.useEffect(() => setHostNameDraft(state.hostName), [state.hostName]);
+
+  React.useEffect(() => {
+    const updateVisibility = () => setPageVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
 
   const refresh = React.useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -118,19 +167,21 @@ export function ConnectionDialog({
   }, [manager]);
 
   React.useEffect(() => {
-    if (!open) return;
-    let active = true;
+    if (!manager || !pageVisible) return;
     const update = () => void refresh();
     update();
     const poll = window.setInterval(update, 1_000);
-    const clock = window.setInterval(() => active && setNow(Date.now()), 1_000);
     return () => {
-      active = false;
       refreshGeneration.current += 1;
       window.clearInterval(poll);
-      window.clearInterval(clock);
     };
-  }, [open, refresh]);
+  }, [pageVisible, refresh]);
+
+  React.useEffect(() => {
+    if (!pageVisible || !hasPendingClients) return;
+    const clock = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(clock);
+  }, [hasPendingClients, pageVisible]);
 
   const updateEnabled = async (enabled: boolean) => {
     setLoading(true);
@@ -145,160 +196,219 @@ export function ConnectionDialog({
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async () => {
+    if (!deleteTarget) return;
     setLoading(true);
-    setError(undefined);
+    setDeleteError(undefined);
     try {
       if (!manager) return;
-      setState(await manager.removeConnection(id));
-      if (pairingClient?.invitationId === id) setPairingClient(undefined);
+      setState(await manager.removeConnection(deleteTarget.id));
+      setDeleteTarget(undefined);
     } catch {
-      setError("Showtime could not remove this client.");
+      setDeleteError("Showtime could not remove this client.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (!manager) return null;
+  const changeHostName = async () => {
+    if (!hostNameCandidate || !hostNameChanged || !manager?.setHostName) return;
+    setLoading(true);
+    setHostNameError(undefined);
+    try {
+      setState(await manager.setHostName(hostNameCandidate));
+      setHostNameConfirmOpen(false);
+    } catch {
+      setHostNameError("Showtime could not change the host name.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!manager) {
+    return (
+      <div className="space-y-6">
+        <SettingsHeader>Connections</SettingsHeader>
+        <SettingsSection title="Access">
+          <SettingsItem
+            title="Connection management unavailable"
+            description="Connection settings can only be changed on the show computer or by a client with connection-management access."
+          />
+        </SettingsSection>
+      </div>
+    );
+  }
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger
-          render={
-            <Button
-              size={compact ? "icon-sm" : "sm"}
-              variant="ghost"
-              className={cn(className)}
-              aria-label="Connections"
+      <div className="space-y-6">
+        <SettingsHeader>Connections</SettingsHeader>
+        {manager.isOwner && (
+          <SettingsSection title="Network">
+            <SettingsItem
+              title="Allow connections"
+              description="Host the web app and let approved devices connect."
+              action={
+                <Switch
+                  id="showtime-connections-enabled"
+                  aria-label="Allow connections"
+                  checked={state.enabled}
+                  disabled={loading}
+                  onCheckedChange={updateEnabled}
+                />
+              }
             />
+            <SettingsItem
+              title="Host name"
+              description="The local address used to open Showtime. Changing it removes existing and pending client connections."
+              action={
+                <InputGroup className="w-fit max-w-full">
+                  <InputGroupAddon>
+                    <InputGroupText>showtime-</InputGroupText>
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    aria-label="Showtime host name"
+                    className="w-auto min-w-0 flex-none px-0! [field-sizing:content]"
+                    size={Math.max(1, Math.min(showtimeHostNameMaxLength, hostNameDraft.length))}
+                    value={hostNameDraft}
+                    maxLength={showtimeHostNameMaxLength}
+                    pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    disabled={loading || !state.enabled}
+                    onChange={(event) =>
+                      setHostNameDraft(
+                        event.currentTarget.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9-]/g, "")
+                          .slice(0, showtimeHostNameMaxLength),
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && hostNameChanged) {
+                        setHostNameError(undefined);
+                        setHostNameConfirmOpen(true);
+                      }
+                      if (event.key === "Escape") setHostNameDraft(state.hostName);
+                    }}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupText>.local</InputGroupText>
+                    {hostNameChanged && (
+                      <InputGroupButton
+                        variant="destructive"
+                        disabled={loading || !state.enabled}
+                        onClick={() => {
+                          setHostNameError(undefined);
+                          setHostNameConfirmOpen(true);
+                        }}
+                      >
+                        Change
+                      </InputGroupButton>
+                    )}
+                  </InputGroupAddon>
+                </InputGroup>
+              }
+            />
+          </SettingsSection>
+        )}
+        <SettingsSection
+          title="Devices"
+          action={
+            state.enabled && manager.canCreate ? (
+              <Button
+                type="button"
+                disabled={loading}
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+              >
+                <PlusIcon /> Add a new client
+              </Button>
+            ) : undefined
           }
         >
-          <WifiIcon /> {!compact && "Connections"}
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Connections</DialogTitle>
-            <DialogDescription>
-              Manage access to Showtime from devices on this network.
-            </DialogDescription>
-          </DialogHeader>
-          {manager.isOwner && (
-            <>
-              <Item variant="outline" render={<label htmlFor="showtime-connections-enabled" />}>
-                <ItemContent>
-                  <ItemTitle>Allow connections</ItemTitle>
-                  <ItemDescription>
-                    Host the web app and let approved devices connect.
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Switch
-                    id="showtime-connections-enabled"
-                    checked={state.enabled}
-                    disabled={loading}
-                    onCheckedChange={updateEnabled}
-                  />
-                </ItemActions>
-              </Item>
-              <Item variant="outline">
-                <ItemContent>
-                  <ItemTitle>Host name</ItemTitle>
-                  <ItemDescription>{state.hostname}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={loading || !state.enabled}
-                    onClick={() => setHostNameOpen(true)}
-                  >
-                    Change
-                  </Button>
-                </ItemActions>
-              </Item>
-            </>
-          )}
-          <ItemGroup>
-            {state.clients.map((client) => {
-              const id = client.kind === "pending" ? client.invitationId : client.clientId;
-              const connected = client.kind === "paired" && client.connected;
-              return (
-                <Item key={id} variant="outline">
-                  <ItemMedia>
-                    <span
-                      className={`size-2.5 rounded-full ${connected ? "bg-primary" : "bg-destructive"}`}
-                      aria-label={connected ? "Connected" : "Not connected"}
-                    />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle className="flex items-center gap-2">
-                      <span className="truncate">{client.name}</span>
-                      <ClientProfileBadge
-                        profile={profilesState?.profiles.find(
-                          (profile) => profile.id === client.clientProfile,
-                        )}
+          {state.clients.length > 0 && (
+            <ItemGroup className="gap-0 divide-y">
+              {state.clients.map((client) => {
+                const id = client.kind === "pending" ? client.invitationId : client.clientId;
+                const connected = client.kind === "paired" && client.connected;
+                return (
+                  <Item key={id} className="min-h-16 border-0 px-0 py-3 sm:flex-nowrap">
+                    <ItemMedia>
+                      <span
+                        className={`size-2.5 rounded-full ${connected ? "bg-primary" : "bg-destructive"}`}
+                        aria-label={connected ? "Connected" : "Not connected"}
                       />
-                    </ItemTitle>
-                    <ItemDescription>
-                      {client.kind === "pending"
-                        ? timeUntil(client.expiresAt, now)
-                        : connected
-                          ? "Connected now"
-                          : "Not currently connected"}
-                      {hasShowtimeConnectionManagementScopes(client.scopes)
-                        ? " · Can manage connections"
-                        : ""}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    {client.kind === "pending" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={loading || !state.enabled}
-                        onClick={() => setPairingClient(client)}
-                      >
-                        Connect
-                      </Button>
-                    )}
-                    {manager.canDelete && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        disabled={loading}
-                        aria-label={`Remove ${client.name}`}
-                        onClick={() => remove(id)}
-                      >
-                        <Trash2Icon />
-                      </Button>
-                    )}
-                  </ItemActions>
-                </Item>
-              );
-            })}
-          </ItemGroup>
-          {state.enabled && manager.canCreate && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-              onClick={() => setCreateOpen(true)}
-            >
-              <PlusIcon /> Add a new client
-            </Button>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle className="flex items-center gap-2">
+                        <span className="truncate">{client.name}</span>
+                        <ClientProfileBadge
+                          profile={profilesState?.profiles.find(
+                            (profile) => profile.id === client.clientProfile,
+                          )}
+                        />
+                      </ItemTitle>
+                      <ItemDescription>
+                        {client.kind === "pending"
+                          ? timeUntil(client.expiresAt, now)
+                          : connected
+                            ? "Connected now"
+                            : "Not currently connected"}
+                        {hasShowtimeConnectionManagementScopes(client.scopes)
+                          ? " · Can manage connections"
+                          : ""}
+                      </ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      {client.kind === "pending" && (
+                        <PairClientPopover
+                          manager={manager}
+                          client={client}
+                          disabled={loading || !state.enabled}
+                        />
+                      )}
+                      {manager.canDelete && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={loading}
+                          aria-label={`Revoke ${client.name}`}
+                          onClick={() => {
+                            setDeleteError(undefined);
+                            setDeleteTarget({ id, name: client.name });
+                          }}
+                        >
+                          <Trash2Icon /> Revoke
+                        </Button>
+                      )}
+                    </ItemActions>
+                  </Item>
+                );
+              })}
+            </ItemGroup>
           )}
           {!loading && state.clients.length === 0 && (
-            <p className="text-sm text-muted-foreground">No clients have access yet.</p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <WifiOffIcon />
+                </EmptyMedia>
+                <EmptyTitle>No connected clients</EmptyTitle>
+                <EmptyDescription>
+                  Add a client to give another device access to Showtime.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
-          {(error ?? loadError) && (
-            <p role="alert" className="text-sm text-destructive">
-              {error ?? loadError}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
+        </SettingsSection>
+        {(error ?? loadError) && (
+          <p role="alert" className="text-sm text-destructive">
+            {error ?? loadError}
+          </p>
+        )}
+      </div>
       <CreateClientDialog
         manager={manager}
         open={createOpen}
@@ -307,127 +417,70 @@ export function ConnectionDialog({
         profilesState={profilesState}
         profilesResult={profilesResult}
       />
-      <HostNameDialog
-        manager={manager}
-        open={hostNameOpen}
-        currentState={state}
-        onOpenChange={setHostNameOpen}
-        onChanged={(next) => {
-          setState(next);
-          setPairingClient(undefined);
-        }}
-      />
-      <PairClientDialog
-        manager={manager}
-        key={pairingClient?.invitationId ?? "closed"}
-        client={pairingClient}
-        onOpenChange={(next) => !next && setPairingClient(undefined)}
-      />
+      <AlertDialog open={hostNameConfirmOpen} onOpenChange={setHostNameConfirmOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Change the host name?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The old address will stop working. Every paired client and pending connection will be
+              removed. Change{" "}
+              <strong className="font-semibold text-foreground">{state.hostname}</strong> to{" "}
+              <strong className="font-semibold text-foreground">
+                showtime-{hostNameCandidate}.local
+              </strong>{" "}
+              and remove {state.clients.length} connection{state.clients.length === 1 ? "" : "s"}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {hostNameError && (
+            <p role="alert" className="text-sm text-destructive">
+              {hostNameError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={loading}
+              onClick={changeHostName}
+            >
+              {loading ? "Changing..." : "Change and remove connections"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={deleteTarget !== undefined}
+        onOpenChange={(open) => !open && setDeleteTarget(undefined)}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Revoke device?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong className="font-semibold text-foreground">{deleteTarget?.name}</strong> will
+              no longer be able to connect to Showtime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={loading} onClick={remove}>
+              {loading ? "Revoking..." : "Revoke device"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
-  );
-}
-
-function HostNameDialog({
-  manager,
-  open,
-  currentState,
-  onOpenChange,
-  onChanged,
-}: {
-  readonly manager: ConnectionManagementClient;
-  readonly open: boolean;
-  readonly currentState: ShowtimeConnectionsState;
-  readonly onOpenChange: (open: boolean) => void;
-  readonly onChanged: (state: ShowtimeConnectionsState) => void;
-}) {
-  const [draft, setDraft] = React.useState(currentState.hostName);
-  const [confirming, setConfirming] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string>();
-
-  React.useEffect(() => {
-    if (!open) return;
-    setDraft(currentState.hostName);
-    setConfirming(false);
-    setSaving(false);
-    setError(undefined);
-  }, [open, currentState.hostName]);
-
-  const candidate = draft.trim() ? normalizeShowtimeHostName(draft) : undefined;
-  const hostname = candidate ? `showtime-${candidate}.local` : undefined;
-  const changed = candidate !== undefined && candidate !== currentState.hostName;
-
-  const save = async () => {
-    if (!candidate || !manager.setHostName) return;
-    setSaving(true);
-    setError(undefined);
-    try {
-      onChanged(await manager.setHostName(candidate));
-      onOpenChange(false);
-    } catch {
-      setError("Showtime could not change the host name.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{confirming ? "Change the host name?" : "Host name"}</DialogTitle>
-          <DialogDescription>
-            {confirming
-              ? "The old address will stop working. Every paired client and pending connection will be removed."
-              : "Choose the permanent local address people use to open this Showtime host."}
-          </DialogDescription>
-        </DialogHeader>
-        {!confirming ? (
-          <>
-            <Input
-              autoFocus
-              value={draft}
-              maxLength={showtimeHostNameMaxLength}
-              placeholder="For example, front-of-house"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && changed && setConfirming(true)}
-            />
-            <p className="text-sm text-muted-foreground">
-              New address: {hostname ?? "Enter a host name"}
-            </p>
-            <Button type="button" disabled={!changed} onClick={() => setConfirming(true)}>
-              Continue
-            </Button>
-          </>
-        ) : (
-          <>
-            <p className="text-sm">
-              Change <strong>{currentState.hostname}</strong> to <strong>{hostname}</strong> and
-              remove {currentState.clients.length} connection
-              {currentState.clients.length === 1 ? "" : "s"}?
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={saving}
-                onClick={() => setConfirming(false)}
-              >
-                Back
-              </Button>
-              <Button type="button" variant="destructive" disabled={saving} onClick={save}>
-                {saving ? "Changing…" : "Change and remove connections"}
-              </Button>
-            </div>
-          </>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -559,15 +612,16 @@ function CreateClientDialog({
   );
 }
 
-function PairClientDialog({
+function PairClientPopover({
   manager,
   client,
-  onOpenChange,
+  disabled,
 }: {
   readonly manager: ConnectionManagementClient;
-  readonly client: ShowtimePendingClient | undefined;
-  readonly onOpenChange: (open: boolean) => void;
+  readonly client: ShowtimePendingClient;
+  readonly disabled: boolean;
 }) {
+  const [open, setOpen] = React.useState(false);
   const [candidates, setCandidates] = React.useState<ReadonlyArray<ShowtimeConnectionCandidate>>(
     [],
   );
@@ -579,7 +633,7 @@ function PairClientDialog({
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState<string>();
   React.useEffect(() => {
-    if (!client) return;
+    if (!open) return;
     let active = true;
     setCandidates([]);
     setSelectedUrl("");
@@ -587,24 +641,41 @@ function PairClientDialog({
     setQrCode(undefined);
     setCopied(false);
     setError(undefined);
-    let timer: number | undefined;
+    let loadTimer: number | undefined;
+    let expiryTimer: number | undefined;
     let consecutiveFailures = 0;
     let expiresAt = Date.parse(client.expiresAt);
     let hasRequestedPairingInfo = false;
-    const setExpiredError = () => setError("This connection link has expired.");
+    const setExpired = () => {
+      if (!active) return;
+      setCandidates([]);
+      setSelectedUrl("");
+      setQrCode(undefined);
+      setError("This connection link has expired.");
+    };
+    const scheduleExpiry = () => {
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
+      const wait = expiresAt - Date.now();
+      if (!Number.isFinite(wait) || wait <= 0) {
+        setExpired();
+        return false;
+      }
+      expiryTimer = window.setTimeout(setExpired, wait);
+      return true;
+    };
     const hasExpired = () => pairingInfoRetryWait(expiresAt, 0) === undefined;
     const scheduleLoad = (delay: number) => {
       const wait = pairingInfoRetryWait(expiresAt, delay);
       if (wait === undefined) {
-        setExpiredError();
+        setExpired();
         return;
       }
-      timer = window.setTimeout(load, wait);
+      loadTimer = window.setTimeout(load, wait);
     };
     const load = () => {
       if (!active) return;
       if (!canLoadPairingInfo(hasRequestedPairingInfo, expiresAt)) {
-        setExpiredError();
+        setExpired();
         return;
       }
       hasRequestedPairingInfo = true;
@@ -612,14 +683,11 @@ function PairClientDialog({
         (info) => {
           if (!active) return;
           if (info.expiresAt === null) {
-            setExpiredError();
+            setExpired();
             return;
           }
           expiresAt = Date.parse(info.expiresAt);
-          if (hasExpired()) {
-            setExpiredError();
-            return;
-          }
+          if (hasExpired() || !scheduleExpiry()) return;
           consecutiveFailures = 0;
           setDiscovery(info.discovery);
           setCandidates(info.candidates);
@@ -636,11 +704,11 @@ function PairClientDialog({
         () => {
           if (!active) return;
           if (hasExpired()) {
-            setExpiredError();
+            setExpired();
             return;
           }
           consecutiveFailures += 1;
-          setError("Showtime could not refresh the connection link. Retrying…");
+          setError("Showtime could not refresh the connection link. Retrying...");
           scheduleLoad(pairingInfoRetryDelay(consecutiveFailures));
         },
       );
@@ -648,16 +716,17 @@ function PairClientDialog({
     load();
     return () => {
       active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (loadTimer !== undefined) window.clearTimeout(loadTimer);
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
     };
-  }, [client, manager]);
+  }, [client.expiresAt, client.invitationId, manager, open]);
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
-    setError(undefined);
     if (!selectedUrl) return;
+    setError(undefined);
     let active = true;
-    void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 320 }).then(
+    void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 640 }).then(
       (value) => active && setQrCode(value),
     );
     return () => {
@@ -666,18 +735,17 @@ function PairClientDialog({
   }, [selectedUrl]);
   const selected = candidates.find((candidate) => candidate.url === selectedUrl);
   return (
-    <Dialog open={client !== undefined} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Connect {client?.name}</DialogTitle>
-          <DialogDescription>
-            Open this link on one device within five minutes. It can only be used once.
-          </DialogDescription>
-        </DialogHeader>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={<Button type="button" variant="outline" size="sm" disabled={disabled} />}
+      >
+        <QrCodeIcon /> Connect
+      </PopoverTrigger>
+      <PopoverContent align="end" className="grid w-80 gap-3">
         {candidates.length > 0 && (
           <Select value={selectedUrl} onValueChange={(value) => value && setSelectedUrl(value)}>
-            <SelectTrigger>
-              <SelectValue>{selected?.label ?? "Choose network"}</SelectValue>
+            <SelectTrigger aria-label="Connection address">
+              <SelectValue>{selected?.label ?? "Choose address"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {candidates.map((candidate) => (
@@ -689,35 +757,29 @@ function PairClientDialog({
           </Select>
         )}
         {selectedUrl && (
-          <div className="grid gap-2">
-            <label htmlFor="generated-showtime-connection-url" className="text-sm font-medium">
-              Connection link
-            </label>
-            <Input
-              id="generated-showtime-connection-url"
-              type="url"
-              value={selectedUrl}
-              readOnly
-              onFocus={(event) => event.currentTarget.select()}
-            />
-          </div>
+          <Input
+            aria-label="Connection link"
+            type="url"
+            value={selectedUrl}
+            readOnly
+            onFocus={(event) => event.currentTarget.select()}
+          />
         )}
         {qrCode && (
-          <div className="grid justify-items-center">
+          <div className="aspect-square w-full overflow-hidden rounded-lg">
             <img
               src={qrCode}
-              alt={`QR code for connecting ${client?.name ?? "client"}`}
-              className="w-full max-w-72"
+              alt={`QR code for connecting ${client.name}`}
+              className="block size-full rounded-lg"
             />
           </div>
         )}
-        {discovery.kind === "probing" && (
-          <p className="text-sm text-muted-foreground">Finding an easy local address…</p>
+        {discovery.kind === "probing" && !error && (
+          <p className="text-sm text-muted-foreground">Finding an easy local address...</p>
         )}
         {discovery.kind === "degraded" && candidates.length > 0 && (
           <p className="text-sm text-muted-foreground">
-            The easy local name is unavailable on this network. The IP address below will still
-            work.
+            The easy local name is unavailable on this network. The IP address will still work.
           </p>
         )}
         <Button
@@ -730,8 +792,9 @@ function PairClientDialog({
               setCopied(true);
               setError(undefined);
             } catch {
+              setCopied(false);
               setError(
-                "Could not copy automatically. Press and hold the connection link above to copy it.",
+                "Could not copy automatically. Select the connection link above to copy it.",
               );
             }
           }}
@@ -744,7 +807,7 @@ function PairClientDialog({
             {error}
           </p>
         )}
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

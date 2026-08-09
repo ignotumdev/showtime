@@ -15,6 +15,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
+import { useIsMobileDrawer } from "@/hooks/use-mobile-drawer";
 import { useSelectedProfile } from "@/profiles";
 
 interface ChatDrawerProps {
@@ -71,17 +72,7 @@ function ChatDrawerView({
     },
     [onSelectedChannelChange],
   );
-  const [isMobile, setIsMobile] = React.useState(() =>
-    typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches,
-  );
-
-  React.useEffect(() => {
-    const query = window.matchMedia("(min-width: 640px)");
-    const update = () => setIsMobile(!query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
+  const isMobile = useIsMobileDrawer();
 
   React.useEffect(() => {
     const openRequestedChat = () => {

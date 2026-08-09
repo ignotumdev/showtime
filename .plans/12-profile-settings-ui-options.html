@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Showtime profile settings UI options</title>
+    <style>
+      :root { color-scheme:dark; font-family:Inter,system-ui,sans-serif; --bg:#141414; --panel:#1d1d1d; --line:#343434; --muted:#9d9d9d; --accent:#2978b8; }
+      *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#f5f5f5;line-height:1.45} main{max-width:78rem;margin:auto;padding:2rem} h1{font-size:2rem;margin:0 0 .5rem}h2{margin:0}.intro{max-width:54rem;margin-bottom:2rem}p{color:var(--muted);margin:.3rem 0}.option{padding:2.25rem 0;border-top:1px solid var(--line)}
+      .tags{display:flex;gap:.5rem;flex-wrap:wrap;margin:.7rem 0 1.25rem}.tag{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:.2rem .55rem}.rec{color:#9bd3ff;border-color:#386887}
+      .mock{background:var(--panel);border:1px solid var(--line);border-radius:.8rem;overflow:hidden;min-height:20rem}.head{padding:1rem 1.25rem;border-bottom:1px solid var(--line);font-weight:650}.section{padding:1rem 1.25rem .45rem;color:var(--muted);font-size:.78rem;font-weight:650}.row{display:flex;align-items:center;gap:1rem;min-height:4.5rem;padding:.85rem 1.25rem;border-bottom:1px solid var(--line)}.grow{flex:1;min-width:0}.label{font-weight:600}.desc{color:var(--muted);font-size:.84rem}.avatar{width:2rem;height:2rem;border-radius:50%;display:grid;place-items:center;font-size:.72rem;font-weight:750}.purple{background:#7957a8}.blue{background:#326c9a}.green{background:#36795a}.star{color:#e9c75d}.button,.input,.select{color:#eee;background:#252525;border:1px solid #484848;border-radius:.5rem;padding:.45rem .7rem}.button.primary{background:var(--accent);border-color:var(--accent)}
+      .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;padding:1.25rem}.card{border:1px solid var(--line);border-radius:.7rem;padding:1rem}.card .avatar{width:2.7rem;height:2.7rem;margin-bottom:1rem}.actions{display:flex;gap:.4rem;margin-top:1rem}.two{display:grid;grid-template-columns:17rem 1fr;min-height:22rem}.list{border-right:1px solid var(--line);padding:.6rem}.list-item{display:flex;gap:.65rem;align-items:center;padding:.65rem;border-radius:.5rem}.list-item.active{background:#292929}.editor{padding:1.25rem}.field{margin-bottom:1rem}.field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:.35rem}.field .input{width:100%}.colors{display:flex;gap:.5rem}.dot{width:1.6rem;height:1.6rem;border-radius:50%;border:2px solid transparent}.dot.active{border-color:white}.pros{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}.pros div{border-left:2px solid var(--line);padding-left:.8rem}.pros strong{display:block}
+      @media(max-width:720px){main{padding:1rem}.pros{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.two{grid-template-columns:1fr}.list{border-right:0;border-bottom:1px solid var(--line)}}
+    </style>
+  </head>
+  <body><main>
+    <div class="intro"><h1>Profile settings: five presentation options</h1><p>Every option supports name, color, default profile, create, and delete using the existing profile RPCs and Showtime's shadcn-based controls.</p></div>
+
+    <section class="option"><h2>1. Clean inline roster</h2><p>One SettingsItem per profile, with identity first and infrequent actions kept quiet.</p><div class="tags"><span class="tag rec">Recommended</span><span class="tag">Fastest editing</span><span class="tag">Responsive</span></div>
+      <div class="mock"><div class="head">Profiles</div><div class="section">PEOPLE &amp; ROLES</div>
+        <div class="row"><span class="avatar purple">FO</span><div class="grow"><div class="label">FOH <span class="star">★ Default</span></div><div class="desc">Used on startup</div></div><input class="input" value="FOH"/><button class="button">Color</button><button class="button">•••</button></div>
+        <div class="row"><span class="avatar blue">ST</span><div class="grow"><div class="label">Stage</div><div class="desc">Profile</div></div><input class="input" value="Stage"/><button class="button">Color</button><button class="button">•••</button></div>
+        <div class="row"><div class="grow"></div><button class="button primary">＋ Add profile</button></div>
+      </div><div class="pros"><div><strong>Strengths</strong><p>Everything is visible and directly editable; closest to the settings reference.</p></div><div><strong>Tradeoff</strong><p>Rows can become control-heavy unless delete/default move into an overflow menu.</p></div></div>
+    </section>
+
+    <section class="option"><h2>2. Master-detail editor</h2><p>Choose a profile on the left and edit a calm, focused form on the right.</p><div class="tags"><span class="tag">Best for complex profiles</span><span class="tag">Low row density</span></div>
+      <div class="mock two"><aside class="list"><div class="list-item active"><span class="avatar purple">FO</span><div><b>FOH</b><div class="desc">Default</div></div></div><div class="list-item"><span class="avatar blue">ST</span><b>Stage</b></div><div class="list-item"><span class="avatar green">PM</span><b>Production</b></div><button class="button">＋ Add profile</button></aside>
+        <div class="editor"><h3>Edit FOH</h3><div class="field"><label>Name</label><input class="input" value="FOH"/></div><div class="field"><label>Color</label><div class="colors"><span class="dot purple active"></span><span class="dot blue"></span><span class="dot green"></span></div></div><div class="actions"><button class="button primary">Set as default</button><button class="button">Delete</button></div></div>
+      </div><div class="pros"><div><strong>Strengths</strong><p>Clear focus and room for future permissions or profile metadata.</p></div><div><strong>Tradeoff</strong><p>Slower for quickly renaming several profiles; mobile becomes two screens.</p></div></div>
+    </section>
+
+    <section class="option"><h2>3. Identity cards</h2><p>Profiles appear as friendly cards with strong color recognition.</p><div class="tags"><span class="tag">Most visual</span><span class="tag">Good for 2–6 profiles</span></div>
+      <div class="mock"><div class="head">Profiles</div><div class="cards"><div class="card"><span class="avatar purple">FO</span><div class="label">FOH ★</div><div class="desc">Default profile</div><div class="actions"><button class="button">Edit</button></div></div><div class="card"><span class="avatar blue">ST</span><div class="label">Stage</div><div class="desc">Profile</div><div class="actions"><button class="button">Edit</button></div></div><div class="card"><span class="avatar green">PM</span><div class="label">Production</div><div class="desc">Profile</div><div class="actions"><button class="button">Edit</button></div></div></div></div>
+      <div class="pros"><div><strong>Strengths</strong><p>Approachable for nontechnical users and makes colors meaningful.</p></div><div><strong>Tradeoff</strong><p>Consumes space and requires a dialog or secondary editor.</p></div></div>
+    </section>
+
+    <section class="option"><h2>4. Compact roster with edit sheet</h2><p>The page is purely scannable; all editing happens in one reusable sheet.</p><div class="tags"><span class="tag">Cleanest page</span><span class="tag">Touch friendly</span></div>
+      <div class="mock"><div class="head">Profiles</div><div class="section">PROFILES</div><div class="row"><span class="avatar purple">FO</span><div class="grow"><div class="label">FOH</div><div class="desc">Default profile</div></div><button class="button">Edit</button></div><div class="row"><span class="avatar blue">ST</span><div class="grow"><div class="label">Stage</div><div class="desc">Profile</div></div><button class="button">Edit</button></div><div class="row"><button class="button primary">＋ Add profile</button></div></div>
+      <div class="pros"><div><strong>Strengths</strong><p>Minimal visual noise; the same sheet supports create and edit.</p></div><div><strong>Tradeoff</strong><p>Every small change requires opening and closing another surface.</p></div></div>
+    </section>
+
+    <section class="option"><h2>5. Default profile plus secondary roster</h2><p>Elevate the default profile, then list everyone else more compactly.</p><div class="tags"><span class="tag">Makes default obvious</span><span class="tag">Hierarchy-driven</span></div>
+      <div class="mock"><div class="head">Profiles</div><div class="section">DEFAULT PROFILE</div><div class="row"><span class="avatar purple">FO</span><div class="grow"><div class="label">FOH</div><div class="desc">Selected automatically on new devices</div></div><button class="button">Edit</button></div><div class="section">OTHER PROFILES</div><div class="row"><span class="avatar blue">ST</span><div class="grow"><div class="label">Stage</div></div><button class="button">Make default</button><button class="button">Edit</button></div><div class="row"><span class="avatar green">PM</span><div class="grow"><div class="label">Production</div></div><button class="button">Make default</button><button class="button">Edit</button></div></div>
+      <div class="pros"><div><strong>Strengths</strong><p>Explains the default concept without relying on an icon-only star.</p></div><div><strong>Tradeoff</strong><p>Moving rows after changing default can feel visually jumpy.</p></div></div>
+    </section>
+
+    <section class="option"><h2>Recommendation</h2><p><strong>Choose option 1</strong>, but place “Set default” and “Delete” in a small overflow menu. Keep name autosave-on-blur and color autosave-on-select. It remains fast, predictable, and closest to the rest of the minimal settings system. Choose option 2 only if profiles are expected to gain significantly more configuration later.</p></section>
+  </main></body>
+</html>
