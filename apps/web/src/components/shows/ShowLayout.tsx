@@ -1,6 +1,5 @@
 import { Link, Outlet, useParams, useRouterState } from "@tanstack/react-router";
 import {
-  ArrowLeftIcon,
   ListMusicIcon,
   Mic2Icon,
   PlayIcon,
@@ -8,6 +7,7 @@ import {
   SpeakerIcon,
   MessageCircleIcon,
   LibraryIcon,
+  SettingsIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,13 +38,18 @@ import { songAtoms } from "@/client";
 import { useCreateSong } from "@/components/songs/useCreateSong";
 import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
 import { ShowPageAction } from "./ShowPageAction";
-import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ChatDrawer, ChatUnreadBadge } from "@/components/chats/ChatDrawer";
 import { ChatPresetLauncher } from "@/components/chats/ChatPresetLauncher";
-import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ShowSwitcher } from "@/components/shows/ShowSwitcher";
 
 export function ShowLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  if (pathname.includes("/settings")) return <Outlet />;
+  return <ShowWorkspaceLayout pathname={pathname} />;
+}
+
+function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
   const [chatOpen, setChatOpen] = React.useState(false);
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId>();
   const { showId = "", show } = useShowFromParams();
@@ -55,7 +60,6 @@ export function ShowLayout() {
   const currentSongId = typeof params.songId === "string" ? (params.songId as SongId) : undefined;
   const songsResult = useAtomValue(songAtoms(typedShowId).songs);
   const syncedSongsResult = useAtomValue(songAtoms(typedShowId).syncedSongs);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isAllSongsRoute = /\/setlist\/?$/.test(pathname);
   const songs = AsyncResult.isSuccess(songsResult)
     ? songsResult.value
@@ -72,6 +76,7 @@ export function ShowLayout() {
     <React.Fragment>
       <TitleBar
         hideName
+        hideSettings
         stack="above-content"
         className="hidden md:flex"
         actions={
@@ -111,15 +116,7 @@ export function ShowLayout() {
       <SidebarProvider className="app-height relative overflow-hidden bg-background">
         <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
-            <Link
-              to="/shows/$showId"
-              params={{ showId }}
-              className="no-drag-region flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              activeOptions={{ exact: true }}
-            >
-              <span className={`${showColorClassName} size-6 shrink-0 rounded-md`} />
-              <span className="block truncate">{showName}</span>
-            </Link>
+            <ShowSwitcher showId={showId} destination="show" />
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
@@ -186,10 +183,14 @@ export function ShowLayout() {
             >
               LIVE
             </Button>
-            <ProfileSwitcher className="w-full [&>*:first-child]:flex-1" />
-            <Button variant="ghost" render={<Link to="/" />}>
-              <ArrowLeftIcon /> Back to all shows
-            </Button>
+            <SidebarMenu>
+              <ShowSidebarLink
+                to="/shows/$showId/settings/$section"
+                params={{ showId, section: "general" }}
+                label="Settings"
+                icon={SettingsIcon}
+              />
+            </SidebarMenu>
           </SidebarFooter>
         </Sidebar>
 
@@ -248,7 +249,20 @@ function ShowHeader({
         </Link>
         <div className="ml-auto shrink-0">
           <div className="flex items-center gap-1">
-            <ConnectionDialog compact />
+            <Button
+              nativeButton={false}
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Settings"
+              render={
+                <Link
+                  to="/shows/$showId/settings/$section"
+                  params={{ showId, section: "general" }}
+                />
+              }
+            >
+              <SettingsIcon />
+            </Button>
             <ShowPageAction showId={showId} pathname={pathname} />
           </div>
         </div>
@@ -354,6 +368,10 @@ type ShowSidebarLinkProps = (
   | {
       readonly to: "/shows/$showId/setlist/$songId";
       readonly params: { readonly showId: string; readonly songId: string };
+    }
+  | {
+      readonly to: "/shows/$showId/settings/$section";
+      readonly params: { readonly showId: string; readonly section: string };
     }
 ) & {
   readonly label: string;
