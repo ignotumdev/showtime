@@ -13,6 +13,10 @@ import { ConnectionDialog } from "@/components/connections/ConnectionDialog";
 import { ShowPageAction } from "@/components/shows/ShowPageAction";
 import { PwaInstallButton } from "@/components/connections/PwaInstallButton";
 import { DesktopUpdateDialog } from "@/components/updates/DesktopUpdateDialog";
+import {
+  showTitleBarActionsId,
+  showTitleBarLeadingId,
+} from "@/components/shows/ShowTitleBarPortal";
 
 type TitleBarProps = {
   className?: string;
@@ -84,6 +88,14 @@ export function TitleBar({
           </span>
         )}
       </div>
+      {hideName && showId && !isLiveRoute && (
+        <div
+          id={showTitleBarLeadingId}
+          className="no-drag-region ml-[calc(16rem+0.25rem)] flex min-w-0 flex-1 items-center overflow-hidden"
+          style={desktopHost && isMacOS ? { marginLeft: "calc(16rem - 4.125rem)" } : undefined}
+          aria-label="Page toolbar"
+        />
+      )}
       {isLiveRoute && liveStatus ? (
         <div className="pointer-events-none ml-1 flex min-w-0 flex-1 items-center sm:ml-2">
           {liveStatus}
@@ -106,6 +118,9 @@ export function TitleBar({
         </div>
       )}
       <div className="no-drag-region ml-auto flex items-center gap-1" aria-label="Window toolbar">
+        {hideName && showId && !isLiveRoute && (
+          <div id={showTitleBarActionsId} className="flex shrink-0 items-center" />
+        )}
         {actions}
         {desktopHost && !isLiveRoute && <DesktopUpdateDialog />}
         {!desktopHost && isShowsRoute && <PwaInstallButton compact />}

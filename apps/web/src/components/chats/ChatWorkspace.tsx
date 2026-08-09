@@ -71,6 +71,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useSelectedProfile } from "@/profiles";
+import { ShowTitleBarPortal } from "@/components/shows/ShowTitleBarPortal";
 
 export function ChatWorkspace({
   showId,
@@ -166,7 +167,7 @@ function ProfileChatWorkspace({
   }
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border bg-background">
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden">
       <ChannelTabs
         showId={showId}
         profileId={profile.id}
@@ -174,6 +175,7 @@ function ProfileChatWorkspace({
         selectedChannel={selectedChannel}
         onSelect={selectChannel}
         trailing={compact ? null : <ProfileSwitcher variant="avatar" className="md:hidden" />}
+        inTitleBar={!compact}
       />
       <Conversation
         key={selectedChannel.id}
@@ -195,6 +197,7 @@ function ChannelTabs({
   selectedChannel,
   onSelect,
   trailing,
+  inTitleBar,
 }: {
   readonly showId: ShowId;
   readonly profileId: ProfileId;
@@ -202,6 +205,7 @@ function ChannelTabs({
   readonly selectedChannel: ChatChannel;
   readonly onSelect: (id: ChatChannelId) => void;
   readonly trailing: React.ReactNode;
+  readonly inTitleBar: boolean;
 }) {
   const atoms = chatAtoms(showId, profileId);
   const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
@@ -295,90 +299,46 @@ function ChannelTabs({
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
-        <div className="min-w-0 flex-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <ButtonGroup aria-label="Chat channels" className="min-w-max">
-            {channels.map((channel, index) => {
-              const selected = channel.id === selectedChannel.id;
-              return (
-                <div key={channel.id} className="relative flex">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "rounded-none border-l-0 pr-9",
-                      index === 0 && "rounded-l-lg border-l",
-                      selected &&
-                        "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
-                    )}
-                    onClick={() => onSelect(channel.id)}
-                  >
-                    <HashIcon />
-                    <span className="max-w-40 truncate">{channel.name}</span>
-                    {!channel.notificationsEnabled && (
-                      <BellOffIcon className="text-muted-foreground" />
-                    )}
-                    {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
-                  </Button>
-                  {selected && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="absolute top-0 right-0 rounded-none"
-                            aria-label={`Options for ${selectedChannel.name}`}
-                          />
-                        }
-                      >
-                        <MoreHorizontalIcon />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={openRenameDialog}>
-                          <PencilIcon />
-                          Rename channel
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={toggleNotifications}>
-                          {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
-                          {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={channels.length === 1}
-                          onClick={() => {
-                            setError(undefined);
-                            setDeleteTarget({
-                              id: selectedChannel.id,
-                              name: selectedChannel.name,
-                            });
-                          }}
-                        >
-                          <Trash2Icon />
-                          Delete channel
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              );
-            })}
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Add channel"
-              onClick={() => {
-                setError(undefined);
-                setDialogOpen(true);
-              }}
-            >
-              <PlusIcon />
-            </Button>
-          </ButtonGroup>
-        </div>
+      {inTitleBar && (
+        <ShowTitleBarPortal position="leading">
+          <ChannelButtons
+            channels={channels}
+            selectedChannel={selectedChannel}
+            onSelect={onSelect}
+            onAdd={() => {
+              setError(undefined);
+              setDialogOpen(true);
+            }}
+            onRename={openRenameDialog}
+            onToggleNotifications={toggleNotifications}
+            onDelete={() => {
+              setError(undefined);
+              setDeleteTarget({ id: selectedChannel.id, name: selectedChannel.name });
+            }}
+          />
+        </ShowTitleBarPortal>
+      )}
+      <header
+        className={cn(
+          "flex h-14 shrink-0 items-center gap-2 border-b px-2",
+          inTitleBar && "md:hidden",
+        )}
+      >
+        <ChannelButtons
+          channels={channels}
+          selectedChannel={selectedChannel}
+          onSelect={onSelect}
+          onAdd={() => {
+            setError(undefined);
+            setDialogOpen(true);
+          }}
+          onRename={openRenameDialog}
+          onToggleNotifications={toggleNotifications}
+          onDelete={() => {
+            setError(undefined);
+            setDeleteTarget({ id: selectedChannel.id, name: selectedChannel.name });
+          }}
+        />
         {trailing}
       </header>
       {error && !dialogOpen && !renameTarget && !deleteTarget && (
@@ -483,6 +443,97 @@ function ChannelTabs({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ChannelButtons({
+  channels,
+  selectedChannel,
+  onSelect,
+  onAdd,
+  onRename,
+  onToggleNotifications,
+  onDelete,
+}: {
+  readonly channels: ReadonlyArray<ChatChannel>;
+  readonly selectedChannel: ChatChannel;
+  readonly onSelect: (id: ChatChannelId) => void;
+  readonly onAdd: () => void;
+  readonly onRename: () => void;
+  readonly onToggleNotifications: () => void;
+  readonly onDelete: () => void;
+}) {
+  return (
+    <div className="no-drag-region min-w-0 flex-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <ButtonGroup aria-label="Chat channels" className="min-w-max">
+        {channels.map((channel, index) => {
+          const selected = channel.id === selectedChannel.id;
+          return (
+            <div key={channel.id} className="relative flex">
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  "rounded-none border-l-0 pr-9",
+                  index === 0 && "rounded-l-lg border-l",
+                  selected &&
+                    "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
+                )}
+                onClick={() => onSelect(channel.id)}
+              >
+                <HashIcon />
+                <span className="max-w-40 truncate">{channel.name}</span>
+                {!channel.notificationsEnabled && <BellOffIcon className="text-muted-foreground" />}
+                {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
+              </Button>
+              {selected && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="absolute top-0 right-0 rounded-none"
+                        aria-label={`Options for ${selectedChannel.name}`}
+                      />
+                    }
+                  >
+                    <MoreHorizontalIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={onRename}>
+                      <PencilIcon /> Rename channel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onToggleNotifications}>
+                      {selectedChannel.notificationsEnabled ? <BellOffIcon /> : <BellIcon />}
+                      {selectedChannel.notificationsEnabled ? "Mute channel" : "Unmute channel"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={channels.length === 1}
+                      onClick={onDelete}
+                    >
+                      <Trash2Icon /> Delete channel
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          );
+        })}
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          aria-label="Add channel"
+          onClick={onAdd}
+        >
+          <PlusIcon />
+        </Button>
+      </ButtonGroup>
+    </div>
   );
 }
 
@@ -676,7 +727,7 @@ function Composer({
   };
 
   return (
-    <div className="shrink-0 border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="shrink-0 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pt-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <InputGroup>
         <InputGroupAddon align="inline-start">
           <InputGroupButton

@@ -4,12 +4,10 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import type { ChatChannelId, ChatPreset, Profile, ShowId } from "@showtime/contracts";
 import {
   EllipsisIcon,
-  FilePlus2Icon,
-  HashIcon,
   LibraryIcon,
   MessageCircleReplyIcon,
   PencilIcon,
-  PlayIcon,
+  PlusIcon,
   Trash2Icon,
 } from "lucide-react";
 import { chatAtoms, profileAtoms } from "@/client";
@@ -22,7 +20,6 @@ import {
   CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -49,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useSelectedProfile } from "@/profiles";
+import { ShowTitleBarPortal } from "@/components/shows/ShowTitleBarPortal";
 
 type OpenDialog = {
   readonly key: string;
@@ -135,6 +133,7 @@ function ReadyChatPresetsWorkspace({
 }) {
   const [dialog, setDialog] = React.useState<OpenDialog>();
   const { sendMessage } = useSendChatMessage(showId, profile.id, channelId);
+  const selectedChannel = channels.find((channel) => channel.id === channelId);
   const open = (mode: ChatPresetDialogMode) =>
     setDialog({
       key: `${mode.type}:${"preset" in mode && mode.preset ? mode.preset.id : "new"}`,
@@ -142,40 +141,26 @@ function ReadyChatPresetsWorkspace({
     });
 
   return (
-    <section className="mx-auto flex h-full w-full max-w-6xl flex-col gap-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <LibraryIcon className="size-5" />
-            <h1 className="text-xl font-semibold tracking-tight">Message presets</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Prepare common messages once, then send them with the right details in a few taps.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="grid min-w-48 flex-1 gap-1 text-xs text-muted-foreground sm:flex-none">
-            Send to
-            <Select value={channelId} onValueChange={(value) => value && onChannelChange(value)}>
-              <SelectTrigger aria-label="Preset destination channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {channels.map((channel) => (
-                  <SelectItem key={channel.id} value={channel.id}>
-                    <span className="flex items-center gap-2">
-                      <HashIcon className="size-4" /> {channel.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <Button type="button" onClick={() => open({ type: "edit" })}>
-            <FilePlus2Icon /> New preset
-          </Button>
-        </div>
-      </header>
+    <section className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
+      <ShowTitleBarPortal position="actions">
+        <PresetToolbar
+          channelId={channelId}
+          channels={channels}
+          selectedChannelName={selectedChannel?.name}
+          onChannelChange={onChannelChange}
+          onAdd={() => open({ type: "edit" })}
+        />
+      </ShowTitleBarPortal>
+      <div className="md:hidden">
+        <PresetToolbar
+          channelId={channelId}
+          channels={channels}
+          selectedChannelName={selectedChannel?.name}
+          onChannelChange={onChannelChange}
+          onAdd={() => open({ type: "edit" })}
+          fullWidth
+        />
+      </div>
 
       {presets.length === 0 ? (
         <Empty className="min-h-72 border">
@@ -191,12 +176,12 @@ function ReadyChatPresetsWorkspace({
           </EmptyHeader>
           <EmptyContent>
             <Button type="button" onClick={() => open({ type: "edit" })}>
-              <FilePlus2Icon /> Create first preset
+              <PlusIcon /> Add preset
             </Button>
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]">
+        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
           {presets.map((preset) => (
             <PresetCard
               key={preset.id}
@@ -229,6 +214,48 @@ function ReadyChatPresetsWorkspace({
   );
 }
 
+function PresetToolbar({
+  channelId,
+  channels,
+  selectedChannelName,
+  onChannelChange,
+  onAdd,
+  fullWidth = false,
+}: {
+  readonly channelId: ChatChannelId;
+  readonly channels: ReadonlyArray<{ readonly id: ChatChannelId; readonly name: string }>;
+  readonly selectedChannelName: string | undefined;
+  readonly onChannelChange: (channelId: ChatChannelId) => void;
+  readonly onAdd: () => void;
+  readonly fullWidth?: boolean;
+}) {
+  return (
+    <div className={fullWidth ? "flex w-full gap-2" : "flex items-center gap-1"}>
+      <Select value={channelId} onValueChange={(value) => value && onChannelChange(value)}>
+        <SelectTrigger
+          className={fullWidth ? "min-w-0 flex-1" : "w-44"}
+          aria-label="Preset destination channel"
+        >
+          <SelectValue>
+            {selectedChannelName ? `Send to #${selectedChannelName}` : "Send to channel"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {channels.map((channel) => (
+            <SelectItem key={channel.id} value={channel.id}>
+              #{channel.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button type="button" size="sm" aria-label="Add preset" onClick={onAdd}>
+        <PlusIcon />
+        <span className="hidden min-[400px]:inline">Add preset</span>
+      </Button>
+    </div>
+  );
+}
+
 function PresetCard({
   preset,
   onUse,
@@ -241,7 +268,20 @@ function PresetCard({
   readonly onDelete: () => void;
 }) {
   return (
-    <Card>
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-label={`Use preset ${preset.name}`}
+      className="cursor-pointer outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      onClick={onUse}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onUse();
+        }
+      }}
+    >
       <CardHeader>
         <CardTitle>{preset.name}</CardTitle>
         <CardDescription className="line-clamp-3 whitespace-pre-wrap">
@@ -256,12 +296,17 @@ function PresetCard({
                   size="icon-sm"
                   variant="ghost"
                   aria-label={`Actions for ${preset.name}`}
+                  onClick={(event) => event.stopPropagation()}
                 />
               }
             >
               <EllipsisIcon />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={6}>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={6}
+              onClick={(event) => event.stopPropagation()}
+            >
               <DropdownMenuItem onClick={onEdit}>
                 <PencilIcon /> Edit
               </DropdownMenuItem>
@@ -287,11 +332,6 @@ function PresetCard({
           <span className="text-xs text-muted-foreground">Ready to send as-is</span>
         )}
       </CardContent>
-      <CardFooter>
-        <Button type="button" className="w-full" onClick={onUse}>
-          <PlayIcon /> Use preset
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
