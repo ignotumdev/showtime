@@ -460,6 +460,7 @@ function ChannelButtons({
                 variant="outline"
                 className={cn(
                   "rounded-none border-l-0 pr-9",
+                  selected && "pr-17",
                   index === 0 && "rounded-l-lg border-l",
                   index === channels.length - 1 && "rounded-r-lg",
                   selected &&
@@ -471,8 +472,13 @@ function ChannelButtons({
                 <span className="max-w-40 truncate">{channel.name}</span>
                 {!channel.notificationsEnabled && <BellOffIcon className="text-muted-foreground" />}
               </Button>
-              {!selected && channel.unreadCount > 0 && (
-                <span className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-center">
+              {channel.unreadCount > 0 && (
+                <span
+                  className={cn(
+                    "pointer-events-none absolute inset-y-0 flex w-8 items-center justify-center",
+                    selected ? "right-9" : "right-0",
+                  )}
+                >
                   <Badge>{channel.unreadCount}</Badge>
                 </span>
               )}
