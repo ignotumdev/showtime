@@ -96,7 +96,7 @@ export function ShowSwitcher({
                   <ArrowLeftIcon className="size-3.5" />
                 )}
               </span>
-              <span>{destination === "settings" ? "Updates" : "All shows"}</span>
+              <span>{destination === "settings" ? globalSettingsLabel : "All shows"}</span>
             </span>
           </SelectItem>
         </SelectContent>

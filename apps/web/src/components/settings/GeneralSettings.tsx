@@ -21,6 +21,14 @@ import { showColorClassNames } from "@/components/shows/show-color";
 import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { cn } from "@/lib/utils";
 
+export function isUnchangedShowSave(
+  next: { readonly name: string; readonly color: Color },
+  committed: { readonly name: string; readonly color: Color },
+  pendingSaves: number,
+) {
+  return pendingSaves === 0 && next.name === committed.name && next.color === committed.color;
+}
+
 export function GeneralSettings() {
   const { show, result } = useShowFromParams();
   const navigate = useNavigate();
@@ -67,7 +75,14 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
       setName(committed.current.name);
       return;
     }
-    if (trimmed === committed.current.name && nextColor === committed.current.color) return;
+    if (
+      isUnchangedShowSave(
+        { name: trimmed, color: nextColor },
+        committed.current,
+        pendingSaves.current,
+      )
+    )
+      return;
     pendingSaves.current += 1;
     setSaving(true);
     setError(undefined);

@@ -723,8 +723,8 @@ function PairClientPopover({
   React.useEffect(() => {
     setQrCode(undefined);
     setCopied(false);
-    setError(undefined);
     if (!selectedUrl) return;
+    setError(undefined);
     let active = true;
     void QRCode.toDataURL(selectedUrl, { errorCorrectionLevel: "M", margin: 2, width: 640 }).then(
       (value) => active && setQrCode(value),
