@@ -14,6 +14,7 @@ import {
 import { BellIcon, BellOffIcon, Trash2Icon } from "lucide-react";
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
+import { NewChatChannelInput } from "@/components/chats/NewChatChannelInput";
 import { currentProfilesState } from "@/components/profiles/ProfileSwitcher";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +34,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   InputGroup,
   InputGroupAddon,
-  InputGroupButton,
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
@@ -129,33 +129,12 @@ function ChatSettingsLoaded({
       <SettingsSection
         title="Channels"
         action={
-          <form onSubmit={add}>
-            <InputGroup className="w-56">
-              <InputGroupAddon>
-                <InputGroupText>#</InputGroupText>
-              </InputGroupAddon>
-              <InputGroupInput
-                aria-label="New channel name"
-                className="pl-0!"
-                value={newName}
-                maxLength={60}
-                placeholder="New channel"
-                disabled={busy}
-                onChange={(event) => setNewName(event.currentTarget.value)}
-              />
-              {newName.length > 0 && (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    type="submit"
-                    variant="outline"
-                    disabled={!newName.trim() || busy}
-                  >
-                    Add
-                  </InputGroupButton>
-                </InputGroupAddon>
-              )}
-            </InputGroup>
-          </form>
+          <NewChatChannelInput
+            name={newName}
+            busy={busy}
+            onNameChange={setNewName}
+            onSubmit={add}
+          />
         }
       >
         {channels.map((channel) => (

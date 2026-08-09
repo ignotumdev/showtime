@@ -18,18 +18,20 @@ import {
   BellIcon,
   BellOffIcon,
   HashIcon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   LibraryIcon,
   PencilIcon,
-  PlusIcon,
   Trash2Icon,
 } from "lucide-react";
 import { chatAtoms, profileAtoms, rpcErrorMessageFromCause } from "@/client";
 import { setChatPresence } from "@/chats/ChatPresence";
+import { areChatMessagesInSameGroup } from "@/chats/ChatMessageGrouping";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
 import { ChatMessageBody as RichChatMessageBody } from "@/components/chats/ChatMessageBody";
 import { ChatPresetAnswerForm } from "@/components/chats/ChatPresetAnswer";
 import { ChatPresetDialog } from "@/components/chats/ChatPresetDialog";
+import { NewChatChannelInput } from "@/components/chats/NewChatChannelInput";
 import { useSendChatMessage } from "@/components/chats/useSendChatMessage";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { formatClientTime } from "@/lib/dates";
@@ -54,6 +56,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   InputGroup,
   InputGroupAddon,
@@ -212,7 +221,6 @@ function ChannelTabs({
   const renameChannel = useAtomSet(atoms.renameChannel, { mode: "promiseExit" });
   const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
   const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
-  const [dialogOpen, setDialogOpen] = React.useState(false);
   const [renameTarget, setRenameTarget] = React.useState<
     Pick<ChatChannel, "id" | "name"> | undefined
   >();
@@ -240,7 +248,6 @@ function ChannelTabs({
     if (Exit.isFailure(exit)) setError(rpcErrorMessageFromCause(exit.cause));
     else {
       setName("");
-      setDialogOpen(false);
       onSelect(exit.value.id);
     }
     setAdding(false);
@@ -305,16 +312,19 @@ function ChannelTabs({
             channels={channels}
             selectedChannel={selectedChannel}
             onSelect={onSelect}
-            onAdd={() => {
-              setError(undefined);
-              setDialogOpen(true);
-            }}
             onRename={openRenameDialog}
             onToggleNotifications={toggleNotifications}
             onDelete={() => {
               setError(undefined);
               setDeleteTarget({ id: selectedChannel.id, name: selectedChannel.name });
             }}
+          />
+          <NewChatChannelInput
+            name={name}
+            busy={adding}
+            onNameChange={setName}
+            onSubmit={add}
+            formClassName="mr-1"
           />
         </ShowTitleBarPortal>
       )}
@@ -328,10 +338,6 @@ function ChannelTabs({
           channels={channels}
           selectedChannel={selectedChannel}
           onSelect={onSelect}
-          onAdd={() => {
-            setError(undefined);
-            setDialogOpen(true);
-          }}
           onRename={openRenameDialog}
           onToggleNotifications={toggleNotifications}
           onDelete={() => {
@@ -339,39 +345,20 @@ function ChannelTabs({
             setDeleteTarget({ id: selectedChannel.id, name: selectedChannel.name });
           }}
         />
+        <NewChatChannelInput
+          name={name}
+          busy={adding}
+          onNameChange={setName}
+          onSubmit={add}
+          className="w-44 sm:w-56"
+        />
         {trailing}
       </header>
-      {error && !dialogOpen && !renameTarget && !deleteTarget && (
+      {error && !renameTarget && !deleteTarget && (
         <p role="alert" className="shrink-0 border-b px-3 py-2 text-xs text-destructive">
           {error}
         </p>
       )}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New channel</DialogTitle>
-            <DialogDescription>Create another conversation for this show.</DialogDescription>
-          </DialogHeader>
-          <form className="flex gap-2" onSubmit={add}>
-            <Input
-              autoFocus
-              value={name}
-              maxLength={60}
-              placeholder="Channel name"
-              aria-label="New channel name"
-              onChange={(event) => setName(event.currentTarget.value)}
-            />
-            <Button type="submit" disabled={adding || !name.trim()}>
-              {adding ? <Spinner /> : "Create"}
-            </Button>
-          </form>
-          {error && (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
       <Dialog
         open={renameTarget !== undefined}
         onOpenChange={(open) => {
@@ -450,7 +437,6 @@ function ChannelButtons({
   channels,
   selectedChannel,
   onSelect,
-  onAdd,
   onRename,
   onToggleNotifications,
   onDelete,
@@ -458,7 +444,6 @@ function ChannelButtons({
   readonly channels: ReadonlyArray<ChatChannel>;
   readonly selectedChannel: ChatChannel;
   readonly onSelect: (id: ChatChannelId) => void;
-  readonly onAdd: () => void;
   readonly onRename: () => void;
   readonly onToggleNotifications: () => void;
   readonly onDelete: () => void;
@@ -476,6 +461,7 @@ function ChannelButtons({
                 className={cn(
                   "rounded-none border-l-0 pr-9",
                   index === 0 && "rounded-l-lg border-l",
+                  index === channels.length - 1 && "rounded-r-lg",
                   selected &&
                     "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
                 )}
@@ -484,8 +470,12 @@ function ChannelButtons({
                 <HashIcon />
                 <span className="max-w-40 truncate">{channel.name}</span>
                 {!channel.notificationsEnabled && <BellOffIcon className="text-muted-foreground" />}
-                {channel.unreadCount > 0 && <Badge>{channel.unreadCount}</Badge>}
               </Button>
+              {!selected && channel.unreadCount > 0 && (
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-center">
+                  <Badge>{channel.unreadCount}</Badge>
+                </span>
+              )}
               {selected && (
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -494,7 +484,10 @@ function ChannelButtons({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        className="absolute top-0 right-0 rounded-none"
+                        className={cn(
+                          "absolute top-0 right-0 rounded-none",
+                          index === channels.length - 1 && "rounded-r-lg",
+                        )}
                         aria-label={`Options for ${selectedChannel.name}`}
                       />
                     }
@@ -523,15 +516,6 @@ function ChannelButtons({
             </div>
           );
         })}
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          aria-label="Add channel"
-          onClick={onAdd}
-        >
-          <PlusIcon />
-        </Button>
       </ButtonGroup>
     </div>
   );
@@ -563,13 +547,24 @@ function Conversation({
         >
           <MessageScroller.Content className="flex min-h-full flex-col justify-end gap-4 p-3 sm:p-4">
             {channel.messages.length === 0 && (
-              <div className="my-auto text-center text-sm text-muted-foreground">
-                No messages yet. Start the conversation.
-              </div>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <MessageSquareIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No messages yet</EmptyTitle>
+                  <EmptyDescription>Send a message to start the conversation.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
-            {channel.messages.map((message) => {
+            {channel.messages.map((message, index) => {
+              const previousMessage = channel.messages[index - 1];
+              const nextMessage = channel.messages[index + 1];
+              const startsGroup = !areChatMessagesInSameGroup(previousMessage, message);
+              const endsGroup = !areChatMessagesInSameGroup(message, nextMessage);
               const sender = profiles.find((item) => item.id === message.senderProfileId);
               const mine = message.senderProfileId === profile.id;
+              const senderName = sender?.name ?? "Deleted profile";
               const request = message.replyToMessageId
                 ? channel.messages.find((item) => item.id === message.replyToMessageId)
                 : undefined;
@@ -578,16 +573,20 @@ function Conversation({
                   item.replyToMessageId === message.id && item.senderProfileId === profile.id,
               );
               return (
-                <MessageScroller.Item key={message.id} messageId={message.id}>
-                  <Message align={mine ? "end" : "start"}>
+                <MessageScroller.Item
+                  key={message.id}
+                  messageId={message.id}
+                  className={cn(!startsGroup && "-mt-2")}
+                >
+                  <Message
+                    align={mine ? "end" : "start"}
+                    aria-label={`${senderName}, ${formatClientTime(DateTime.toDateUtc(message.sentAt))}`}
+                  >
                     <MessageAvatar>
-                      <ProfileAvatar
-                        name={sender?.name ?? "Deleted profile"}
-                        color={sender?.color}
-                      />
+                      {endsGroup && <ProfileAvatar name={senderName} color={sender?.color} />}
                     </MessageAvatar>
                     <MessageContent>
-                      <MessageHeader>{sender?.name ?? "Deleted profile"}</MessageHeader>
+                      {startsGroup && <MessageHeader>{senderName}</MessageHeader>}
                       {request && (
                         <p className="max-w-72 truncate text-xs text-muted-foreground">
                           Answer to: {request.body}
@@ -609,9 +608,13 @@ function Conversation({
                           />
                         </div>
                       )}
-                      <MessageFooter>
-                        {formatClientTime(DateTime.toDateUtc(message.sentAt))}
-                      </MessageFooter>
+                      {endsGroup && (
+                        <MessageFooter>
+                          <time dateTime={DateTime.formatIso(message.sentAt)}>
+                            {formatClientTime(DateTime.toDateUtc(message.sentAt))}
+                          </time>
+                        </MessageFooter>
+                      )}
                     </MessageContent>
                   </Message>
                 </MessageScroller.Item>

@@ -142,14 +142,16 @@ function ReadyChatPresetsWorkspace({
 
   return (
     <section className="mx-auto flex h-full w-full max-w-6xl flex-col gap-3">
-      <ShowTitleBarPortal position="actions">
-        <PresetToolbar
+      <ShowTitleBarPortal position="leading">
+        <PresetChannelSelect
           channelId={channelId}
           channels={channels}
           selectedChannelName={selectedChannel?.name}
           onChannelChange={onChannelChange}
-          onAdd={() => open({ type: "edit" })}
         />
+      </ShowTitleBarPortal>
+      <ShowTitleBarPortal position="actions">
+        <AddPresetButton onAdd={() => open({ type: "edit" })} />
       </ShowTitleBarPortal>
       <div className="md:hidden">
         <PresetToolbar
@@ -163,7 +165,7 @@ function ReadyChatPresetsWorkspace({
       </div>
 
       {presets.length === 0 ? (
-        <Empty className="min-h-72 border">
+        <Empty className="min-h-72">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <LibraryIcon />
@@ -231,28 +233,58 @@ function PresetToolbar({
 }) {
   return (
     <div className={fullWidth ? "flex w-full gap-2" : "flex items-center gap-1"}>
-      <Select value={channelId} onValueChange={(value) => value && onChannelChange(value)}>
-        <SelectTrigger
-          className={fullWidth ? "min-w-0 flex-1" : "w-44"}
-          aria-label="Preset destination channel"
-        >
-          <SelectValue>
-            {selectedChannelName ? `Send to #${selectedChannelName}` : "Send to channel"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {channels.map((channel) => (
-            <SelectItem key={channel.id} value={channel.id}>
-              #{channel.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button type="button" size="sm" aria-label="Add preset" onClick={onAdd}>
-        <PlusIcon />
-        <span className="hidden min-[400px]:inline">Add preset</span>
-      </Button>
+      <PresetChannelSelect
+        channelId={channelId}
+        channels={channels}
+        selectedChannelName={selectedChannelName}
+        onChannelChange={onChannelChange}
+        fullWidth={fullWidth}
+      />
+      <AddPresetButton onAdd={onAdd} />
     </div>
+  );
+}
+
+function PresetChannelSelect({
+  channelId,
+  channels,
+  selectedChannelName,
+  onChannelChange,
+  fullWidth = false,
+}: {
+  readonly channelId: ChatChannelId;
+  readonly channels: ReadonlyArray<{ readonly id: ChatChannelId; readonly name: string }>;
+  readonly selectedChannelName: string | undefined;
+  readonly onChannelChange: (channelId: ChatChannelId) => void;
+  readonly fullWidth?: boolean;
+}) {
+  return (
+    <Select value={channelId} onValueChange={(value) => value && onChannelChange(value)}>
+      <SelectTrigger
+        className={fullWidth ? "min-w-0 flex-1" : "w-44"}
+        aria-label="Preset destination channel"
+      >
+        <SelectValue>
+          {selectedChannelName ? `Send to #${selectedChannelName}` : "Send to channel"}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {channels.map((channel) => (
+          <SelectItem key={channel.id} value={channel.id}>
+            #{channel.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function AddPresetButton({ onAdd }: { readonly onAdd: () => void }) {
+  return (
+    <Button type="button" size="sm" aria-label="Add preset" onClick={onAdd}>
+      <PlusIcon />
+      <span className="hidden min-[400px]:inline">Add preset</span>
+    </Button>
   );
 }
 
