@@ -24,7 +24,8 @@ const globalSettingsLabels = {
 type GlobalSettingsSection = keyof typeof globalSettingsLabels;
 
 export function globalSettingsSectionFromParams(section: unknown): GlobalSettingsSection {
-  return typeof section === "string" && section in globalSettingsLabels
+  return typeof section === "string" &&
+    Object.prototype.hasOwnProperty.call(globalSettingsLabels, section)
     ? (section as GlobalSettingsSection)
     : "updates";
 }

@@ -9,10 +9,16 @@ describe("globalSettingsSectionFromParams", () => {
     },
   );
 
-  it.each(["general", "chat", undefined, null])(
-    "falls back to updates for a non-global section (%s)",
-    (section) => {
-      expect(globalSettingsSectionFromParams(section)).toBe("updates");
-    },
-  );
+  it.each([
+    "general",
+    "chat",
+    "toString",
+    "constructor",
+    "hasOwnProperty",
+    "__proto__",
+    undefined,
+    null,
+  ])("falls back to updates for a non-global section (%s)", (section) => {
+    expect(globalSettingsSectionFromParams(section)).toBe("updates");
+  });
 });
