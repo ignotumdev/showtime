@@ -73,12 +73,7 @@ function ShowWorkspaceLayout({ pathname }: { readonly pathname: string }) {
   const songCreator = useCreateSong(typedShowId, currentSongId);
   return (
     <React.Fragment>
-      <TitleBar
-        hideName
-        hideSettings
-        stack="above-content"
-        className="hidden md:flex"
-      />
+      <TitleBar hideName hideSettings stack="above-content" className="hidden md:flex" />
       <SidebarProvider className="app-height relative overflow-hidden bg-background">
         <Sidebar collapsible="none" className="relative z-40 hidden md:flex">
           <SidebarHeader>
