@@ -14,15 +14,18 @@ export type ChatAnswerRequestSequences = ReadonlyMap<ChatChannelId, ChatSequence
 export const reconcileChatAnswerRequests = ({
   queued,
   incoming,
-  channelIds,
+  channels,
 }: {
   readonly queued: ReadonlyArray<AnswerRequest>;
   readonly incoming: ReadonlyArray<AnswerRequest>;
-  readonly channelIds: ReadonlySet<ChatChannelId>;
+  readonly channels: ReadonlyArray<ChatChannel>;
 }): ReadonlyArray<AnswerRequest> => {
-  const next = queued.filter((request) => channelIds.has(request.channelId));
+  const promptChannelIds = new Set(
+    channels.filter((channel) => channel.notificationsEnabled).map((channel) => channel.id),
+  );
+  const next = queued.filter((request) => promptChannelIds.has(request.channelId));
   for (const request of incoming) {
-    if (channelIds.has(request.channelId) && !next.some((item) => item.id === request.id)) {
+    if (promptChannelIds.has(request.channelId) && !next.some((item) => item.id === request.id)) {
       next.push(request);
     }
   }
@@ -65,7 +68,7 @@ export const planChatAnswerRequests = ({
   for (const channel of channels) {
     const previousSequence = previousSequences?.get(channel.id) ?? channel.lastReadSequence;
     sequences.set(channel.id, channel.newestSequence);
-    if (!shouldPrompt) continue;
+    if (!shouldPrompt || !channel.notificationsEnabled) continue;
 
     requests.push(
       ...channel.messages.filter(
