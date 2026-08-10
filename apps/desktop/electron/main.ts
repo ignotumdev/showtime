@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Effect, Schema } from "effect";
@@ -14,6 +14,7 @@ import {
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
   desktopSetHostNameChannel,
+  desktopSetAppearanceChannel,
   desktopUpdateStateChangedChannel,
   desktopUpdateStateChannel,
   ShowtimeHostName,
@@ -90,14 +91,15 @@ function createWindow() {
     return;
   }
 
+  const initialAppearance = windowAppearance(nativeTheme.shouldUseDarkColors ? "dark" : "light");
   win = new BrowserWindow({
     autoHideMenuBar: true,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: initialAppearance.backgroundColor,
     icon: getAppIconPath(),
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#0a0a0a",
-      symbolColor: "#fafafa",
+      color: initialAppearance.backgroundColor,
+      symbolColor: initialAppearance.symbolColor,
       height: 40,
     },
     webPreferences: {
@@ -114,6 +116,23 @@ function createWindow() {
     void win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 }
+
+const windowAppearance = (appearance: "light" | "dark") =>
+  appearance === "dark"
+    ? { backgroundColor: "#0a0a0a", symbolColor: "#fafafa" }
+    : { backgroundColor: "#ffffff", symbolColor: "#0a0a0a" };
+
+const applyWindowAppearance = (window: BrowserWindow, appearance: "light" | "dark") => {
+  const colors = windowAppearance(appearance);
+  window.setBackgroundColor(colors.backgroundColor);
+  if (process.platform !== "darwin") {
+    window.setTitleBarOverlay({
+      color: colors.backgroundColor,
+      symbolColor: colors.symbolColor,
+      height: 40,
+    });
+  }
+};
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -211,6 +230,11 @@ if (gotSingleInstanceLock) {
           ),
         );
         ipcMain.handle(desktopUpdateStateChannel, () => updateService.state());
+        ipcMain.on(desktopSetAppearanceChannel, (event, appearance: unknown) => {
+          if (appearance !== "light" && appearance !== "dark") return;
+          const window = BrowserWindow.fromWebContents(event.sender);
+          if (window && !window.isDestroyed()) applyWindowAppearance(window, appearance);
+        });
         ipcMain.handle(desktopCheckForUpdatesChannel, () => updateService.check());
         ipcMain.handle(desktopDownloadUpdateChannel, () => updateService.download());
         ipcMain.handle(desktopInstallUpdateChannel, () => updateService.install());

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { globalSettingsSectionFromParams } from "./ShowSwitcher";
 
 describe("globalSettingsSectionFromParams", () => {
-  it.each(["connections", "profiles", "updates"] as const)(
+  it.each(["appearance", "connections", "profiles", "updates"] as const)(
     "preserves the %s global settings section",
     (section) => {
       expect(globalSettingsSectionFromParams(section)).toBe(section);

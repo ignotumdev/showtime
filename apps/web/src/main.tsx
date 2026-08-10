@@ -18,9 +18,14 @@ import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 import { installMobileViewport } from "./mobile-viewport";
 import { registerServiceWorker, restorePwaConnectionHandoff } from "./pwa";
 import { ConnectToShowtime } from "./components/connections/ConnectToShowtime";
+import { initializeTheme } from "./theme";
 
+const uninstallTheme = initializeTheme();
 const uninstallMobileViewport = installMobileViewport();
-if (import.meta.hot) import.meta.hot.dispose(uninstallMobileViewport);
+if (import.meta.hot) {
+  import.meta.hot.dispose(uninstallTheme);
+  import.meta.hot.dispose(uninstallMobileViewport);
+}
 restorePwaConnectionHandoff();
 void registerServiceWorker();
 const pairing = await capturePairingFragment();

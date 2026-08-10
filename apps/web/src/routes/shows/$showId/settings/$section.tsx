@@ -4,6 +4,7 @@ import { ProfilesSettings } from "@/components/profiles/ProfileSwitcher";
 import { ConnectionsSettings } from "@/components/connections/ConnectionDialog";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 import { UpdatesSettings } from "@/components/settings/UpdatesSettings";
+import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 
 export const Route = createFileRoute("/shows/$showId/settings/$section")({
   component: SettingsSection,
@@ -16,6 +17,7 @@ function SettingsSection() {
   if (section === "updates") return <UpdatesSettings />;
   if (section === "profiles") return <ProfilesSettings />;
   if (section === "connections") return <ConnectionsSettings />;
+  if (section === "appearance") return <AppearanceSettings />;
   return (
     <Navigate
       to="/shows/$showId/settings/$section"

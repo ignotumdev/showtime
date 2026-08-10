@@ -8,6 +8,7 @@ import {
   desktopRpcWebSocketUrlChannel,
   desktopSetConnectionsEnabledChannel,
   desktopSetHostNameChannel,
+  desktopSetAppearanceChannel,
   desktopCheckForUpdatesChannel,
   desktopDownloadUpdateChannel,
   desktopInstallUpdateChannel,
@@ -31,6 +32,7 @@ const bridge: ShowtimeHostBridge = {
   setConnectionsEnabled: (enabled) =>
     ipcRenderer.invoke(desktopSetConnectionsEnabledChannel, enabled),
   setHostName: (hostName) => ipcRenderer.invoke(desktopSetHostNameChannel, hostName),
+  setAppearance: (appearance) => ipcRenderer.send(desktopSetAppearanceChannel, appearance),
   updateState: () => ipcRenderer.invoke(desktopUpdateStateChannel),
   checkForUpdates: () => ipcRenderer.invoke(desktopCheckForUpdatesChannel),
   downloadUpdate: () => ipcRenderer.invoke(desktopDownloadUpdateChannel),
