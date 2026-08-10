@@ -8,6 +8,7 @@ import { hasShowtimeConnectionScope } from "@showtime/shared";
 import { readStoredConnection } from "../../connection";
 
 export interface ConnectionManagementClient {
+  readonly stateKey: string;
   readonly isOwner: boolean;
   readonly canCreate: boolean;
   readonly canDelete: boolean;
@@ -32,6 +33,7 @@ export const getConnectionManagementClient = (): ConnectionManagementClient | un
   const bridge = window.showtime;
   if (bridge) {
     return {
+      stateKey: "desktop-owner",
       isOwner: true,
       canCreate: true,
       canDelete: true,
@@ -50,6 +52,7 @@ export const getConnectionManagementClient = (): ConnectionManagementClient | un
   }
   const base = `/connection-management/${encodeURIComponent(connection.clientId)}/${encodeURIComponent(connection.capability)}`;
   return {
+    stateKey: `browser:${connection.clientId}:${connection.capability}`,
     isOwner: false,
     canCreate: hasShowtimeConnectionScope(connection.scopes, "connections:create"),
     canDelete: hasShowtimeConnectionScope(connection.scopes, "connections:delete"),

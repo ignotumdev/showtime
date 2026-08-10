@@ -1,5 +1,7 @@
 import * as React from "react";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Option } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
 import QRCode from "qrcode";
 import {
   CheckIcon,
@@ -46,6 +48,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -76,6 +79,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Spinner } from "@/components/ui/spinner";
 import {
   canLoadPairingInfo,
   pairingInfoPollDelay,
@@ -88,6 +92,11 @@ import {
   getConnectionManagementClient,
   type ConnectionManagementClient,
 } from "./connection-management";
+import {
+  connectionsStateCacheAtom,
+  currentConnectionsStateResult,
+  refreshConnectionsStateAtom,
+} from "./connection-state-resource";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/clipboard";
 import { profileAtoms } from "@/client";
@@ -95,13 +104,6 @@ import { useProfileSelection } from "@/profiles";
 import { currentProfilesState, ProfileControl } from "@/components/profiles/ProfileSwitcher";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { SettingsHeader, SettingsItem, SettingsSection } from "@/components/settings/SettingsPage";
-
-const emptyState: ShowtimeConnectionsState = {
-  enabled: false,
-  hostName: "device",
-  hostname: "showtime-device.local",
-  clients: [],
-};
 
 const timeUntil = (expiresAt: string, now: number) => {
   const remaining = Math.max(0, Date.parse(expiresAt) - now);
@@ -113,34 +115,39 @@ const timeUntil = (expiresAt: string, now: number) => {
 
 export function ConnectionsSettings() {
   const [manager] = React.useState(getConnectionManagementClient);
+  const cache = useAtomValue(connectionsStateCacheAtom);
+  const loadState = useAtomSet(refreshConnectionsStateAtom, { mode: "promiseExit" });
+  const setCache = useAtomSet(connectionsStateCacheAtom);
+  const stateResult = currentConnectionsStateResult(cache, manager?.stateKey);
+  const state = Option.getOrUndefined(AsyncResult.value(stateResult));
   const profilesResult = useAtomValue(profileAtoms.state);
   const profilesState = currentProfilesState(profilesResult);
-  const [state, setState] = React.useState(emptyState);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<{
     readonly id: string;
     readonly name: string;
   }>();
   const [deleteError, setDeleteError] = React.useState<string>();
-  const [hostNameDraft, setHostNameDraft] = React.useState(emptyState.hostName);
+  const [hostNameDraft, setHostNameDraft] = React.useState("");
   const [hostNameConfirmOpen, setHostNameConfirmOpen] = React.useState(false);
   const [hostNameError, setHostNameError] = React.useState<string>();
-  const [loadError, setLoadError] = React.useState<string>();
   const [error, setError] = React.useState<string>();
   const [loading, setLoading] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
-  const refreshGeneration = React.useRef(0);
-  const refreshInFlight = React.useRef(false);
   const [pageVisible, setPageVisible] = React.useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
   const hostNameCandidate = hostNameDraft.trim()
     ? normalizeShowtimeHostName(hostNameDraft)
     : undefined;
-  const hostNameChanged = hostNameCandidate !== undefined && hostNameCandidate !== state.hostName;
-  const hasPendingClients = state.clients.some((client) => client.kind === "pending");
+  const hostNameChanged =
+    state !== undefined && hostNameCandidate !== undefined && hostNameCandidate !== state.hostName;
+  const hasPendingClients = state?.clients.some((client) => client.kind === "pending") ?? false;
+  const loadedHostName = state?.hostName;
 
-  React.useEffect(() => setHostNameDraft(state.hostName), [state.hostName]);
+  React.useEffect(() => {
+    if (loadedHostName) setHostNameDraft(loadedHostName);
+  }, [loadedHostName]);
 
   React.useEffect(() => {
     const updateVisibility = () => setPageVisible(document.visibilityState === "visible");
@@ -148,34 +155,41 @@ export function ConnectionsSettings() {
     return () => document.removeEventListener("visibilitychange", updateVisibility);
   }, []);
 
-  const refresh = React.useCallback(async () => {
-    if (refreshInFlight.current) return;
-    refreshInFlight.current = true;
-    const generation = refreshGeneration.current;
-    try {
+  const source = React.useMemo(
+    () => (manager ? { key: manager.stateKey, manager } : undefined),
+    [manager],
+  );
+
+  const applyState = React.useCallback(
+    (value: ShowtimeConnectionsState) => {
       if (!manager) return;
-      const value = await manager.connectionsState();
-      if (generation !== refreshGeneration.current) return;
-      setState(value);
-      setLoadError(undefined);
-    } catch {
-      if (generation === refreshGeneration.current)
-        setLoadError("Showtime could not load connections.");
-    } finally {
-      refreshInFlight.current = false;
-    }
-  }, [manager]);
+      setCache((current) => ({
+        key: manager.stateKey,
+        revision: current.revision + 1,
+        result: AsyncResult.success(value),
+      }));
+    },
+    [manager, setCache],
+  );
+
+  const refreshNow = React.useCallback(() => {
+    if (source) void loadState(source);
+  }, [loadState, source]);
 
   React.useEffect(() => {
-    if (!manager || !pageVisible) return;
-    const update = () => void refresh();
-    update();
-    const poll = window.setInterval(update, 1_000);
-    return () => {
-      refreshGeneration.current += 1;
-      window.clearInterval(poll);
+    if (!source || !pageVisible) return;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async () => {
+      await loadState(source);
+      if (active) timer = window.setTimeout(poll, 1_000);
     };
-  }, [pageVisible, refresh]);
+    void poll();
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [loadState, pageVisible, source]);
 
   React.useEffect(() => {
     if (!pageVisible || !hasPendingClients) return;
@@ -188,7 +202,7 @@ export function ConnectionsSettings() {
     setError(undefined);
     try {
       if (!manager?.setConnectionsEnabled) return;
-      setState(await manager.setConnectionsEnabled(enabled));
+      applyState(await manager.setConnectionsEnabled(enabled));
     } catch {
       setError("Showtime could not update connection settings.");
     } finally {
@@ -202,7 +216,7 @@ export function ConnectionsSettings() {
     setDeleteError(undefined);
     try {
       if (!manager) return;
-      setState(await manager.removeConnection(deleteTarget.id));
+      applyState(await manager.removeConnection(deleteTarget.id));
       setDeleteTarget(undefined);
     } catch {
       setDeleteError("Showtime could not remove this client.");
@@ -216,7 +230,7 @@ export function ConnectionsSettings() {
     setLoading(true);
     setHostNameError(undefined);
     try {
-      setState(await manager.setHostName(hostNameCandidate));
+      applyState(await manager.setHostName(hostNameCandidate));
       setHostNameConfirmOpen(false);
     } catch {
       setHostNameError("Showtime could not change the host name.");
@@ -235,6 +249,31 @@ export function ConnectionsSettings() {
             description="Connection settings can only be changed on the show computer or by a client with connection-management access."
           />
         </SettingsSection>
+      </div>
+    );
+  }
+
+  if (!state) {
+    const failed = AsyncResult.isFailure(stateResult);
+    return (
+      <div className="space-y-6">
+        <SettingsHeader>Connections</SettingsHeader>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">{failed ? <TriangleAlertIcon /> : <Spinner />}</EmptyMedia>
+            <EmptyTitle>
+              {failed ? "Connections could not be loaded" : "Loading connections"}
+            </EmptyTitle>
+            {failed && <EmptyDescription>Check the connection and try again.</EmptyDescription>}
+          </EmptyHeader>
+          {failed && (
+            <EmptyContent>
+              <Button type="button" variant="outline" onClick={refreshNow}>
+                Try again
+              </Button>
+            </EmptyContent>
+          )}
+        </Empty>
       </div>
     );
   }
@@ -403,9 +442,12 @@ export function ConnectionsSettings() {
             </Empty>
           )}
         </SettingsSection>
-        {(error ?? loadError) && (
+        {(error ??
+          (AsyncResult.isFailure(stateResult)
+            ? "Showtime could not load connections."
+            : undefined)) && (
           <p role="alert" className="text-sm text-destructive">
-            {error ?? loadError}
+            {error ?? "Showtime could not load connections."}
           </p>
         )}
       </div>
@@ -413,7 +455,7 @@ export function ConnectionsSettings() {
         manager={manager}
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={setState}
+        onCreated={applyState}
         profilesState={profilesState}
         profilesResult={profilesResult}
       />
