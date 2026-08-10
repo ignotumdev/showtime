@@ -23,6 +23,7 @@ describe("browser connection management", () => {
       },
     });
     expect(getConnectionManagementClient()).toMatchObject({
+      stateKey: `browser:${credentials.clientId}:${credentials.capability}`,
       isOwner: false,
       canCreate: false,
       canDelete: false,
