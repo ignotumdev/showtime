@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 
 const allShowsValue = "all-shows";
 const globalSettingsLabels = {
+  appearance: "Appearance",
   connections: "Connections",
   profiles: "Profiles",
   updates: "Updates",

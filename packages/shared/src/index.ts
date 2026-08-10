@@ -5,7 +5,18 @@ export const desktopPairingInfoChannel = "showtime:pairing-info";
 export const desktopRemoveConnectionChannel = "showtime:remove-connection";
 export const desktopSetConnectionsEnabledChannel = "showtime:set-connections-enabled";
 export const desktopSetHostNameChannel = "showtime:set-host-name";
+export const desktopSetAppearanceChannel = "showtime:set-appearance";
 export const showtimeConnectionStorageKey = "showtime.connection.v1";
+export const showtimeThemePreferences = ["system", "light", "dark"] as const;
+export type ShowtimeThemePreference = (typeof showtimeThemePreferences)[number];
+export type ShowtimeResolvedTheme = Exclude<ShowtimeThemePreference, "system">;
+export const isShowtimeThemePreference = (value: unknown): value is ShowtimeThemePreference =>
+  typeof value === "string" && showtimeThemePreferences.includes(value as ShowtimeThemePreference);
+export const resolveShowtimeTheme = (
+  preference: ShowtimeThemePreference,
+  systemUsesDarkColors: boolean,
+): ShowtimeResolvedTheme =>
+  preference === "system" ? (systemUsesDarkColors ? "dark" : "light") : preference;
 export * from "./local-endpoint.js";
 export * from "./desktop-update.js";
 
@@ -132,6 +143,7 @@ export interface ShowtimeHostBridge {
   readonly setHostName: (
     hostName: import("./local-endpoint.js").ShowtimeHostName,
   ) => Promise<ShowtimeConnectionsState>;
+  readonly setAppearance: (preference: ShowtimeThemePreference) => void;
   readonly updateState: () => Promise<ShowtimeDesktopUpdateState>;
   readonly checkForUpdates: () => Promise<ShowtimeDesktopUpdateState>;
   readonly downloadUpdate: () => Promise<ShowtimeDesktopUpdateState>;

@@ -2,6 +2,7 @@ import { Link, Outlet } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   MessageCircleIcon,
+  PaletteIcon,
   RefreshCwIcon,
   Settings2Icon,
   UserRoundIcon,
@@ -104,6 +105,20 @@ export function SettingsLayout() {
                   {showId ? (
                     <SettingsShowLink
                       showId={showId}
+                      section="appearance"
+                      label="Appearance"
+                      icon={PaletteIcon}
+                    />
+                  ) : (
+                    <SettingsGlobalLink
+                      section="appearance"
+                      label="Appearance"
+                      icon={PaletteIcon}
+                    />
+                  )}
+                  {showId ? (
+                    <SettingsShowLink
+                      showId={showId}
                       section="updates"
                       label="Updates"
                       icon={RefreshCwIcon}
@@ -163,6 +178,11 @@ export function SettingsLayout() {
               </>
             )}
             {showId ? (
+              <MobileShowLink showId={showId} section="appearance" label="Appearance" />
+            ) : (
+              <MobileGlobalLink section="appearance" label="Appearance" />
+            )}
+            {showId ? (
               <MobileShowLink showId={showId} section="updates" label="Updates" />
             ) : (
               <MobileGlobalLink section="updates" label="Updates" />
@@ -180,8 +200,8 @@ export function SettingsLayout() {
 }
 
 type Icon = React.ComponentType<{ className?: string }>;
-type ShowSection = "general" | "chat" | "updates" | "profiles" | "connections";
-type GlobalSection = "updates" | "profiles" | "connections";
+type ShowSection = "general" | "chat" | "appearance" | "updates" | "profiles" | "connections";
+type GlobalSection = "appearance" | "updates" | "profiles" | "connections";
 
 function SettingsShowLink({
   showId,
