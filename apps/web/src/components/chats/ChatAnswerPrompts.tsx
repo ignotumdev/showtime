@@ -90,9 +90,12 @@ function ReadyChatAnswerPrompts({
       shouldPrompt: !chatOpen,
     });
     newestSequences.current = sequences;
-    const channelIds = new Set(snapshot.channels.map((channel) => channel.id));
     setPendingAnswers((current) =>
-      reconcileChatAnswerRequests({ queued: current, incoming: requests, channelIds }),
+      reconcileChatAnswerRequests({
+        queued: current,
+        incoming: requests,
+        channels: snapshot.channels,
+      }),
     );
   }, [chatOpen, profile.id, snapshot]);
 

@@ -134,6 +134,24 @@ describe("chat answer request policy", () => {
     expect(planned.sequences.get(channelId)).toBe(2);
   });
 
+  it("ignores requests in muted channels while advancing their cursor", () => {
+    const planned = planChatAnswerRequests({
+      channels: [
+        channel({
+          messages: [request(2)],
+          newestSequence: 2 as ChatSequence,
+          notificationsEnabled: false,
+        }),
+      ],
+      profileId: selectedProfileId,
+      previousSequences: undefined,
+      shouldPrompt: true,
+    });
+
+    expect(planned.requests).toEqual([]);
+    expect(planned.sequences.get(channelId)).toBe(2);
+  });
+
   it("drops queued requests when their channel is deleted", () => {
     const stale = request(2);
     const available = request(3, { channelId: addedChannelId });
@@ -141,9 +159,21 @@ describe("chat answer request policy", () => {
     const reconciled = reconcileChatAnswerRequests({
       queued: [stale, available],
       incoming: [available],
-      channelIds: new Set([addedChannelId]),
+      channels: [channel({ id: addedChannelId })],
     });
 
     expect(reconciled).toEqual([available]);
+  });
+
+  it("drops queued requests when their channel is muted", () => {
+    const queued = request(2);
+
+    const reconciled = reconcileChatAnswerRequests({
+      queued: [queued],
+      incoming: [],
+      channels: [channel({ notificationsEnabled: false })],
+    });
+
+    expect(reconciled).toEqual([]);
   });
 });
