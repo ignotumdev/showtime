@@ -1,3 +1,4 @@
+import { NodeFileSystem } from "@effect/platform-node";
 import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -17,10 +18,18 @@ import {
   desktopSetAppearanceChannel,
   desktopUpdateStateChangedChannel,
   desktopUpdateStateChannel,
+  isShowtimeThemePreference,
+  resolveShowtimeTheme,
   ShowtimeHostName,
   showtimeLocalPort,
+  type ShowtimeThemePreference,
   type ShowtimeConnectionScope,
 } from "@showtime/shared";
+import {
+  appearancePreferenceFileName,
+  readAppearancePreference,
+  writeAppearancePreference,
+} from "./appearance-preference.js";
 import { formatStartupError } from "./startup-error.js";
 import { DesktopUpdateService } from "./DesktopUpdateService.js";
 
@@ -50,6 +59,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null;
 let backendStarted = false;
 let backendShutdownStarted = false;
+let appearancePreference: ShowtimeThemePreference = "system";
+let appearanceWrite = Promise.resolve();
 const rpcHost = "0.0.0.0";
 const rpcPort = showtimeLocalPort;
 const backendRuntime = makeBackendRuntime({
@@ -91,7 +102,9 @@ function createWindow() {
     return;
   }
 
-  const initialAppearance = windowAppearance(nativeTheme.shouldUseDarkColors ? "dark" : "light");
+  const initialAppearance = windowAppearance(
+    resolveShowtimeTheme(appearancePreference, nativeTheme.shouldUseDarkColors),
+  );
   win = new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: initialAppearance.backgroundColor,
@@ -172,7 +185,7 @@ app.on("before-quit", (event) => {
 
   event.preventDefault();
   backendShutdownStarted = true;
-  void backendRuntime.dispose().finally(() => {
+  void Promise.all([backendRuntime.dispose(), appearanceWrite]).finally(() => {
     backendStarted = false;
     app.quit();
   });
@@ -181,10 +194,21 @@ app.on("before-quit", (event) => {
 if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    const appearancePreferencePath = path.join(
+      app.getPath("userData"),
+      appearancePreferenceFileName,
+    );
 
-    backendRuntime
-      .runPromise(Effect.void)
-      .then(() => {
+    Promise.all([
+      backendRuntime.runPromise(Effect.void),
+      Effect.runPromise(
+        readAppearancePreference(appearancePreferencePath).pipe(
+          Effect.provide(NodeFileSystem.layer),
+        ),
+      ),
+    ])
+      .then(([, storedAppearancePreference]) => {
+        appearancePreference = storedAppearancePreference;
         ipcMain.handle(desktopRpcWebSocketUrlChannel, () =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (connections) => connections.rpcWebSocketUrl),
@@ -230,10 +254,29 @@ if (gotSingleInstanceLock) {
           ),
         );
         ipcMain.handle(desktopUpdateStateChannel, () => updateService.state());
-        ipcMain.on(desktopSetAppearanceChannel, (event, appearance: unknown) => {
-          if (appearance !== "light" && appearance !== "dark") return;
+        ipcMain.on(desktopSetAppearanceChannel, (event, nextPreference: unknown) => {
+          if (!isShowtimeThemePreference(nextPreference)) return;
+          const preferenceChanged = nextPreference !== appearancePreference;
+          appearancePreference = nextPreference;
+          const appearance = resolveShowtimeTheme(
+            appearancePreference,
+            nativeTheme.shouldUseDarkColors,
+          );
           const window = BrowserWindow.fromWebContents(event.sender);
           if (window && !window.isDestroyed()) applyWindowAppearance(window, appearance);
+          if (preferenceChanged) {
+            appearanceWrite = appearanceWrite
+              .then(() =>
+                Effect.runPromise(
+                  writeAppearancePreference(appearancePreferencePath, nextPreference).pipe(
+                    Effect.provide(NodeFileSystem.layer),
+                  ),
+                ),
+              )
+              .catch((error: unknown) => {
+                console.error("Could not persist the appearance preference", error);
+              });
+          }
         });
         ipcMain.handle(desktopCheckForUpdatesChannel, () => updateService.check());
         ipcMain.handle(desktopDownloadUpdateChannel, () => updateService.download());

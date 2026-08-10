@@ -1,16 +1,23 @@
 import * as React from "react";
+import {
+  isShowtimeThemePreference,
+  resolveShowtimeTheme,
+  showtimeThemePreferences,
+  type ShowtimeResolvedTheme,
+  type ShowtimeThemePreference,
+} from "@showtime/shared";
 
 export const themeStorageKey = "showtime.theme";
-export const themePreferences = ["system", "light", "dark"] as const;
-export type ThemePreference = (typeof themePreferences)[number];
-export type ResolvedTheme = Exclude<ThemePreference, "system">;
+export const themePreferences = showtimeThemePreferences;
+export type ThemePreference = ShowtimeThemePreference;
+export type ResolvedTheme = ShowtimeResolvedTheme;
 
 interface ReadableStorage {
   readonly getItem: (key: string) => string | null;
 }
 
 export const isThemePreference = (value: unknown): value is ThemePreference =>
-  typeof value === "string" && themePreferences.includes(value as ThemePreference);
+  isShowtimeThemePreference(value);
 
 export const readThemePreference = (storage?: ReadableStorage): ThemePreference => {
   try {
@@ -21,10 +28,7 @@ export const readThemePreference = (storage?: ReadableStorage): ThemePreference 
   }
 };
 
-export const resolveTheme = (
-  preference: ThemePreference,
-  systemPrefersDark: boolean,
-): ResolvedTheme => (preference === "system" ? (systemPrefersDark ? "dark" : "light") : preference);
+export const resolveTheme = resolveShowtimeTheme;
 
 let preference: ThemePreference = "system";
 const listeners = new Set<() => void>();
@@ -45,7 +49,7 @@ const applyTheme = () => {
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute("content", dark ? "#0a0a0a" : "#ffffff");
-  window.showtime?.setAppearance(resolved);
+  window.showtime?.setAppearance(preference);
 };
 
 const emitChange = () => {
